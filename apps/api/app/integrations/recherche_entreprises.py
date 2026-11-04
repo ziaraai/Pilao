@@ -7,6 +7,7 @@ parser is deliberately tolerant (every field optional) and the test fixture is h
 
 import logging
 import re
+import threading
 import time
 from dataclasses import dataclass
 from functools import lru_cache
@@ -19,6 +20,7 @@ from app.core.config import get_settings
 logger = logging.getLogger("pilao.recherche_entreprises")
 
 CACHE_TTL_SECONDS = 24 * 3600
+CACHE_MAX_ENTRIES = 10_000
 MAX_ATTEMPTS = 3
 
 
@@ -50,16 +52,22 @@ def _clean(value: Any) -> str | None:
     return value.strip() or None if isinstance(value, str) else None
 
 
+def _dicts(value: Any) -> list[dict[str, Any]]:
+    """Objects of a JSON list (or a single object); anything else is ignored (unverified shape)."""
+    items = value if isinstance(value, list) else [value]
+    return [v for v in items if isinstance(v, dict)]
+
+
 def parse_company(payload: dict[str, Any], siret: str) -> CompanyInfo | None:
     """Pick the establishment matching ``siret`` out of a /search response, if any."""
-    for result in payload.get("results") or []:
-        etabs = [result.get("siege") or {}, *(result.get("matching_etablissements") or [])]
+    for result in _dicts(payload.get("results")):
+        etabs = [*_dicts(result.get("siege")), *_dicts(result.get("matching_etablissements"))]
         etab = next((e for e in etabs if e.get("siret") == siret), None)
         if etab is None:
             continue
         managers = tuple(
             " ".join(filter(None, [_clean(d.get("prenoms")), _clean(d.get("nom"))]))
-            for d in result.get("dirigeants") or []
+            for d in _dicts(result.get("dirigeants"))
             if d.get("type_dirigeant", "personne physique") == "personne physique"
         )
         state = _clean(etab.get("etat_administratif"))
@@ -95,15 +103,28 @@ class RechercheEntreprisesClient:
         self._http = http or httpx.Client(timeout=httpx.Timeout(5.0, connect=3.0))
         self._sleep = sleep
         self._cache: dict[str, tuple[float, CompanyInfo | None]] = {}
+        self._lock = threading.Lock()
 
     def lookup_siret(self, siret: str) -> CompanyInfo | None:
         if not re.fullmatch(r"\d{14}", siret):
             raise ValueError("siret must be 14 digits")
+        now = time.monotonic()
         hit = self._cache.get(siret)
-        if hit and hit[0] > time.monotonic():
+        if hit and hit[0] > now:
             return hit[1]
-        info = parse_company(self._get({"q": siret, "page": 1, "per_page": 1}), siret)
-        self._cache[siret] = (time.monotonic() + CACHE_TTL_SECONDS, info)
+        try:
+            info = parse_company(self._get({"q": siret, "page": 1, "per_page": 1}), siret)
+        except CompanyLookupUnavailable:
+            raise
+        except Exception as exc:  # unexpected response shape: callers only handle "unavailable"
+            logger.warning("recherche-entreprises unparseable response: %r", exc)
+            raise CompanyLookupUnavailable("unparseable response") from exc
+        with self._lock:  # requests run in a thread pool
+            if len(self._cache) >= CACHE_MAX_ENTRIES:  # public endpoint: keep memory bounded
+                self._cache = {k: v for k, v in self._cache.items() if v[0] > now}
+                while len(self._cache) >= CACHE_MAX_ENTRIES:
+                    self._cache.pop(next(iter(self._cache)))
+            self._cache[siret] = (now + CACHE_TTL_SECONDS, info)
         return info
 
     def _get(self, params: dict[str, Any]) -> dict[str, Any]:
@@ -112,7 +133,7 @@ class RechercheEntreprisesClient:
             try:
                 res = self._http.get(f"{self._base}/search", params=params)
                 if res.status_code == 429 or res.status_code >= 500:
-                    delay = float(res.headers.get("retry-after", 2**attempt * 0.5))
+                    delay = _retry_after(res.headers.get("retry-after"), 2**attempt * 0.5)
                     last = CompanyLookupUnavailable(f"HTTP {res.status_code}")
                     logger.warning(
                         "recherche-entreprises %s, retry in %.1fs", res.status_code, delay
@@ -123,14 +144,23 @@ class RechercheEntreprisesClient:
                 res.raise_for_status()
                 data = res.json()
                 return data if isinstance(data, dict) else {}
-            except (httpx.TransportError, ValueError) as exc:
+            except httpx.HTTPStatusError as exc:  # 3xx/4xx other than 429: do not retry
+                raise CompanyLookupUnavailable(f"HTTP {exc.response.status_code}") from exc
+            except (httpx.HTTPError, ValueError) as exc:  # transport, decoding, bad JSON…
                 last = exc
                 logger.warning("recherche-entreprises error: %s", exc)
                 if attempt < MAX_ATTEMPTS - 1:
                     self._sleep(2**attempt * 0.5)
-            except httpx.HTTPStatusError as exc:  # 4xx other than 429: do not retry
-                raise CompanyLookupUnavailable(f"HTTP {exc.response.status_code}") from exc
         raise CompanyLookupUnavailable(str(last)) from last
+
+
+def _retry_after(header: str | None, default: float) -> float:
+    """Seconds from a ``Retry-After`` header (delta form only; HTTP-date or junk → default)."""
+    try:
+        delay = float(header) if header is not None else default
+    except ValueError:
+        return default
+    return delay if delay >= 0 else default
 
 
 @lru_cache

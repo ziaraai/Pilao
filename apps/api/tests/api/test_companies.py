@@ -1,4 +1,5 @@
 from collections.abc import Callable, Iterator
+from dataclasses import replace
 
 import pytest
 from fastapi.testclient import TestClient
@@ -43,10 +44,14 @@ class FakeDirectory:
 
 @pytest.fixture
 def directory(make_client: Factory) -> Iterator[FakeDirectory]:
+    from app.routers import companies
+
     fake = FakeDirectory()
+    companies._limiter._hits.clear()  # module-level limiter: isolate each test
     app.dependency_overrides[get_company_directory] = lambda: fake
     yield fake
     app.dependency_overrides.pop(get_company_directory, None)
+    companies._limiter._hits.clear()
 
 
 SIRET = register_payload(1)["siret"]
@@ -84,6 +89,14 @@ def test_lookup_validates_input(make_client: Factory, directory: FakeDirectory) 
     assert make_client().get("/companies/lookup?siret=abc").status_code == 422
 
 
+def test_lookup_accepts_spaces_like_register(
+    make_client: Factory, directory: FakeDirectory
+) -> None:
+    spaced = f"{SIRET[:3]} {SIRET[3:6]} {SIRET[6:9]} {SIRET[9:]}"
+    body = make_client().get("/companies/lookup", params={"siret": spaced}).json()
+    assert body["found"] and body["company"]["siret"] == SIRET
+
+
 def test_lookup_is_rate_limited(make_client: Factory, directory: FakeDirectory) -> None:
     from app.routers import companies
 
@@ -106,6 +119,22 @@ def test_register_prefills_org_from_registry(
         "5710",
     )
     assert org.name == "Entreprise 1"  # the name typed by the user is kept
+
+
+def test_register_ignores_registry_values_too_long_for_the_schema(
+    make_client: Factory, directory: FakeDirectory, db: Session, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    real = directory.lookup_siret
+
+    def odd(siret: str) -> CompanyInfo | None:
+        info = real(siret)
+        assert info is not None
+        return replace(info, department="Paris (75)")  # CHAR(3) column
+
+    monkeypatch.setattr(directory, "lookup_siret", odd)
+    assert make_client().post("/auth/register", json=register_payload(1)).status_code == 201
+    org = db.scalars(select(Organization)).one()
+    assert org.department is None and org.city == "PARIS"
 
 
 def test_register_still_works_when_registry_is_down(

@@ -1,3 +1,4 @@
+import logging
 import uuid
 from datetime import UTC, datetime, timedelta
 
@@ -14,6 +15,7 @@ from app.integrations.recherche_entreprises import CompanyDirectory, CompanyLook
 from app.schemas.auth import RegisterIn
 
 VERIFY_KIND = "email_verify"
+logger = logging.getLogger("pilao.auth")
 
 
 def _now() -> datetime:
@@ -52,6 +54,35 @@ def _verification_email(db: Session, user: User) -> Email:
     )
 
 
+_PREFILLED = (
+    "legal_form",
+    "naf_code",
+    "address_line",
+    "postal_code",
+    "city",
+    "department",
+    "headcount_range",
+)
+
+
+def _prefill_from_registry(org: Organization, directory: CompanyDirectory) -> None:
+    """Best effort: the registry being down or odd must never block sign-up."""
+    try:
+        info = directory.lookup_siret(org.siret)
+    except CompanyLookupUnavailable:
+        return
+    if info is None:
+        return
+    columns = Organization.__table__.c
+    for field in _PREFILLED:
+        value = getattr(info, field)
+        limit = getattr(columns[field].type, "length", None)
+        if value is not None and limit is not None and len(value) > limit:
+            logger.warning("registry value too long for organizations.%s: %r", field, value)
+            continue  # unverified API shape: never let it fail the INSERT
+        setattr(org, field, value)
+
+
 def register(
     db: Session, data: RegisterIn, mailer: Mailer, directory: CompanyDirectory | None = None
 ) -> None:
@@ -60,16 +91,11 @@ def register(
     if db.scalar(select(User.id).where(User.email == data.email)):
         raise ApiError(409, "email_taken", "Cette adresse e-mail est déjà utilisée.")
     org = Organization(siren=data.siret[:9], siret=data.siret, name=data.org_name)
-    if directory is not None:  # best effort: the registry being down must never block sign-up
-        try:
-            info = directory.lookup_siret(data.siret)
-        except CompanyLookupUnavailable:
-            info = None
-        if info is not None:
-            org.legal_form, org.naf_code = info.legal_form, info.naf_code
-            org.address_line, org.postal_code = info.address_line, info.postal_code
-            org.city, org.department = info.city, info.department
-            org.headcount_range = info.headcount_range
+    if directory is not None:
+        # Do not keep the read transaction (and its pooled connection) open during the HTTP
+        # call; the unique constraints still catch a concurrent registration below.
+        db.rollback()
+        _prefill_from_registry(org, directory)
     try:
         db.add(org)
         db.flush()

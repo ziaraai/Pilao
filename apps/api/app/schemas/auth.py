@@ -16,6 +16,14 @@ def luhn_ok(digits: str) -> bool:
     return total % 10 == 0
 
 
+def siret_ok(siret: str) -> bool:
+    """14 digits with a valid Luhn key. La Poste (SIREN 356000000) has legitimate SIRETs that
+    fail Luhn; accept them."""
+    return bool(re.fullmatch(r"\d{14}", siret)) and (
+        luhn_ok(siret) or siret.startswith("356000000")
+    )
+
+
 class RegisterIn(BaseModel):
     email: EmailStr
     password: str = Field(min_length=12, max_length=256)
@@ -27,8 +35,7 @@ class RegisterIn(BaseModel):
     @classmethod
     def _siret(cls, v: str) -> str:
         v = re.sub(r"\s+", "", v)
-        # La Poste (SIREN 356000000) has legitimate SIRETs that fail Luhn; accept them.
-        if not re.fullmatch(r"\d{14}", v) or not (luhn_ok(v) or v.startswith("356000000")):
+        if not siret_ok(v):
             raise ValueError("SIRET invalide")
         return v
 

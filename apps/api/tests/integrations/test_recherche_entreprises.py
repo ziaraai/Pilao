@@ -123,3 +123,54 @@ def test_client_error_is_not_retried() -> None:
 def test_rejects_malformed_siret() -> None:
     with pytest.raises(ValueError):
         make_client(lambda r: httpx.Response(200, json={})).lookup_siret("123")
+
+
+@pytest.mark.parametrize(
+    "payload",
+    [{"results": ["oops"]}, {"results": {"siren": "1"}}, {"results": [{"siege": "x"}]}],
+)
+def test_unexpected_shape_is_not_a_crash(payload: dict[str, Any]) -> None:
+    client = make_client(lambda r: httpx.Response(200, json=payload))
+    assert client.lookup_siret(SIRET) is None
+
+
+def test_unparseable_payload_is_unavailable(monkeypatch: pytest.MonkeyPatch) -> None:
+    from app.integrations import recherche_entreprises as mod
+
+    def broken(payload: dict[str, Any], siret: str) -> None:
+        raise TypeError("shape changed")
+
+    monkeypatch.setattr(mod, "parse_company", broken)
+    with pytest.raises(CompanyLookupUnavailable):
+        make_client(lambda r: httpx.Response(200, json=SAMPLE)).lookup_siret(SIRET)
+
+
+def test_decoding_error_is_unavailable() -> None:
+    def handler(req: httpx.Request) -> httpx.Response:
+        raise httpx.DecodingError("bad gzip")
+
+    with pytest.raises(CompanyLookupUnavailable):
+        make_client(handler).lookup_siret(SIRET)
+
+
+def test_retry_after_http_date_falls_back_to_backoff() -> None:
+    answers = iter([429, 200])
+    sleeps: list[float] = []
+
+    def handler(req: httpx.Request) -> httpx.Response:
+        code = next(answers)
+        headers = {"retry-after": "Wed, 21 Oct 2015 07:28:00 GMT"} if code == 429 else {}
+        return httpx.Response(code, json=SAMPLE if code == 200 else {}, headers=headers)
+
+    assert make_client(handler, sleeps).lookup_siret(SIRET) is not None
+    assert sleeps == [0.5]
+
+
+def test_cache_is_bounded(monkeypatch: pytest.MonkeyPatch) -> None:
+    from app.integrations import recherche_entreprises as mod
+
+    monkeypatch.setattr(mod, "CACHE_MAX_ENTRIES", 3)
+    client = make_client(lambda r: httpx.Response(200, json={"results": []}))
+    for i in range(10):
+        client.lookup_siret(f"{i:014d}")
+    assert len(client._cache) <= 3
