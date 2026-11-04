@@ -21,7 +21,7 @@ Objectif : savoir si la génération est assez bonne, avec quel modèle, à quel
 - [x] P1-03 Auth (inscription, vérification e-mail, connexion), rôles, `get_current_org()`, tests de tenancy
 - [x] P1-04 Intégration Recherche d'entreprises (US-1.1) — code et tests faits, **vérification sur appel réel en attente (Q9)**
 - [x] P1-05 Profil : paramètres, moyens, certifications, références + import Excel (US-1.2, 1.3)
-- [ ] P1-06 Upload fichiers S3 + URL signées + antivirus
+- [x] P1-06 Upload fichiers S3 + URL signées + antivirus
 - [ ] P1-07 Base documentaire : extraction, découpage, embeddings (US-1.4)
 - [ ] P1-08 Coffre-fort : dépôt, lecture IA, confirmation, statuts (US-5.1)
 - [ ] P1-09 Dossiers (`bids`) + dépôt du DCE, décompression, typage, OCR (US-3.1)

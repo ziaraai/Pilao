@@ -64,6 +64,52 @@ class Outbox:
         return self.sent[-1].body.split("token=")[1].split()[0]
 
 
+class MemoryStorage:
+    """In-memory ObjectStorage for API tests (S3 itself is covered with moto)."""
+
+    def __init__(self) -> None:
+        self.objects: dict[str, bytes] = {}
+        self.fail_put = False
+
+    def put(self, key: str, fileobj, content_type: str) -> None:  # type: ignore[no-untyped-def]
+        if self.fail_put:
+            raise RuntimeError("storage down")
+        self.objects[key] = fileobj.read()
+
+    def delete(self, key: str) -> None:
+        self.objects.pop(key, None)
+
+    def signed_download_url(self, key: str, filename: str, ttl_seconds: int) -> str:
+        return f"https://storage.test/{key}?name={filename}&expires={ttl_seconds}&sig=abc"
+
+
+class FakeScanner:
+    """Flags any content containing the EICAR marker; can simulate an outage."""
+
+    def __init__(self) -> None:
+        self.down = False
+
+    def scan(self, fileobj) -> str | None:  # type: ignore[no-untyped-def]
+        from app.storage.antivirus import ScannerUnavailable
+
+        if self.down:
+            raise ScannerUnavailable("down")
+        fileobj.seek(0)
+        found = b"EICAR-STANDARD-ANTIVIRUS-TEST-FILE" in fileobj.read()
+        fileobj.seek(0)
+        return "Eicar-Test-Signature" if found else None
+
+
+@pytest.fixture
+def storage() -> MemoryStorage:
+    return MemoryStorage()
+
+
+@pytest.fixture
+def scanner() -> FakeScanner:
+    return FakeScanner()
+
+
 class NoDirectory:
     """Default registry stub: knows no company."""
 
@@ -77,12 +123,19 @@ def outbox() -> Outbox:
 
 
 @pytest.fixture
-def make_client(conn: Connection, outbox: Outbox) -> Iterator[Callable[[], TestClient]]:
+def make_client(
+    conn: Connection,
+    outbox: Outbox,
+    storage: MemoryStorage,
+    scanner: FakeScanner,
+) -> Iterator[Callable[[], TestClient]]:
     """Factory of independent HTTP clients (own cookie jar), one DB session per request."""
     from app.core.email import get_mailer
     from app.db.session import get_db
     from app.integrations.recherche_entreprises import get_company_directory
     from app.main import app
+    from app.routers.files import _scanner
+    from app.storage.objects import get_storage
 
     def override_db() -> Iterator[Session]:
         with _new_session(conn) as session:
@@ -91,5 +144,7 @@ def make_client(conn: Connection, outbox: Outbox) -> Iterator[Callable[[], TestC
     app.dependency_overrides[get_db] = override_db
     app.dependency_overrides[get_mailer] = lambda: outbox
     app.dependency_overrides[get_company_directory] = lambda: NoDirectory()  # never hit the network
+    app.dependency_overrides[get_storage] = lambda: storage
+    app.dependency_overrides[_scanner] = lambda: scanner
     yield lambda: TestClient(app, headers={"Origin": "http://localhost:3000"})
     app.dependency_overrides.clear()

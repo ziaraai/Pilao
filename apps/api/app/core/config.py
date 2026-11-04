@@ -11,6 +11,16 @@ class Settings(BaseSettings):
     app_secret_key: str = "change-me"
     app_base_url: str = "http://localhost:3000"
     recherche_entreprises_base_url: str = "https://recherche-entreprises.api.gouv.fr"
+    s3_endpoint: str | None = None  # None = AWS / provider default; MinIO locally
+    s3_bucket: str = "pilao-local"
+    s3_access_key: str = ""
+    s3_secret_key: str = ""
+    s3_region: str = "fr-par"
+    max_upload_bytes: int = 50 * 1024 * 1024
+    org_storage_quota_bytes: int = 5 * 1024**3
+    signed_url_ttl_seconds: int = 300
+    clamav_host: str | None = None  # unset = no antivirus (refused in production)
+    clamav_port: int = 3310
     environment: str = "local"  # local | test | production
 
     session_cookie_name: str = "pilao_session"

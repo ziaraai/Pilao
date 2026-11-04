@@ -22,6 +22,15 @@ services:
       MINIO_ROOT_PASSWORD: pilao-secret
     ports: ["9000:9000", "9001:9001"]
     volumes: [miniodata:/data]
+  minio-init:
+    image: minio/mc
+    depends_on: [minio]
+    entrypoint: >
+      /bin/sh -c "until mc alias set local http://minio:9000 pilao pilao-secret; do sleep 1; done;
+      mc mb --ignore-existing local/pilao-local"
+  clamav:
+    image: clamav/clamav:stable
+    ports: ["3310:3310"]
 volumes:
   pgdata:
   miniodata:
