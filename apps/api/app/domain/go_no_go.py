@@ -165,7 +165,10 @@ def opinion(i: Inputs) -> Opinion:
     text = _norm(i.tender_text)
 
     excluded = [k for k in i.excluded_keywords if _norm(k) and _norm(k) in text]
-    matched = [k for k in i.profile_keywords if _norm(k) and _norm(k) in text]
+    # The same word can come from the profile and from a trade: list it once.
+    matched = list(
+        dict.fromkeys(_norm(k) for k in i.profile_keywords if _norm(k) and _norm(k) in text)
+    )
     if excluded:
         score -= 40
         factors.append(

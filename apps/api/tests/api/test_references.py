@@ -276,3 +276,14 @@ def test_unknown_columns_are_reported_not_silently_dropped(
     header = [*HEADER, "Contact acheteur"]
     report = upload(c, workbook([[*GOOD, "M. Martin"]], header=header)).json()
     assert report["created"] == 1 and report["ignored_columns"] == ["Contact acheteur"]
+
+
+def test_import_errors_are_in_french(make_client: Factory, outbox: Outbox) -> None:
+    c = signed_in_client(make_client, outbox)
+    rows = [
+        ["", "public", "Objet sans client", None, None, None, None, None, None, None],
+        ["C", "public", "Année farfelue", None, None, None, 1800, None, None, None],
+    ]
+    errors = [e["message"] for e in upload(c, workbook(rows)).json()["errors"]]
+    assert errors == ["Client : champ obligatoire", "Année : doit être au moins 1950"]
+    assert not any("should" in e for e in errors)

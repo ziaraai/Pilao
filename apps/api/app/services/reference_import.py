@@ -188,8 +188,31 @@ def _friendly(exc: ValidationError) -> str:
         field = str(err["loc"][0]) if err["loc"] else "ligne"
         field = _MODEL_TO_COLUMN.get(field, field)
         label = next((lbl for f, lbl, _ in COLUMNS if f == field), field)
-        parts.append(f"{label} : {err['msg'].removeprefix('Value error, ')}")
+        parts.append(f"{label} : {_french(err)}")
     return " ; ".join(parts)
+
+
+def _french(err: Any) -> str:
+    """The user reads this report: Pydantic's English messages are translated."""
+    msg = str(err["msg"])
+    if msg.startswith("Value error, "):
+        return msg.removeprefix("Value error, ")  # our own validators speak French
+    kind, ctx = str(err.get("type", "")), err.get("ctx") or {}
+    if kind == "string_too_short":
+        return (
+            "champ obligatoire"
+            if ctx.get("min_length") == 1
+            else f"{ctx.get('min_length')} caractères minimum"
+        )
+    if kind == "string_too_long":
+        return f"{ctx.get('max_length')} caractères maximum"
+    if kind in ("greater_than_equal", "greater_than"):
+        return f"doit être au moins {ctx.get('ge', ctx.get('gt'))}"
+    if kind in ("less_than_equal", "less_than"):
+        return f"doit être au plus {ctx.get('le', ctx.get('lt'))}"
+    if kind == "missing":
+        return "champ obligatoire"
+    return "valeur invalide"
 
 
 def parse_workbook(content: bytes) -> tuple[list[RowResult], list[str]]:

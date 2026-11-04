@@ -118,3 +118,12 @@ Format : numéro, date, décision, raison, statut. Ajouter une entrée pour chaq
 - **Date limite de l'avis Go / No-Go** : celle du dossier prime (pré-remplie depuis le DCE, puis éventuellement corrigée par l'utilisateur, par exemple après un avis rectificatif) ; la date lue dans le DCE ne sert que si le dossier n'en a pas.
 - **Autres corrections** : l'attestation valable le plus longtemps est retenue quand plusieurs du même type existent ; détails de visite et contraintes de format sans source vérifiable écartés ; un lot mal formé n'invalide plus l'analyse ; aucun appel vide quand le DCE n'est qu'un CCTP trop long ; une pièce qui ne tient pas du tout est nommée dans les avertissements ; un fichier identique déposé deux fois sous le même chemin est signalé comme doublon, un fichier différent est gardé sous un chemin distinct ; mémoire bornée sur les longs PDF.
 - **Statut** : validé.
+
+## ADR-017 — Front : appels directs à l'API, URL en français, rechargement à la connexion
+- **Date** : 2026-11-04
+- **Appels** : le navigateur appelle l'API directement (`NEXT_PUBLIC_API_URL`), avec le cookie de session `httpOnly` + `SameSite=Lax` et l'origine autorisée par CORS. Pas de proxy par Next.js : les dépôts de DCE vont jusqu'à 250 Mo. **En production, l'API doit être sur le même site** que l'application (ex. `app.pilao.fr` et `api.pilao.fr`), sinon le cookie n'est pas envoyé.
+- **Pages** : client components (données dynamiques par utilisateur) ; rafraîchissement automatique toutes les 3 s tant qu'un traitement de fond est en cours (lecture IA, indexation, DCE, analyse). URL en français : `/inscription`, `/connexion`, `/verifier-email`, `/dossiers`, `/dossiers/[id]`, `/profil`, `/coffre-fort`, `/documents`.
+- **Cache Components (Next.js 16)** : les routes masquées restent montées (`<Activity>`). La connexion et la déconnexion font donc un **rechargement complet** : sinon la mise en page gardait l'état « non connecté » (ou des données de la session précédente). Le cadre de l'application lit l'URL et se trouve sous `<Suspense>`.
+- **Accessibilité / langue** : sélecteur de fichier maison en français (le bouton natif suit la langue du navigateur), champs étiquetés, fenêtre de source fermable par Échap, messages d'erreur de validation traduits.
+- **Vérification** : tests unitaires (vitest, CI) sur la logique (montants, dates à l'heure de Paris, messages) ; parcours de bout en bout dans Chromium contre la vraie pile (`apps/web/e2e/`), à lancer en local.
+- **Statut** : validé.

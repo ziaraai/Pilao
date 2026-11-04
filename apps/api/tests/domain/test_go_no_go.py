@@ -121,3 +121,8 @@ def test_parse_datetime() -> None:
         and day.utcoffset() == timedelta(hours=1)
     )
     assert parse_datetime("15 décembre") is None and parse_datetime(None) is None
+
+
+def test_a_keyword_from_profile_and_trade_is_listed_once() -> None:
+    o = opinion(inputs(profile_keywords=["nettoyage", "Nettoyage", "vitrerie"]))
+    assert o.factors[0].detail == "Correspond à votre activité (nettoyage)."
