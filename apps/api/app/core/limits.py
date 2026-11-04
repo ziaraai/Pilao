@@ -1,10 +1,15 @@
 """Reject oversized request bodies before they are spooled (multipart is spooled to disk)."""
 
+import re
+
 from starlette.types import ASGIApp, Message, Receive, Scope, Send
 
 from app.core.config import get_settings
 
 _BODY = b'{"error":{"code":"payload_too_large","message":"Requ\\u00eate trop volumineuse."}}'
+
+
+_DCE_UPLOAD = re.compile(r"^/bids/[^/]+/dce/?$")
 
 
 class _TooLarge(Exception):
@@ -36,7 +41,13 @@ class BodySizeLimitMiddleware:
         if scope["type"] != "http":
             await self.app(scope, receive, send)
             return
-        limit = get_settings().max_upload_bytes + 1024 * 1024  # multipart overhead
+        s = get_settings()
+        base = (
+            s.max_dce_upload_bytes
+            if _DCE_UPLOAD.match(scope.get("path", ""))
+            else s.max_upload_bytes
+        )
+        limit = base + 1024 * 1024  # multipart overhead
         raw = dict(scope["headers"]).get(b"content-length")
         if raw and raw.isdigit() and int(raw) > limit:
             await _send_413(send)

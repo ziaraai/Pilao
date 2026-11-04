@@ -18,6 +18,8 @@ class Settings(BaseSettings):
     s3_secret_key: str = ""
     s3_region: str = "fr-par"
     max_upload_bytes: int = 50 * 1024 * 1024
+    # DCE archives often carry plans: a larger limit, for that endpoint only.
+    max_dce_upload_bytes: int = 250 * 1024 * 1024
     org_storage_quota_bytes: int = 5 * 1024**3
     signed_url_ttl_seconds: int = 300
     clamav_host: str | None = None  # unset = no antivirus (refused in production)

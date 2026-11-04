@@ -154,11 +154,17 @@ class FakeQueue:
     """Collects enqueued documents; ``drain`` plays the worker on the test connection."""
 
     def __init__(
-        self, conn: Connection, storage: MemoryStorage, embedder: CountingEmbedder
+        self,
+        conn: Connection,
+        storage: MemoryStorage,
+        embedder: CountingEmbedder,
+        scanner: "FakeScanner",
     ) -> None:
         self._conn, self._storage, self._embedder = conn, storage, embedder
+        self._scanner = scanner
         self.pending: list[uuid.UUID] = []
         self.pending_reads: list[uuid.UUID] = []
+        self.pending_dce: list[uuid.UUID] = []
         self.down = False
 
     def enqueue_index_document(self, doc_id: uuid.UUID) -> None:
@@ -179,6 +185,19 @@ class FakeQueue:
             with _new_session(self._conn) as session:
                 run_read_document(session, doc_id, self._storage, reader)
 
+    def enqueue_process_dce(self, version_id: uuid.UUID) -> None:
+        if self.down:
+            raise ConnectionError("redis down")
+        self.pending_dce.append(version_id)
+
+    def drain_dce(self) -> None:
+        from app.services.dce import run_process_dce
+
+        while self.pending_dce:
+            version_id = self.pending_dce.pop(0)
+            with _new_session(self._conn) as session:
+                run_process_dce(session, version_id, self._storage, self._scanner)
+
     def drain(self) -> None:
         from app.services.knowledge import run_index_document
 
@@ -194,8 +213,10 @@ def embedder() -> CountingEmbedder:
 
 
 @pytest.fixture
-def queue(conn: Connection, storage: MemoryStorage, embedder: CountingEmbedder) -> FakeQueue:
-    return FakeQueue(conn, storage, embedder)
+def queue(
+    conn: Connection, storage: MemoryStorage, embedder: CountingEmbedder, scanner: FakeScanner
+) -> FakeQueue:
+    return FakeQueue(conn, storage, embedder, scanner)
 
 
 class FakeReader:

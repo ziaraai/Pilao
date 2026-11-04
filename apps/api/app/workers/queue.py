@@ -9,12 +9,14 @@ from rq import Queue, Retry
 
 from app.core.config import get_settings
 
+DCE_JOB_TIMEOUT_SECONDS = 1800  # 300-page DCE with OCR (US-3.2 CA8 targets 5 min for analysis)
 INDEX_JOB_TIMEOUT_SECONDS = 900
 
 
 class JobQueue(Protocol):
     def enqueue_index_document(self, doc_id: uuid.UUID) -> None: ...
     def enqueue_read_compliance_document(self, doc_id: uuid.UUID) -> None: ...
+    def enqueue_process_dce(self, version_id: uuid.UUID) -> None: ...
 
 
 class RqJobQueue:
@@ -36,6 +38,16 @@ class RqJobQueue:
             "app.workers.jobs.read_compliance_document_job",
             str(doc_id),
             job_timeout=300,
+            result_ttl=3600,
+            failure_ttl=7 * 24 * 3600,
+            retry=Retry(max=2, interval=[30, 120]),
+        )
+
+    def enqueue_process_dce(self, version_id: uuid.UUID) -> None:
+        self._q.enqueue(
+            "app.workers.jobs.process_dce_job",
+            str(version_id),
+            job_timeout=DCE_JOB_TIMEOUT_SECONDS,
             result_ttl=3600,
             failure_ttl=7 * 24 * 3600,
             retry=Retry(max=2, interval=[30, 120]),

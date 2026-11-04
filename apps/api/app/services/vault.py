@@ -16,6 +16,7 @@ from app.domain.filetypes import JPEG, PDF, PNG
 from app.schemas.vault import ComplianceDocOut, ConfirmIn, MissingOut, SummaryOut
 from app.services import files as files_svc
 from app.services.document_reading import DocumentReader
+from app.services.jobs import set_job_status
 from app.storage.antivirus import VirusScanner
 from app.storage.objects import ObjectStorage
 from app.workers.queue import JobQueue
@@ -140,18 +141,7 @@ def delete_document(
 
 
 def _set_job(db: Session, doc_id: uuid.UUID, status: str, error: str | None = None) -> None:
-    job = db.scalars(
-        select(Job)
-        .where(Job.kind == JOB_KIND, Job.ref_id == doc_id)
-        .order_by(Job.created_at.desc())
-    ).first()
-    if job is None:
-        return
-    job.status, job.error = status, error
-    if status == "running":
-        job.started_at = _now()
-    if status in ("done", "error"):
-        job.finished_at, job.progress = _now(), (100 if status == "done" else job.progress)
+    set_job_status(db, JOB_KIND, doc_id, status, error)
 
 
 def run_read_document(

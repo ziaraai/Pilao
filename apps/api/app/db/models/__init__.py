@@ -1,6 +1,7 @@
 from app.db.models.ai_call import AiCall
 from app.db.models.audit_log import AuditLog
 from app.db.models.auth import AuthToken, LoginAttempt, UserSession
+from app.db.models.bid import Bid, DceFile, DceVersion
 from app.db.models.file import File
 from app.db.models.job import Job
 from app.db.models.knowledge import DocumentChunk, KnowledgeDocument
@@ -19,10 +20,13 @@ __all__ = [
     "AiCall",
     "AuditLog",
     "AuthToken",
+    "Bid",
     "Certification",
     "CompanyProfile",
     "CompanyReference",
     "ComplianceDocument",
+    "DceFile",
+    "DceVersion",
     "DocumentChunk",
     "Equipment",
     "File",

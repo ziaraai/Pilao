@@ -7,7 +7,14 @@ from sqlalchemy import any_, select
 from app.core.config import get_settings
 from app.core.deps import CurrentAuth, ScopedDb
 from app.core.errors import ApiError
-from app.db.models import CompanyReference, ComplianceDocument, File, KnowledgeDocument
+from app.db.models import (
+    CompanyReference,
+    ComplianceDocument,
+    DceFile,
+    DceVersion,
+    File,
+    KnowledgeDocument,
+)
 from app.schemas.files import DownloadUrlOut, FileOut
 from app.services import files as svc
 from app.storage.antivirus import ScannerUnavailable, VirusScanner, get_scanner
@@ -73,13 +80,18 @@ def delete(file_id: uuid.UUID, ctx: CurrentAuth, db: ScopedDb, storage: Storage)
     record = _get(db, file_id)
     # A file that backs an indexed document or an attestation must be deleted through its
     # owner, which also removes the derived data (search index...). Never leave orphans.
-    for owner in (KnowledgeDocument, ComplianceDocument):
+    for owner in (KnowledgeDocument, ComplianceDocument, DceFile):
         if db.scalar(select(owner.id).where(owner.file_id == record.id)) is not None:
             raise ApiError(
                 409,
                 "file_in_use",
                 "Ce fichier est utilisé par un document : supprimez le document lui-même.",
             )
+    deposited = select(DceVersion.id).where(any_(DceVersion.source_file_ids) == record.id)
+    if db.scalar(deposited.limit(1)) is not None:
+        raise ApiError(
+            409, "file_in_use", "Ce fichier fait partie d'un DCE : supprimez le dossier lui-même."
+        )
     # Reference photos are plain id lists (no foreign key): refuse rather than leave a dangling id.
     photo_of = select(CompanyReference.id).where(any_(CompanyReference.photo_file_ids) == record.id)
     if db.scalar(photo_of.limit(1)) is not None:

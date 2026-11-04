@@ -61,15 +61,19 @@ def _measure(fileobj: BinaryIO, limit: int) -> tuple[int, str]:
 def upload_file(
     db: Session,
     org: Organization,
-    user: User,
+    user: User | None,
     fileobj: BinaryIO,
     filename: str | None,
     storage: ObjectStorage,
     scanner: VirusScanner,
     allowed_mimes: frozenset[str] | None = None,
+    max_bytes: int | None = None,
 ) -> File:
+    """Validate, scan and store one file. ``user`` is None for files a worker extracts on
+    behalf of a user who has since been deleted."""
     s = get_settings()
-    size, sha256 = _measure(fileobj, s.max_upload_bytes)
+    user_id = user.id if user is not None else None
+    size, sha256 = _measure(fileobj, max_bytes or s.max_upload_bytes)
     if size == 0:
         raise ApiError(422, "empty_file", "Le fichier est vide.")
     kind = detect(fileobj)
@@ -95,7 +99,7 @@ def upload_file(
     if signature is not None:
         db.add(
             AuditLog(
-                user_id=user.id,
+                user_id=user_id,
                 action="upload_blocked",
                 entity="file",
                 meta={"signature": signature, "sha256": sha256, "filename": (filename or "")[:200]},
@@ -111,7 +115,7 @@ def upload_file(
         mime=kind.mime,
         size_bytes=size,
         sha256=sha256,
-        uploaded_by=user.id,
+        uploaded_by=user_id,
     )
     storage.put(record.storage_key, fileobj, kind.mime)
     try:
@@ -120,7 +124,7 @@ def upload_file(
         db.execute(select(Organization.id).where(Organization.id == org.id).with_for_update())
         _check_quota(db, size, s.org_storage_quota_bytes)
         db.add(record)
-        db.add(AuditLog(user_id=user.id, action="upload", entity="file", entity_id=record.id))
+        db.add(AuditLog(user_id=user_id, action="upload", entity="file", entity_id=record.id))
         db.commit()
     except Exception:
         db.rollback()
@@ -132,9 +136,13 @@ def upload_file(
     return record
 
 
-def delete_file(db: Session, user: User, record: File, storage: ObjectStorage) -> None:
+def delete_file(db: Session, user: User | None, record: File, storage: ObjectStorage) -> None:
     key = record.storage_key
-    db.add(AuditLog(user_id=user.id, action="delete", entity="file", entity_id=record.id))
+    db.add(
+        AuditLog(
+            user_id=user.id if user else None, action="delete", entity="file", entity_id=record.id
+        )
+    )
     db.delete(record)
     db.commit()
     try:

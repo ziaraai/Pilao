@@ -85,3 +85,12 @@ Format : numéro, date, décision, raison, statut. Ajouter une entrée pour chaq
 - **Liens d'aide (CA4)** : seulement les pages d'accueil des organismes, car les liens profonds n'ont pas pu être vérifiés depuis l'environnement de développement.
 - **Reste à faire** : alertes e-mail J-30 / J-7 et bandeau (P3-05) ; choix et évaluation du modèle de vision (phase 0, ADR-005) sur de vraies attestations ; question Q2 (RNE accepté à la place du Kbis) qui influence les exigences affichées.
 - **Statut** : validé.
+
+## ADR-014 — Dépôt du DCE : versions, décompression sûre, typage
+- **Date** : 2026-11-04
+- **Décision** : chaque dépôt (ZIP et/ou documents, 50 fichiers max, 250 Mo par fichier pour ce point d'entrée seulement) crée une **version** (`dce_versions`) traitée en tâche de fond (`process_dce`). Un seul dépôt en traitement à la fois par dossier. Les fichiers déposés sont conservés tels quels ; chaque pièce extraite devient un fichier à part (`dce_files`) qui repasse par les contrôles d'envoi (type réel, antivirus, quota) — une pièce refusée (format, virus) est **signalée** dans la version (`skipped`) sans faire échouer le dépôt.
+- **Décompression** (`app/documents/archive.py`) : ZIP imbriqués jusqu'à 3 niveaux ; tailles mesurées sur les octets réellement décompressés ; refus des taux de compression anormaux (ZIP bombe), de plus de 2 000 fichiers ou de 1 Go décompressé ; fichiers protégés par mot de passe signalés ; noms « Windows » (cp850) reconstitués ; chemins neutralisés (`..`, chemins absolus) ; fichiers parasites ignorés (`__MACOSX`, `Thumbs.db`, fichiers de verrouillage Office). Rien n'est écrit sur disque sous un nom venant de l'archive.
+- **Typage** : déterministe, d'abord par le nom (RC, CCAP, CCTP, AE/ATTRI1, BPU, DPGF, DQE, annexe), puis par le contenu de la première page (livraison 2) ; l'utilisateur corrige (`PATCH /dce-files/{id}`), sa correction est marquée `user`.
+- **Différences entre versions (CA4)** : comparaison par chemin relatif et empreinte SHA-256 : fichiers ajoutés, supprimés, modifiés, avec une phrase de synthèse. Un fichier seulement déplacé ou renommé n'est pas compté comme modifié. La comparaison du **contenu** (quelles exigences ont changé) viendra avec l'analyse (P1-10).
+- **Choix** : un même contenu présent sous deux noms est gardé deux fois (on ne retire jamais en silence un fichier déposé).
+- **Statut** : validé.
