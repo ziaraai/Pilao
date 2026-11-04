@@ -62,7 +62,9 @@ def extract_pdf(fileobj: BinaryIO) -> list[Block]:
                 total_chars += len(text)
                 if total_chars > MAX_CHARS:
                     raise ExtractionError("Document trop volumineux à indexer.")
-                for para in re.split(r"\n\s*\n|\n(?=\S.*\n\S)", text):
+                # Paragraphs end on blank lines only: lines inside one are re-joined (and
+                # de-hyphenated) by _split_heading_lines, which also isolates heading lines.
+                for para in re.split(r"\n\s*\n", text):
                     for line_block in _split_heading_lines(para):
                         blocks.append(Block(line_block[0], line_block[1], number))
             page_count = len(pages)
@@ -118,13 +120,17 @@ def extract_docx(fileobj: BinaryIO) -> list[Block]:
             style = (para.style.name if para.style is not None else "") or ""
             is_heading = style.lower().startswith(("heading", "titre")) or style == "Title"
             blocks.append(Block("heading" if is_heading else "paragraph", text, None))
+            total += len(text)
         elif child.tag.endswith("}tbl"):
             table = Table(child, doc)
             for row in table.rows:
                 cells = [c.text.strip() for c in row.cells if c.text.strip()]
                 if cells:
-                    blocks.append(Block("paragraph", " | ".join(dict.fromkeys(cells)), None))
-        total += len(blocks[-1].text) if blocks else 0
+                    row_text = " | ".join(dict.fromkeys(cells))
+                    blocks.append(Block("paragraph", row_text, None))
+                    total += len(row_text)
+                if total > MAX_CHARS:
+                    raise ExtractionError("Document trop volumineux à indexer.")
         if total > MAX_CHARS:
             raise ExtractionError("Document trop volumineux à indexer.")
     if not blocks:

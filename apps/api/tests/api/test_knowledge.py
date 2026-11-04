@@ -276,3 +276,47 @@ def test_tenancy_isolation(
     assert a.post(f"/knowledge/{doc_id}/reindex").status_code == 404
     assert a.delete(f"/knowledge/{doc_id}").status_code == 404
     assert b.get(f"/knowledge/{doc_id}").json()["status"] == "ready" and storage.objects
+
+
+def test_reindex_after_a_model_change_re_embeds(
+    make_client: Factory, outbox: Outbox, queue: FakeQueue, embedder: CountingEmbedder, db: Session
+) -> None:
+    c = signed_in_client(make_client, outbox)
+    doc_id = ready_doc(c, queue)
+    before = embedder.texts_embedded
+    for chunk in db.scalars(select(DocumentChunk)):
+        chunk.meta = {"embedding_model": "old/model"}
+    db.commit()
+
+    assert c.post(f"/knowledge/{doc_id}/reindex").status_code == 202
+    queue.drain()
+    assert embedder.texts_embedded > before  # old-model vectors are never reused
+    assert {ch.meta["embedding_model"] for ch in db.scalars(select(DocumentChunk))} == {
+        embedder.model
+    }
+
+
+def test_document_stuck_in_processing_can_be_reindexed(
+    make_client: Factory, outbox: Outbox, queue: FakeQueue, db: Session
+) -> None:
+    from datetime import UTC, datetime, timedelta
+
+    from sqlalchemy import update
+
+    c = signed_in_client(make_client, outbox)
+    doc_id = ready_doc(c, queue)
+    db.execute(
+        update(KnowledgeDocument)
+        .where(KnowledgeDocument.id == doc_id)
+        .values(status="processing", updated_at=datetime.now(UTC) - timedelta(minutes=5))
+    )
+    db.commit()
+    assert c.post(f"/knowledge/{doc_id}/reindex").status_code == 409  # maybe still running
+
+    db.execute(
+        update(KnowledgeDocument)
+        .where(KnowledgeDocument.id == doc_id)
+        .values(updated_at=datetime.now(UTC) - timedelta(hours=1))
+    )
+    db.commit()
+    assert c.post(f"/knowledge/{doc_id}/reindex").status_code == 202  # worker died long ago

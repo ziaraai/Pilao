@@ -39,8 +39,11 @@ def _split_long(text: str) -> list[str]:
     pieces: list[str] = []
     current = ""
     for sentence in re.split(r"(?<=[\.\!\?;:])\s+", text):
+        if len(sentence) > _MAX_CHARS and current:  # keep the text order: flush first
+            pieces.append(current)
+            current = ""
         while len(sentence) > _MAX_CHARS:  # no punctuation at all: cut on a space
-            cut = sentence.rfind(" ", 0, _TARGET_CHARS) or _TARGET_CHARS
+            cut = sentence.rfind(" ", 0, _TARGET_CHARS)
             cut = cut if cut > 0 else _TARGET_CHARS
             pieces.append(sentence[:cut].strip())
             sentence = sentence[cut:].strip()
@@ -88,7 +91,8 @@ def chunk_blocks(blocks: list[Block]) -> list[Chunk]:
                 )
             )
         carried = _tail(content) if keep_overlap else ""
-        parts, pages = ([carried] if carried else []), []
+        # The overlap text comes from the end of the previous chunk: keep its page as a source.
+        parts, pages = ([carried], pages[-1:]) if carried else ([], [])
 
     for block in blocks:
         if block.kind == "heading":

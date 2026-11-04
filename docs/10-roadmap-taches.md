@@ -38,6 +38,10 @@ Reste à faire :
 - [ ] Limiteur de débit public (`/companies/lookup`) en mémoire par processus → Redis quand l'API aura plusieurs instances.
 - [ ] Code de suivi des jobs dupliqué entre `services/knowledge.py` et `services/vault.py` ; deux écritures de `ai_calls` (`ai/calls.py`, `ai/llm.py`) → factoriser.
 - [ ] « Relire » une attestation pendant qu'une relance automatique RQ est programmée peut lancer deux lectures.
+- [ ] Détection des titres dans les PDF : une ligne comme « 2 Agents de propreté… » est prise pour un titre (à régler sur de vrais mémoires).
+- [ ] `EMBEDDING_DIM` paraît réglable, mais la colonne est fixée à 1024 par la migration : le changer impose une migration et un ré-embedding.
+- [ ] Les embeddings appellent LiteLLM depuis `app/ai/embeddings.py` et non `app/ai/llm.py` (reste dans la couche IA, mais deux points d'entrée).
+- [ ] `page_count` = dernière page contenant du texte, pas le nombre réel de pages.
 - [ ] L'inscription révèle si un e-mail est déjà utilisé (409) : acceptable en V1, à revoir avec un parcours « vérifiez votre e-mail » neutre.
 
 ## Phase 2 — Mémoire technique, éditeur, export (4 semaines)

@@ -24,6 +24,9 @@ class EmbeddingResult:
 
 
 class Embedder(Protocol):
+    @property
+    def model(self) -> str: ...
+
     def embed(self, texts: list[str]) -> EmbeddingResult: ...
 
 
@@ -59,6 +62,10 @@ class HashEmbedder:
 class LiteLLMEmbedder:
     def __init__(self, model: str, dim: int, batch_size: int = 64) -> None:
         self._model, self._dim, self._batch = model, dim, batch_size
+
+    @property
+    def model(self) -> str:
+        return self._model
 
     def embed(self, texts: list[str]) -> EmbeddingResult:
         import litellm  # imported lazily: heavy, and only needed when a real model is set

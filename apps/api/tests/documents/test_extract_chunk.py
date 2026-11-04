@@ -120,3 +120,36 @@ def test_empty_and_tiny_inputs() -> None:
     assert (
         len(only) == 1 and only[0].page_from is None and only[0].tokens == estimate_tokens("Court.")
     )
+
+
+def test_pdf_lines_of_a_paragraph_are_rejoined_and_dehyphenated() -> None:
+    pdf = make_pdf([["Le prestataire assure l'entre-", "tien des locaux chaque jour", "ouvre."]])
+    blocks = extract_pdf(io.BytesIO(pdf))
+    assert [b.text for b in blocks] == [
+        "Le prestataire assure l'entretien des locaux chaque jour ouvre."
+    ]
+
+
+def test_long_unpunctuated_sentence_keeps_the_text_order() -> None:
+    from app.documents.chunk import _split_long
+
+    text = "Courte phrase. " + " ".join(f"mot{i}" for i in range(1500))
+    pieces = _split_long(text)
+    assert pieces[0] == "Courte phrase."
+    assert " ".join(pieces).split() == text.split()
+
+
+def test_overlap_keeps_the_page_it_comes_from() -> None:
+    para = " ".join(["Texte de la page."] * 120)  # about 2000 characters per page
+    chunks = chunk_blocks([Block("paragraph", para, 3), Block("paragraph", para, 4)])
+    assert len(chunks) == 2
+    assert (chunks[1].page_from, chunks[1].page_to) == (3, 4)
+
+
+def test_docx_size_limit_counts_every_table_row(monkeypatch: pytest.MonkeyPatch) -> None:
+    from app.documents import extract
+
+    monkeypatch.setattr(extract, "MAX_CHARS", 500)
+    rows = [[f"ligne {i} " + "x" * 40, "valeur"] for i in range(30)]
+    with pytest.raises(ExtractionError):
+        extract_docx(io.BytesIO(make_docx([("Normal", "Intro")], table=rows)))

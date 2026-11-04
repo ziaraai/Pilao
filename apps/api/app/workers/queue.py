@@ -9,6 +9,8 @@ from rq import Queue, Retry
 
 from app.core.config import get_settings
 
+INDEX_JOB_TIMEOUT_SECONDS = 900
+
 
 class JobQueue(Protocol):
     def enqueue_index_document(self, doc_id: uuid.UUID) -> None: ...
@@ -23,7 +25,7 @@ class RqJobQueue:
         self._q.enqueue(
             "app.workers.jobs.index_document_job",
             str(doc_id),
-            job_timeout=900,
+            job_timeout=INDEX_JOB_TIMEOUT_SECONDS,
             result_ttl=3600,
             failure_ttl=7 * 24 * 3600,
             retry=Retry(max=2, interval=[30, 120]),

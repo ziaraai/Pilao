@@ -130,6 +130,10 @@ class CountingEmbedder:
         self.bad_dim = False
 
     @property
+    def model(self) -> str:
+        return self._inner.model
+
+    @property
     def texts_embedded(self) -> int:
         return sum(len(b) for b in self.batches)
 

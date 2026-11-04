@@ -2,10 +2,11 @@ import hashlib
 import logging
 import time
 import uuid
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from typing import BinaryIO
 
 from sqlalchemy import delete, select
+from sqlalchemy.dialects.postgresql import distinct_on
 from sqlalchemy.orm import Session
 
 from app.ai.calls import log_embedding_call
@@ -28,7 +29,7 @@ from app.domain.filetypes import DOCX, PDF
 from app.services import files as files_svc
 from app.storage.antivirus import VirusScanner
 from app.storage.objects import ObjectStorage
-from app.workers.queue import JobQueue
+from app.workers.queue import INDEX_JOB_TIMEOUT_SECONDS, JobQueue
 
 logger = logging.getLogger("pilao.knowledge")
 
@@ -46,7 +47,8 @@ def _now() -> datetime:
 
 
 def _enqueue(db: Session, doc: KnowledgeDocument, queue: JobQueue) -> None:
-    db.add(Job(kind=JOB_KIND, ref_id=doc.id, org_id=doc.org_id, status="pending"))
+    job = Job(kind=JOB_KIND, ref_id=doc.id, org_id=doc.org_id, status="pending")
+    db.add(job)
     doc.status, doc.error = "pending", None
     db.commit()
     try:
@@ -54,6 +56,7 @@ def _enqueue(db: Session, doc: KnowledgeDocument, queue: JobQueue) -> None:
     except Exception:
         logger.exception("could not enqueue indexing of %s", doc.id)
         doc.status, doc.error = "error", "File d'attente indisponible. Réessayez plus tard."
+        job.status, job.error, job.finished_at = "error", "enqueue failed", _now()
         db.commit()
 
 
@@ -85,7 +88,12 @@ def create_document(
 
 
 def reindex_document(db: Session, doc: KnowledgeDocument, queue: JobQueue) -> None:
-    if doc.status in ("pending", "processing"):
+    # A worker killed mid-job (out of memory, redeploy) never resets "processing": once the
+    # job timeout is long past, the document must not stay locked forever.
+    stale = doc.status == "processing" and doc.updated_at < _now() - timedelta(
+        seconds=2 * INDEX_JOB_TIMEOUT_SECONDS
+    )
+    if doc.status in ("pending", "processing") and not stale:
         raise ApiError(409, "already_running", "L'indexation est déjà en cours.")
     _enqueue(db, doc, queue)
 
@@ -123,13 +131,21 @@ def _set_job(db: Session, doc_id: uuid.UUID, status: str, error: str | None = No
 def _embed_chunks(
     db: Session, org_id: uuid.UUID, chunks: list[Chunk], embedder: Embedder
 ) -> list[list[float]]:
-    """Embeddings for ``chunks``; identical text already indexed *in this org* is reused."""
+    """Embeddings for ``chunks``; identical text already indexed *in this org* is reused.
+
+    Only vectors made by the current model are reused: after a model change, a reindex
+    really re-embeds instead of mixing two vector spaces.
+    """
     hashes = [_hash(c.content) for c in chunks]
     known: dict[str, list[float]] = {}
     rows = db.execute(
-        select(DocumentChunk.content_hash, DocumentChunk.embedding).where(
-            DocumentChunk.org_id == org_id, DocumentChunk.content_hash.in_(set(hashes))
+        select(DocumentChunk.content_hash, DocumentChunk.embedding)
+        .where(
+            DocumentChunk.org_id == org_id,
+            DocumentChunk.content_hash.in_(set(hashes)),
+            DocumentChunk.meta["embedding_model"].astext == embedder.model,
         )
+        .ext(distinct_on(DocumentChunk.content_hash))
     )
     for content_hash, vector in rows:
         known[content_hash] = [float(x) for x in vector]
@@ -145,11 +161,12 @@ def _embed_chunks(
             result = embedder.embed([chunks[i].content for i in batch])
         except EmbeddingError as exc:
             log_embedding_call(
-                db, org_id, None, int((time.monotonic() - began) * 1000), "?", str(exc)
+                db, org_id, None, int((time.monotonic() - began) * 1000), embedder.model, str(exc)
             )
             db.commit()
             raise
         log_embedding_call(db, org_id, result, int((time.monotonic() - began) * 1000), result.model)
+        db.commit()  # the call is paid: its journal row must survive any later failure
         if len(result.vectors) != len(batch) or any(len(v) != dim for v in result.vectors):
             raise EmbeddingError(f"unexpected embedding shape (expected {dim} dimensions)")
         for i, vector in zip(batch, result.vectors, strict=True):
@@ -221,6 +238,7 @@ def run_index_document(
                 content_hash=_hash(chunk.content),
                 tokens=chunk.tokens,
                 embedding=vector,
+                meta={"embedding_model": embedder.model},
             )
         )
     doc = fresh
