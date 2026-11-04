@@ -241,3 +241,41 @@ export type Analysis = {
     disclaimer: string;
   } | null;
 };
+
+export type MemoirSection = {
+  id: string;
+  position: number;
+  title: string;
+  criterion_ref: string | null;
+  criterion_weight: number | null;
+  requirement_refs: string[];
+  word_budget: number;
+  status: string;
+  error: string | null;
+  content_md: string | null;
+  flags: { type: string; text: string }[];
+  sources: Record<string, unknown>[];
+  covered_refs: string[];
+  edited_by_user: boolean;
+};
+export type Memoir = {
+  id: string;
+  version: number;
+  status: string;
+  outline_source: "rc_imposed" | "org_template" | "sector_default";
+  max_pages: number | null;
+  word_budget: number;
+  sections: MemoirSection[];
+  unassigned_requirements: string[];
+  created_at: string;
+  references: {
+    id: string;
+    client_name: string;
+    title: string;
+    year: number | null;
+    amount_cents: number | null;
+    score: number | null;
+    reasons: string[];
+    selected: boolean;
+  }[];
+};

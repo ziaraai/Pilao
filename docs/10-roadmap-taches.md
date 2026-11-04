@@ -46,8 +46,8 @@ Reste à faire :
 
 ## Phase 2 — Mémoire technique, éditeur, export (4 semaines)
 
-- [ ] P2-01 Génération du plan (US-4.1)
-- [ ] P2-02 Sélection des références
+- [x] P2-01 Génération du plan (US-4.1)
+- [x] P2-02 Sélection des références
 - [ ] P2-03 Rédaction par chapitre en parallèle + sources + flags (US-4.2)
 - [ ] P2-04 Matrice de conformité (US-4.3)
 - [ ] P2-05 Éditeur + régénération d'un chapitre + versions (US-4.4)

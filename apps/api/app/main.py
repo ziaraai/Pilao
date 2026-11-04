@@ -7,7 +7,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from app.core.config import get_settings
 from app.core.errors import install_error_handlers
 from app.core.limits import BodySizeLimitMiddleware
-from app.routers import auth, bids, companies, files, knowledge, profile, vault
+from app.routers import auth, bids, companies, files, knowledge, memoir, profile, vault
 from app.storage.antivirus import get_scanner
 
 
@@ -35,6 +35,7 @@ app.include_router(files.router)
 app.include_router(knowledge.router)
 app.include_router(vault.router)
 app.include_router(bids.router)
+app.include_router(memoir.router)
 
 
 @app.get("/health")

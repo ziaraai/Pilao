@@ -104,3 +104,5 @@ class CompanyReference(IdMixin, TimestampMixin, OrgScoped, Base):
     )
     # Filled by the reference-selection step (P2-02); same dimension as document chunks.
     embedding: Mapped[Any] = mapped_column(Vector(get_settings().embedding_dim), nullable=True)
+    # Hash of the text the embedding was computed from: a changed reference is re-embedded.
+    embedding_text_hash: Mapped[str | None] = mapped_column(Text)

@@ -108,23 +108,25 @@ export function Field({
   );
 }
 
-const control =
-  "block w-full rounded-md border-0 px-3 py-2 text-sm text-slate-900 ring-1 ring-inset ring-slate-300 placeholder:text-slate-400 focus:ring-2 focus:ring-brand-navy disabled:bg-slate-50";
+const controlBase =
+  "block rounded-md border-0 px-3 py-2 text-sm text-slate-900 ring-1 ring-inset ring-slate-300 placeholder:text-slate-400 focus:ring-2 focus:ring-brand-navy disabled:bg-slate-50";
+
+/** Full width unless the caller sets a width (Tailwind cannot let a later class win). */
+export function controlClass(extra = ""): string {
+  const sized = /(^|\s)(w-|flex-1|max-w-|min-w-)/.test(extra);
+  return `${controlBase} ${sized ? "" : "w-full"} ${extra}`.trim();
+}
 
 export function Input(props: InputHTMLAttributes<HTMLInputElement>) {
-  return <input {...props} className={`${control} ${props.className ?? ""}`} />;
+  return <input {...props} className={controlClass(props.className)} />;
 }
 
 export function Textarea(props: TextareaHTMLAttributes<HTMLTextAreaElement>) {
-  return (
-    <textarea {...props} className={`${control} ${props.className ?? ""}`} />
-  );
+  return <textarea {...props} className={controlClass(props.className)} />;
 }
 
 export function Select(props: SelectHTMLAttributes<HTMLSelectElement>) {
-  return (
-    <select {...props} className={`${control} ${props.className ?? ""}`} />
-  );
+  return <select {...props} className={controlClass(props.className)} />;
 }
 
 export function Card({

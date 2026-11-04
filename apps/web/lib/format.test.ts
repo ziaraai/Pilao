@@ -1,5 +1,7 @@
 import { describe, expect, it } from "vitest";
 
+import { controlClass } from "@/components/ui";
+
 import { validationMessage } from "./api";
 import {
   centsToInput,
@@ -69,5 +71,14 @@ describe("lists and errors", () => {
         { loc: ["body", "email"], msg: "value is not a valid email address" },
       ]),
     ).toBe("Adresse e-mail invalide.");
+  });
+});
+
+describe("control widths", () => {
+  it("is full width by default and yields to an explicit width", () => {
+    expect(controlClass()).toContain("w-full");
+    expect(controlClass("w-24")).not.toContain("w-full");
+    expect(controlClass("min-w-64 flex-1")).not.toContain("w-full");
+    expect(controlClass("text-xs")).toContain("w-full");
   });
 });

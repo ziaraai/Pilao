@@ -127,3 +127,11 @@ Format : numéro, date, décision, raison, statut. Ajouter une entrée pour chaq
 - **Accessibilité / langue** : sélecteur de fichier maison en français (le bouton natif suit la langue du navigateur), champs étiquetés, fenêtre de source fermable par Échap, messages d'erreur de validation traduits.
 - **Vérification** : tests unitaires (vitest, CI) sur la logique (montants, dates à l'heure de Paris, messages) ; parcours de bout en bout dans Chromium contre la vraie pile (`apps/web/e2e/`), à lancer en local.
 - **Statut** : validé.
+
+## ADR-018 — Mémoire : plan, exigences par chapitre, références
+- **Date** : 2026-11-04
+- **Plan (US-4.1)** : règles déterministes (`app/domain/memoir_plan.py`). Plan imposé par le RC repris **mot pour mot et dans l'ordre** ; sinon titres de premier niveau du dernier « mémoire modèle » indexé, ordonnés selon les sous-critères de notation du RC (chapitres sans critère à la fin, dans leur ordre) ; sinon plan type du nettoyage. Chaque chapitre est rattaché au sous-critère dont il partage le plus de mots (prix exclu). Le plan est modifiable (titres, ordre, ajout, suppression, exigences, nombre de mots) tant que la rédaction n'a pas commencé ; les exigences rattachées à aucun chapitre sont signalées. Chaque préparation est une nouvelle version du mémoire. Les chapitres sont le plan : pas de colonne `outline` séparée.
+- **Exigences → chapitres** : par catégorie de l'exigence (personnel, matériel, fréquence, qualité, sécurité, environnement…) retrouvée dans le titre du chapitre, puis par mots communs ; à défaut, chapitre « méthodologie » ou premier chapitre. Une exigence n'est jamais perdue.
+- **Budget de mots (US-4.2 CA5)** : pages maximum du RC (12 par défaut) × 500 mots × 90 %, réparti selon le poids des sous-critères (un chapitre sans critère pèse la moitié d'un chapitre moyen), arrondi à 50, 150 minimum.
+- **Références (US-4.2 CA4)** : uniquement celles de l'entreprise. Score = proximité de contenu (embeddings, recalculés seulement si la référence change) 60 %, montant comparable 20 %, client public 10 %, moins de 5 ans 10 % ; 5 proposées avec leurs raisons, sélection automatique de celles au-dessus de 0,25 (au moins 3 si l'entreprise en a 3, au plus 5), modifiable. Sans IA disponible, choix sur les autres critères avec un avertissement.
+- **Statut** : validé.

@@ -176,6 +176,44 @@ let current; // the page, for a screenshot when a step fails
   await page.screenshot({ path: `${S}/03-source.png` });
   await page.getByRole("button", { name: "Fermer" }).click();
   step("clickable source opens the cited page");
+
+  // 6b. Memoir outline (P2-01) and references (P2-02)
+  await page
+    .getByRole("button", { name: "Préparer le plan du mémoire" })
+    .click();
+  await page
+    .getByText("Plan imposé par le règlement de la consultation", {
+      exact: false,
+    })
+    .waitFor();
+  if (
+    (await page.getByLabel("Titre du chapitre 2").inputValue()) !==
+    "2. Méthodologie"
+  )
+    throw new Error("imposed outline not kept");
+  await page.getByText("CCTP-1", { exact: true }).first().waitFor();
+  const refBox = page.getByRole("checkbox", { name: /Nettoyage des écoles/ });
+  if (!(await refBox.isChecked()))
+    throw new Error("closest reference not selected");
+  await page
+    .getByLabel("Titre du chapitre 2")
+    .fill("2. Méthodologie et organisation");
+  await page.getByRole("button", { name: "Enregistrer le plan" }).click();
+  await page
+    .getByRole("button", { name: "Enregistrer le plan" })
+    .and(page.locator("[disabled]"))
+    .waitFor();
+  await page.reload();
+  await page.getByLabel("Titre du chapitre 2").waitFor();
+  if (
+    (await page.getByLabel("Titre du chapitre 2").inputValue()) !==
+    "2. Méthodologie et organisation"
+  )
+    throw new Error("outline edit not saved");
+  await page.screenshot({ path: `${S}/04-plan.png`, fullPage: true });
+  step(
+    "memoir outline: imposed plan kept, requirements attached, reference selected, edit saved",
+  );
   await page
     .locator("h1 + p")
     .filter({ visible: true })

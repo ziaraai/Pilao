@@ -6,10 +6,10 @@ import { useState } from "react";
 
 import { AnalysisSection } from "@/components/dossier/analysis";
 import { DceSection } from "@/components/dossier/dce";
+import { MemoirSection } from "@/components/dossier/memoir";
 import {
   Alert,
   Button,
-  Card,
   Field,
   Loading,
   PageTitle,
@@ -26,6 +26,7 @@ export default function BidPage() {
   const router = useRouter();
   const bid = useApi<Bid>(`/bids/${id}`);
   const [analysisKey, setAnalysisKey] = useState(0);
+  const [memoirKey, setMemoirKey] = useState(0);
   const action = useAction();
 
   if (bid.error && !bid.data) return <Alert tone="danger">{bid.error}</Alert>;
@@ -94,13 +95,15 @@ export default function BidPage() {
         }}
       />
       {/* Re-mounted when a DCE version finishes processing: its analysis has just started. */}
-      <AnalysisSection key={analysisKey} bidId={id} onReady={bid.reload} />
-      <Card title="Mémoire technique">
-        <p className="text-sm text-slate-600">
-          La rédaction du mémoire arrive avec la phase 2 : elle s&apos;appuiera
-          sur cette analyse, votre profil et votre base documentaire.
-        </p>
-      </Card>
+      <AnalysisSection
+        key={analysisKey}
+        bidId={id}
+        onReady={() => {
+          bid.reload(); // the analysis pre-fills buyer and deadline
+          setMemoirKey((k) => k + 1); // and unlocks the memoir outline
+        }}
+      />
+      <MemoirSection key={`memoir-${analysisKey}-${memoirKey}`} bidId={id} />
     </div>
   );
 }
