@@ -1,0 +1,122 @@
+import io
+
+import pytest
+
+from app.documents.chunk import MAX_TOKENS, chunk_blocks, estimate_tokens
+from app.documents.extract import (
+    Block,
+    ExtractionError,
+    extract_docx,
+    extract_pdf,
+    looks_like_heading,
+)
+from tests.documents_helpers import make_blank_pdf, make_docx, make_pdf
+
+
+def test_heading_heuristics() -> None:
+    for yes in [
+        "1. Présentation de l'entreprise",
+        "2.3 Moyens humains",
+        "ARTICLE 5 - Durée",
+        "MOYENS MATÉRIELS",
+        "Chapitre 2 : Méthodologie",
+    ]:
+        assert looks_like_heading(yes), yes
+    for no in [
+        "Nous intervenons chaque jour dans les locaux, avec soin,",
+        "1 000 euros",
+        "",
+        "a" * 200,
+        "Le titulaire s'engage à respecter les délais.",
+    ]:
+        assert not looks_like_heading(no), no
+
+
+def test_pdf_pages_headings_and_text() -> None:
+    pdf = make_pdf(
+        [
+            [
+                "1. Presentation de l'entreprise",
+                "",
+                "Nous sommes une PME de nettoyage creee en 2010.",
+            ],
+            ["2. Moyens humains", "", "Nous employons douze agents de service qualifies."],
+        ]
+    )
+    blocks = extract_pdf(io.BytesIO(pdf))
+    headings = [(b.text, b.page) for b in blocks if b.kind == "heading"]
+    assert headings == [("1. Presentation de l'entreprise", 1), ("2. Moyens humains", 2)]
+    assert any("douze agents" in b.text and b.page == 2 for b in blocks)
+
+
+def test_scanned_pdf_is_reported_not_indexed_empty() -> None:
+    with pytest.raises(ExtractionError, match="scan"):
+        extract_pdf(io.BytesIO(make_blank_pdf()))
+
+
+def test_corrupt_pdf() -> None:
+    with pytest.raises(ExtractionError, match="PDF"):
+        extract_pdf(io.BytesIO(b"%PDF-1.4 this is not really a pdf"))
+
+
+def test_docx_headings_paragraphs_and_tables() -> None:
+    data = make_docx(
+        [("Heading 1", "Moyens"), ("Normal", "Nous disposons de 3 autolaveuses.")],
+        table=[["Matériel", "Quantité"], ["Autolaveuse", "3"]],
+    )
+    blocks = extract_docx(io.BytesIO(data))
+    assert blocks[0] == Block("heading", "Moyens", None)
+    assert any("autolaveuses" in b.text for b in blocks)
+    assert any(b.text == "Autolaveuse | 3" for b in blocks)
+
+
+def test_docx_empty_and_corrupt() -> None:
+    with pytest.raises(ExtractionError, match="aucun texte"):
+        extract_docx(io.BytesIO(make_docx([])))
+    with pytest.raises(ExtractionError, match="Word"):
+        extract_docx(io.BytesIO(b"PK not a docx"))
+
+
+def words(n: int, tag: str = "mot") -> str:
+    return " ".join(f"{tag}{i}" for i in range(n))
+
+
+def test_chunks_respect_size_overlap_and_pages() -> None:
+    blocks = [Block("heading", "1. Méthode", 1)]
+    blocks += [Block("paragraph", words(120, f"p{i}x"), 1 + i // 4) for i in range(24)]
+    chunks = chunk_blocks(blocks)
+    assert len(chunks) > 2
+    assert all(c.tokens <= MAX_TOKENS for c in chunks)
+    assert all(c.heading == "1. Méthode" for c in chunks)
+    assert chunks[0].page_from == 1 and chunks[-1].page_to == 6
+    # overlap: the start of a chunk repeats the end of the previous one
+    first_tail = chunks[0].content.split()[-5:]
+    assert all(w in chunks[1].content for w in first_tail)
+    # nothing is lost: every word appears in at least one chunk
+    joined = " ".join(c.content for c in chunks)
+    assert all(f"p{i}x119" in joined for i in range(24))
+
+
+def test_new_heading_starts_a_new_chunk_without_overlap() -> None:
+    blocks = [
+        Block("heading", "A", 1),
+        Block("paragraph", "alpha " * 40, 1),
+        Block("heading", "B", 2),
+        Block("paragraph", "beta " * 40, 2),
+    ]
+    chunks = chunk_blocks(blocks)
+    assert [(c.heading, c.page_from) for c in chunks] == [("A", 1), ("B", 2)]
+    assert "alpha" not in chunks[1].content
+
+
+def test_huge_paragraph_without_punctuation_is_split() -> None:
+    chunks = chunk_blocks([Block("paragraph", "mot " * 5000, 1)])
+    assert len(chunks) > 3 and all(c.tokens <= MAX_TOKENS for c in chunks)
+
+
+def test_empty_and_tiny_inputs() -> None:
+    assert chunk_blocks([]) == []
+    only = chunk_blocks([Block("paragraph", "Court.", None)])
+    assert (
+        len(only) == 1 and only[0].page_from is None and only[0].tokens == estimate_tokens("Court.")
+    )

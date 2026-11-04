@@ -73,7 +73,7 @@ En attente : 3 vrais DCE + mémoires techniques + plan type envoyés par Abdraou
 ```bash
 docker compose -f infra/docker-compose.yml up -d   # postgres+pgvector, redis, minio
 cd apps/api && uv sync && uv run alembic upgrade head && uv run fastapi dev app/main.py
-cd apps/api && uv run rq worker                      # worker
+cd apps/api && uv run rq worker -u $REDIS_URL        # worker (indexation des documents)
 cd apps/web && pnpm install && pnpm dev
 cd apps/api && uv run pytest
 ```

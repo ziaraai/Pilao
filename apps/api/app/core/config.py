@@ -21,6 +21,10 @@ class Settings(BaseSettings):
     signed_url_ttl_seconds: int = 300
     clamav_host: str | None = None  # unset = no antivirus (refused in production)
     clamav_port: int = 3310
+    # Embedding model (LiteLLM name, e.g. "openrouter/..."), fixed after phase 0 (ADR-005).
+    # Empty = deterministic local HashEmbedder (development and tests only).
+    embedding_model: str = ""
+    embedding_dim: int = 1024  # changing it needs a migration AND a full re-embedding
     environment: str = "local"  # local | test | production
 
     session_cookie_name: str = "pilao_session"

@@ -1,6 +1,8 @@
 import uuid
 from datetime import date
+from typing import Any
 
+from pgvector.sqlalchemy import Vector
 from sqlalchemy import (
     ARRAY,
     BigInteger,
@@ -15,6 +17,7 @@ from sqlalchemy import (
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import Mapped, mapped_column
 
+from app.core.config import get_settings
 from app.db.base import Base, IdMixin, OrgScoped, TimestampMixin
 
 
@@ -99,3 +102,5 @@ class CompanyReference(IdMixin, TimestampMixin, OrgScoped, Base):
     photo_file_ids: Mapped[list[uuid.UUID]] = mapped_column(
         ARRAY(UUID(as_uuid=True)), nullable=False, default=list
     )
+    # Filled by the reference-selection step (P2-02); same dimension as document chunks.
+    embedding: Mapped[Any] = mapped_column(Vector(get_settings().embedding_dim), nullable=True)

@@ -48,6 +48,7 @@ def upload_file(
     filename: str | None,
     storage: ObjectStorage,
     scanner: VirusScanner,
+    allowed_mimes: frozenset[str] | None = None,
 ) -> File:
     s = get_settings()
     size, sha256 = _measure(fileobj, s.max_upload_bytes)
@@ -60,6 +61,9 @@ def upload_file(
             "unsupported_type",
             "Format non accepté. Formats : PDF, DOCX, XLSX, ZIP, PNG, JPEG.",
         )
+
+    if allowed_mimes is not None and kind.mime not in allowed_mimes:
+        raise ApiError(415, "unsupported_type", "Format non accepté pour ce dépôt (PDF ou DOCX).")
 
     used = db.scalar(select(func.coalesce(func.sum(File.size_bytes), 0))) or 0
     if used + size > s.org_storage_quota_bytes:

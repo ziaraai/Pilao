@@ -3,6 +3,7 @@
 Files are never served by the API: clients get short-lived signed URLs.
 """
 
+import tempfile
 from functools import lru_cache
 from typing import BinaryIO, Protocol
 
@@ -14,6 +15,7 @@ from app.core.config import get_settings
 
 class ObjectStorage(Protocol):
     def put(self, key: str, fileobj: BinaryIO, content_type: str) -> None: ...
+    def get(self, key: str) -> BinaryIO: ...
     def delete(self, key: str) -> None: ...
     def signed_download_url(self, key: str, filename: str, ttl_seconds: int) -> str: ...
 
@@ -46,6 +48,13 @@ class S3Storage:
                 else {"ContentType": content_type}
             ),
         )
+
+    def get(self, key: str) -> BinaryIO:
+        """Download to a spooled temp file (RAM up to 16 MB, then disk), cursor at 0."""
+        buf = tempfile.SpooledTemporaryFile(max_size=16 * 1024 * 1024)  # noqa: SIM115
+        self._s3.download_fileobj(self._bucket, key, buf)  # type: ignore[attr-defined]
+        buf.seek(0)
+        return buf  # type: ignore[return-value]
 
     def delete(self, key: str) -> None:
         self._s3.delete_object(Bucket=self._bucket, Key=key)  # type: ignore[attr-defined]

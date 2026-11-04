@@ -3,7 +3,7 @@ from fastapi import FastAPI
 from app.core.config import get_settings
 from app.core.errors import install_error_handlers
 from app.core.limits import BodySizeLimitMiddleware
-from app.routers import auth, companies, files, profile
+from app.routers import auth, companies, files, knowledge, profile
 
 app = FastAPI(title="Pilao API")
 install_error_handlers(app)
@@ -12,6 +12,7 @@ app.include_router(auth.router)
 app.include_router(companies.router)
 app.include_router(profile.router)
 app.include_router(files.router)
+app.include_router(knowledge.router)
 
 
 @app.get("/health")

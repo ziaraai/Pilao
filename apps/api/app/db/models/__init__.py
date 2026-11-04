@@ -3,6 +3,7 @@ from app.db.models.audit_log import AuditLog
 from app.db.models.auth import AuthToken, LoginAttempt, UserSession
 from app.db.models.file import File
 from app.db.models.job import Job
+from app.db.models.knowledge import DocumentChunk, KnowledgeDocument
 from app.db.models.organization import Organization
 from app.db.models.profile import (
     Certification,
@@ -20,10 +21,12 @@ __all__ = [
     "Certification",
     "CompanyProfile",
     "CompanyReference",
+    "DocumentChunk",
     "Equipment",
     "File",
     "HumanResource",
     "Job",
+    "KnowledgeDocument",
     "LoginAttempt",
     "Organization",
     "PlatformAdmin",
