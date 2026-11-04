@@ -40,7 +40,7 @@ Format : numéro, date, décision, raison, statut. Ajouter une entrée pour chaq
 
 ## ADR-007 — Isolation multi-tenant appliquée dans l'ORM
 - **Date** : 2026-11-04
-- **Décision** : toute table avec `org_id` hérite de `OrgScoped` ou `OptionalOrgScoped`. `scope_session(session, org_id)` ajoute automatiquement le filtre `org_id` à tous les SELECT/UPDATE/DELETE de ces modèles et refuse (`TenancyViolation`) l'écriture d'une ligne d'une autre org. Une session sans `scope_session` est réservée à l'authentification, aux jobs de plateforme et au back-office.
+- **Décision** : toute table avec `org_id` hérite de `OrgScoped` ou `OptionalOrgScoped`. `scope_session(session, org_id)` ajoute automatiquement le filtre `org_id` à tous les SELECT/UPDATE/DELETE de ces modèles (et limite `organizations` à la seule org de la session), retire de l'identity map les lignes d'autres orgs déjà chargées, et refuse (`TenancyViolation`) toute écriture pour une autre org : insertion, modification ou suppression d'objet, et instructions `insert()`/`update()` qui affectent un autre `org_id`. Une session sans `scope_session` est réservée à l'authentification, aux jobs de plateforme et au back-office.
 - **Raison** : le filtre ne dépend plus de la vigilance de chaque développeur. Défense en profondeur : Row Level Security PostgreSQL à ajouter avant l'ouverture aux clients (voir `docs/09-securite-rgpd.md`).
 - **Statut** : validé.
 

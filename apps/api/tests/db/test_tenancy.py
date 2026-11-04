@@ -100,6 +100,50 @@ def test_invalid_role_and_job_status_rejected(db: Session) -> None:
     with pytest.raises(IntegrityError):
         db.flush()
     db.rollback()
+    db.add(Job(kind="k", status="stuck"))
+    with pytest.raises(IntegrityError):
+        db.flush()
+    db.rollback()
+
+
+def test_scoped_session_does_not_serve_other_org_rows_from_identity_map(db: Session) -> None:
+    a, b = make_org(db, 1), make_org(db, 2)
+    other = make_file(db, b, "b/1")  # loaded while unscoped: sits in the identity map
+    scope_session(db, a.id)
+    assert db.get(File, other.id) is None
+    assert db.get(Organization, b.id) is None
+
+
+def test_scoped_session_only_sees_own_organization(db: Session) -> None:
+    a, _ = make_org(db, 1), make_org(db, 2)
+    db.expunge_all()
+    scope_session(db, a.id)
+    assert [o.id for o in db.scalars(select(Organization)).all()] == [a.id]
+
+
+def test_scoped_session_cannot_move_a_row_to_another_org(db: Session) -> None:
+    a, b = make_org(db, 1), make_org(db, 2)
+    own = make_file(db, a, "a/1")
+    scope_session(db, a.id)
+    own.org_id = b.id
+    with pytest.raises(TenancyViolation):
+        db.flush()
+
+
+def test_scoped_statements_cannot_assign_another_org(db: Session) -> None:
+    from sqlalchemy import insert, update
+
+    a, b = make_org(db, 1), make_org(db, 2)
+    make_file(db, a, "a/1")
+    scope_session(db, a.id)
+    with pytest.raises(TenancyViolation):
+        db.execute(update(File).values(org_id=b.id))
+    row = {"storage_key": "z", "filename": "a", "mime": "x", "size_bytes": 1, "sha256": "0" * 64}
+    with pytest.raises(TenancyViolation):
+        db.execute(insert(File), [{**row, "org_id": b.id}])
+    with pytest.raises(TenancyViolation):
+        db.execute(insert(File).values(**row, org_id=b.id))
+    db.execute(insert(File), [{**row, "org_id": a.id}])  # own org: allowed
 
 
 def test_deleting_org_cascades(db: Session) -> None:

@@ -1,3 +1,5 @@
+from alembic.autogenerate import compare_metadata
+from alembic.migration import MigrationContext
 from sqlalchemy import Engine, inspect
 
 from alembic import command
@@ -11,6 +13,10 @@ def test_migrations_match_models_and_roundtrip(engine: Engine) -> None:
     assert "organizations" not in inspect(engine).get_table_names()
     command.upgrade(cfg, "head")
     assert set(Base.metadata.tables) <= set(inspect(engine).get_table_names())
+    with engine.connect() as conn:
+        ctx = MigrationContext.configure(conn, opts={"compare_type": True})
+        drift = compare_metadata(ctx, Base.metadata)
+    assert drift == [], f"models and migrations differ: {drift}"
 
 
 def test_every_org_scoped_table_has_org_id_index(engine: Engine) -> None:

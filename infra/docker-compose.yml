@@ -6,7 +6,9 @@ services:
       POSTGRES_PASSWORD: pilao
       POSTGRES_DB: pilao
     ports: ["5432:5432"]
-    volumes: [pgdata:/var/lib/postgresql/data]
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+      - ./postgres-init:/docker-entrypoint-initdb.d:ro  # creates pilao_test for pytest
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U pilao"]
       interval: 5s

@@ -1,11 +1,14 @@
+import uuid
+
 from sqlalchemy import CHAR, String, Text
+from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.db.base import Base, IdMixin, TimestampMixin
 
 
 class Organization(IdMixin, TimestampMixin, Base):
-    """Tenant root. Not tenant-filtered itself."""
+    """Tenant root. A scoped session only sees its own organization (app.core.tenancy)."""
 
     __tablename__ = "organizations"
 
@@ -19,5 +22,5 @@ class Organization(IdMixin, TimestampMixin, Base):
     city: Mapped[str | None] = mapped_column(Text)
     department: Mapped[str | None] = mapped_column(CHAR(3))
     headcount_range: Mapped[str | None] = mapped_column(Text)
-    logo_file_id: Mapped[str | None] = mapped_column(Text)
+    logo_file_id: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True))
     brand_color: Mapped[str | None] = mapped_column(String(9))
