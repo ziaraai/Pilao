@@ -18,7 +18,7 @@ Objectif : savoir si la génération est assez bonne, avec quel modèle, à quel
 
 - [x] P1-01 Init monorepo, `infra/docker-compose.yml` (postgres+pgvector, redis, minio), CI (lint + tests)
 - [x] P1-02 FastAPI : config, DB, Alembic, modèle `organizations`, `users`, `files`, `jobs`, `ai_calls`, `audit_logs`
-- [ ] P1-03 Auth (inscription, vérification e-mail, connexion), rôles, `get_current_org()`, tests de tenancy
+- [x] P1-03 Auth (inscription, vérification e-mail, connexion), rôles, `get_current_org()`, tests de tenancy
 - [ ] P1-04 Intégration Recherche d'entreprises (US-1.1)
 - [ ] P1-05 Profil : paramètres, moyens, certifications, références + import Excel (US-1.2, 1.3)
 - [ ] P1-06 Upload fichiers S3 + URL signées + antivirus
