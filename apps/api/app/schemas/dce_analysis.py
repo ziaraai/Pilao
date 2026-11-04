@@ -44,6 +44,19 @@ def _choice(v: object, allowed: tuple[str, ...], default: str) -> str:
     return v if isinstance(v, str) and v in allowed else default
 
 
+def _keep_valid(v: object, item_model: type[BaseModel]) -> list[Any]:
+    """Each item is validated on its own: a malformed one is dropped, the others are kept."""
+    if not isinstance(v, list):
+        return []
+    kept = []
+    for item in v:
+        try:
+            kept.append(item_model.model_validate(item))
+        except ValidationError:
+            continue
+    return kept
+
+
 class Source(BaseModel):
     file: str
     page: int | None = None
@@ -96,6 +109,11 @@ class KeyInfo(BaseModel):
     submission_deadline: SourcedText | None = None  # ISO 8601 text, parsed when used
     submission_platform: SourcedText | None = None
     lots: list[Lot] = Field(default_factory=list)
+
+    @field_validator("lots", mode="before")
+    @classmethod
+    def _lots(cls, v: object) -> Any:
+        return _keep_valid(v, Lot)
 
 
 class SiteVisit(BaseModel):
@@ -202,17 +220,7 @@ class DceAnalysisData(BaseModel):
     )
     @classmethod
     def _lists(cls, v: object, info: ValidationInfo) -> Any:
-        # Each item is validated on its own: a malformed one is dropped, the others are kept.
-        if not isinstance(v, list):
-            return []
-        item_model = _ITEM_MODELS[str(info.field_name)]
-        kept = []
-        for item in v:
-            try:
-                kept.append(item_model.model_validate(item))
-            except ValidationError:
-                continue
-        return kept
+        return _keep_valid(v, _ITEM_MODELS[str(info.field_name)])
 
 
 _ITEM_MODELS: dict[str, type[BaseModel]] = {

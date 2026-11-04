@@ -97,12 +97,15 @@ class FakeScanner:
 
     def __init__(self) -> None:
         self.down = False
+        self.too_large = False
 
     def scan(self, fileobj) -> str | None:  # type: ignore[no-untyped-def]
-        from app.storage.antivirus import ScannerUnavailable
+        from app.storage.antivirus import ScannerUnavailable, ScanTooLarge
 
         if self.down:
             raise ScannerUnavailable("down")
+        if self.too_large:
+            raise ScanTooLarge("INSTREAM size limit exceeded")
         fileobj.seek(0)
         found = b"EICAR-STANDARD-ANTIVIRUS-TEST-FILE" in fileobj.read()
         fileobj.seek(0)

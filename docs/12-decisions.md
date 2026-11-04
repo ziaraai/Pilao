@@ -110,3 +110,11 @@ Format : numéro, date, décision, raison, statut. Ajouter une entrée pour chaq
 - **Pré-remplissage** : acheteur et date limite du dossier remplis s'ils sont vides ; une saisie de l'utilisateur n'est jamais écrasée, une différence de date limite est signalée. Une date sans heure vaut fin de journée (heure de Paris).
 - **À évaluer en phase 0** : qualité de l'extraction sur les 3 vrais DCE (critères, plan imposé, exigences), coût et durée par DCE (`docs/11-tests-evaluation.md`).
 - **Statut** : validé.
+
+## ADR-016 — Revue de P1-09 / P1-10 : relances, antivirus, date limite
+- **Date** : 2026-11-04
+- **Relance en attente** : après une panne passagère (antivirus, IA), la version du DCE ou l'analyse reste « en traitement » avec un message, au lieu de passer en erreur, tant que la file doit la relancer. Un nouveau dépôt ou une nouvelle analyse est refusé pendant ce temps, sauf si le traitement ne donne plus signe de vie depuis plus de deux fois sa durée maximale (worker arrêté). Cela évite qu'une ancienne version relancée passe devant la nouvelle.
+- **Antivirus et gros fichiers** : ClamAV refuse par défaut les flux de plus de 100 Mo (`StreamMaxLength`). Ce refus est désormais une erreur claire « trop volumineux pour l'analyse antivirus » (413), et non plus « antivirus indisponible ». **À configurer** pour accepter les DCE jusqu'à 250 Mo : `StreamMaxLength 260M` dans `clamd.conf` (local et production).
+- **Date limite de l'avis Go / No-Go** : celle du dossier prime (pré-remplie depuis le DCE, puis éventuellement corrigée par l'utilisateur, par exemple après un avis rectificatif) ; la date lue dans le DCE ne sert que si le dossier n'en a pas.
+- **Autres corrections** : l'attestation valable le plus longtemps est retenue quand plusieurs du même type existent ; détails de visite et contraintes de format sans source vérifiable écartés ; un lot mal formé n'invalide plus l'analyse ; aucun appel vide quand le DCE n'est qu'un CCTP trop long ; une pièce qui ne tient pas du tout est nommée dans les avertissements ; un fichier identique déposé deux fois sous le même chemin est signalé comme doublon, un fichier différent est gardé sous un chemin distinct ; mémoire bornée sur les longs PDF.
+- **Statut** : validé.

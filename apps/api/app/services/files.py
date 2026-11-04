@@ -12,7 +12,7 @@ from app.core.config import get_settings
 from app.core.errors import ApiError
 from app.db.models import AuditLog, File, Organization, User
 from app.domain.filetypes import ALLOWED, detect
-from app.storage.antivirus import ScannerUnavailable, VirusScanner
+from app.storage.antivirus import ScannerUnavailable, ScanTooLarge, VirusScanner
 from app.storage.objects import ObjectStorage
 
 logger = logging.getLogger("pilao.files")
@@ -92,6 +92,12 @@ def upload_file(
 
     try:
         signature = scanner.scan(fileobj)
+    except ScanTooLarge:
+        raise ApiError(
+            413,
+            "too_large_for_scan",
+            "Fichier trop volumineux pour l'analyse antivirus : découpez-le ou contactez-nous.",
+        ) from None
     except ScannerUnavailable:
         logger.exception("antivirus unavailable: upload refused (fail closed)")
         raise scan_unavailable() from None

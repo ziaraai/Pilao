@@ -3,7 +3,7 @@
 import logging
 import uuid
 from dataclasses import dataclass, field
-from datetime import UTC, date, datetime, time
+from datetime import UTC, date, datetime, time, timedelta
 from pathlib import Path
 from typing import Any
 from zoneinfo import ZoneInfo
@@ -34,7 +34,7 @@ from app.domain.trades import TRADES
 from app.schemas.dce_analysis import DceAnalysisData, Source
 from app.services import vault as vault_svc
 from app.services.jobs import set_job_status
-from app.workers.queue import JobQueue
+from app.workers.queue import ANALYSIS_JOB_TIMEOUT_SECONDS, JobQueue
 
 logger = logging.getLogger("pilao.dce_analysis")
 JOB_KIND = "analyze_dce"
@@ -55,6 +55,7 @@ SCOPE_REQUIREMENTS = (
     "ne remplis QUE `requirements` à partir de cet extrait du CCTP ({pages}) ; laisse les "
     "autres rubriques vides ou nulles."
 )
+_GENERAL_SCOPES = (SCOPE_FULL, SCOPE_NO_REQUIREMENTS)
 
 
 # ---------- documents sent to the model ---------------------------------------------------
@@ -155,13 +156,24 @@ def plan_calls(docs: list[Doc], budget: int, max_calls: int) -> tuple[list[Call]
         if kept:
             parts.append(render(doc, kept))
             sent |= _sent(doc, kept)
-        warnings.append(
-            f"« {doc.name} » est trop long : seules ses premières pages ont été analysées."
-        )
+            warnings.append(
+                f"« {doc.name} » est trop long : seules ses premières pages ont été analysées."
+            )
+        else:
+            warnings.append(f"« {doc.name} » n'a pas pu être analysé : DCE trop volumineux.")
         used = budget
-    calls = [
-        Call(SCOPE_NO_REQUIREMENTS if cctps else SCOPE_FULL, "\n\n".join(parts), frozenset(sent))
-    ]
+    calls = (
+        [
+            Call(
+                SCOPE_NO_REQUIREMENTS if cctps else SCOPE_FULL,
+                "\n\n".join(parts),
+                frozenset(sent),
+            )
+        ]
+        if parts
+        else []  # only an oversized CCTP: no empty call for the other rubrics
+    )
+    general = len(calls)
 
     for doc in cctps:
         window: list[tuple[int, str]] = []
@@ -176,7 +188,7 @@ def plan_calls(docs: list[Doc], budget: int, max_calls: int) -> tuple[list[Call]
             calls.append(_cctp_call(doc, window))
     if len(calls) > max_calls:
         warnings.append(
-            f"DCE très volumineux : seules les {max_calls - 1} premières tranches du CCTP ont été analysées."
+            f"DCE très volumineux : seules les {max_calls - general} premières tranches du CCTP ont été analysées."
         )
         calls = calls[:max_calls]
     return calls, warnings
@@ -282,18 +294,25 @@ def verify(
     sourced_list("requirements", data.requirements, "Exigence")
     sourced_list("watch_points", data.watch_points, "Point de vigilance")
 
-    visit = out["site_visit"]
-    if data.site_visit.mandatory is not None or data.site_visit.dates:
-        verified = src.resolve(data.site_visit.source)
+    visit, sv = out["site_visit"], data.site_visit
+    if sv.mandatory is not None or sv.dates or sv.details:
+        verified = src.resolve(sv.source)
         if verified is None:
             out["site_visit"] = {"mandatory": None, "dates": [], "details": None, "source": None}
             warnings.append("Visite : information écartée faute de source vérifiable.")
         else:
             visit["source"] = verified
+    else:
+        visit["source"] = None  # nothing to cite: never keep an unverified source
 
-    memoir = out["memoir_requirements"]
-    if data.memoir_requirements.imposed_outline or data.memoir_requirements.max_pages:
-        verified = src.resolve(data.memoir_requirements.source)
+    memoir, mr = out["memoir_requirements"], data.memoir_requirements
+    if (
+        mr.imposed_outline
+        or mr.max_pages
+        or mr.format_constraints
+        or mr.response_template_provided is not None
+    ):
+        verified = src.resolve(mr.source)
         if verified is None:
             # The imposed outline drives the whole memoir (CLAUDE.md §5.4): never trust it unsourced.
             out["memoir_requirements"] = {
@@ -308,6 +327,8 @@ def verify(
             )
         else:
             memoir["source"] = verified
+    else:
+        memoir["source"] = None
 
     for i, req in enumerate(out["requirements"], start=1):  # stable, gap-free numbering
         req["ref"] = f"CCTP-{i}"
@@ -349,7 +370,10 @@ def request_analysis(db: Session, version: DceVersion, queue: JobQueue) -> DceAn
 def rerun(db: Session, bid: Bid, queue: JobQueue) -> DceAnalysis:
     running = db.scalar(
         select(DceAnalysis.id).where(
-            DceAnalysis.bid_id == bid.id, DceAnalysis.status.in_(("pending", "processing"))
+            DceAnalysis.bid_id == bid.id,
+            DceAnalysis.status.in_(("pending", "processing")),
+            DceAnalysis.updated_at
+            > datetime.now(UTC) - timedelta(seconds=2 * ANALYSIS_JOB_TIMEOUT_SECONDS),
         )
     )
     if running is not None:
@@ -393,6 +417,8 @@ def run_analyze_dce(db: Session, analysis_id: uuid.UUID) -> None:
             raise llm.LlmError("Aucun texte exploitable dans ce DCE.")
         calls, plan_warnings = plan_calls(docs, s.dce_analysis_max_chars, s.dce_analysis_max_calls)
         warnings += plan_warnings
+        if not calls:
+            raise llm.LlmError("DCE trop volumineux : aucune pièce n'a pu être analysée.")
         prompt = load_prompt(PROMPT)
         schema = SCHEMA_PATH.read_text(encoding="utf-8")
         company = _company_summary(db, org)
@@ -418,15 +444,22 @@ def run_analyze_dce(db: Session, analysis_id: uuid.UUID) -> None:
             results.append(result.data)
             model = result.model
     except llm.LlmProviderError:
-        _fail(db, analysis_id, "Service d'IA indisponible, nouvelle tentative en cours.")
+        _fail(
+            db,
+            analysis_id,
+            "Service d'IA indisponible, nouvelle tentative en cours.",
+            retrying=True,
+        )
         raise  # transient: RQ retries
     except llm.LlmError as exc:  # not configured, budget, invalid output, no text: permanent
         _fail(db, analysis_id, str(exc))
         return
 
-    merged = results[0]
-    if len(results) > 1:
-        merged.requirements = [r for res in results[1:] for r in res.requirements]
+    general = [r for c, r in zip(calls, results, strict=True) if c.scope in _GENERAL_SCOPES]
+    slices = [r for c, r in zip(calls, results, strict=True) if c.scope not in _GENERAL_SCOPES]
+    merged = general[0] if general else DceAnalysisData()
+    if slices:
+        merged.requirements = [r for res in slices for r in res.requirements]
     sent = set().union(*(c.sent for c in calls))
     data, source_warnings = verify(merged, docs, sent)
     warnings += source_warnings
@@ -459,12 +492,13 @@ def run_analyze_dce(db: Session, analysis_id: uuid.UUID) -> None:
     db.commit()
 
 
-def _fail(db: Session, analysis_id: uuid.UUID, message: str) -> None:
+def _fail(db: Session, analysis_id: uuid.UUID, message: str, retrying: bool = False) -> None:
+    """``retrying``: RQ will run the job again, so the analysis stays "processing"."""
     db.rollback()
     analysis = db.get(DceAnalysis, analysis_id, populate_existing=True)
     if analysis is not None:
-        analysis.status, analysis.error = "error", message
-        set_job_status(db, JOB_KIND, analysis_id, "error", message)
+        analysis.status, analysis.error = ("processing" if retrying else "error"), message
+        set_job_status(db, JOB_KIND, analysis_id, "pending" if retrying else "error", message)
     db.commit()
 
 
@@ -506,8 +540,10 @@ def review(
         gng.VaultEntry(d.kind, vault_svc.to_out(d, org, today).status, d.valid_until)
         for d in db.scalars(select(ComplianceDocument))
     ]
-    deadline = (
-        parse_datetime(_value(data, "key_info", "submission_deadline", "value")) or bid.deadline_at
+    # The bid's deadline wins: it is pre-filled from the DCE and may have been corrected since
+    # (amendment notice); the DCE value is the fallback.
+    deadline = bid.deadline_at or parse_datetime(
+        _value(data, "key_info", "submission_deadline", "value")
     )
     documents = gng.check_documents(
         [

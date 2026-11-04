@@ -134,6 +134,11 @@ class FakeModel:
 
 @pytest.fixture
 def model(monkeypatch: pytest.MonkeyPatch) -> FakeModel:
+    return install_fake_model(monkeypatch)
+
+
+def install_fake_model(monkeypatch: pytest.MonkeyPatch) -> FakeModel:
+    """Configure an extraction model and replace the provider by ``FakeModel``."""
     fake = FakeModel()
     monkeypatch.setattr(get_settings(), "llm_model_extraction", "test/extraction")
     monkeypatch.setattr(llm, "_call_provider", fake)

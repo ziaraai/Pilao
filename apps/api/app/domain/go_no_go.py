@@ -5,10 +5,10 @@ Each factor says what was checked and why; a factor that cannot be checked is re
 """
 
 import re
-import unicodedata
 from dataclasses import dataclass, field
 from datetime import date, datetime
 
+from app.domain.dce import normalize as _norm
 from app.domain.vault import KINDS as VAULT_KINDS
 
 DISCLAIMER = (
@@ -26,11 +26,6 @@ _DOC_PATTERNS: tuple[tuple[str, str], ...] = (
     ("cibtp_certificate", r"cibtp|conges payes"),
     ("qualification", r"qualibat|qualipropre|qualification|certification iso|\biso\b"),
 )
-
-
-def _norm(text: str) -> str:
-    text = unicodedata.normalize("NFKD", text).encode("ascii", "ignore").decode().lower()
-    return re.sub(r"[^a-z0-9]+", " ", text).strip()
 
 
 def compliance_kind_for(name: str, declared: str | None) -> str | None:
@@ -81,8 +76,14 @@ def check_documents(
         accepted = {kind} | (
             {"kbis", "rne_certificate"} if kind in ("kbis", "rne_certificate") else set()
         )
+        # Among usable documents, the one valid the longest (a renewed attestation next to
+        # the old one); no end date means no expiry.
         candidates = sorted(
-            (v for v in vault if v.kind in accepted), key=lambda v: _STATUS_RANK.get(v.status, 9)
+            (v for v in vault if v.kind in accepted),
+            key=lambda v: (
+                0 if v.status in ("valid", "expiring") else _STATUS_RANK.get(v.status, 9),
+                -(v.valid_until or date.max).toordinal(),
+            ),
         )
         best = candidates[0] if candidates else None
         if best is None:

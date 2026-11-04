@@ -1,10 +1,9 @@
-import io
-
 """Object storage (S3-compatible: MinIO locally, Scaleway / OVHcloud in production, EU only).
 
 Files are never served by the API: clients get short-lived signed URLs.
 """
 
+import io
 import tempfile
 from functools import lru_cache
 from typing import TYPE_CHECKING, Any, BinaryIO, Protocol

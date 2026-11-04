@@ -74,6 +74,7 @@ def _pdf(fileobj: BinaryIO, ocr: OcrEngine | None) -> Extraction:
                             text, used = read, True
                     else:
                         ocr_missing = True
+                page.close()  # frees the page's parsed objects: memory stays flat on long PDFs
                 total += len(text)
                 if total > MAX_CHARS:
                     return Extraction(status="error", error="Document trop volumineux.")

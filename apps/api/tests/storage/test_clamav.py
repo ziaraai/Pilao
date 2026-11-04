@@ -5,7 +5,7 @@ import threading
 
 import pytest
 
-from app.storage.antivirus import ClamAvScanner, ScannerUnavailable
+from app.storage.antivirus import ClamAvScanner, ScannerUnavailable, ScanTooLarge
 
 
 def serve(reply: bytes | None) -> tuple[ClamAvScanner, list[bytes]]:
@@ -57,7 +57,7 @@ def test_infected_file_returns_signature() -> None:
 
 
 def test_scanner_errors_are_unavailable_not_clean() -> None:
-    scanner, _ = serve(b"INSTREAM size limit exceeded. ERROR\0")
+    scanner, _ = serve(b"UNKNOWN COMMAND\0")
     with pytest.raises(ScannerUnavailable):
         scanner.scan(io.BytesIO(b"data"))
     silent, _ = serve(None)
@@ -89,3 +89,9 @@ def test_production_without_clamav_refuses_to_start_scanner(
     get_scanner.cache_clear()
     assert isinstance(get_scanner(), NullScanner)
     get_scanner.cache_clear()
+
+
+def test_size_limit_is_reported_as_too_large_not_as_an_outage() -> None:
+    scanner, _ = serve(b"INSTREAM size limit exceeded. ERROR\0")
+    with pytest.raises(ScanTooLarge):
+        scanner.scan(io.BytesIO(b"data"))

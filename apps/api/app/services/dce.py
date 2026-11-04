@@ -1,9 +1,11 @@
 """DCE deposit and processing (US-3.1): versions, safe expansion, typing, differences."""
 
+import hashlib
 import logging
 import uuid
 from collections.abc import Iterator
 from dataclasses import dataclass
+from datetime import UTC, datetime, timedelta
 from typing import Any, BinaryIO
 
 from sqlalchemy import func, select
@@ -23,7 +25,7 @@ from app.services import files as files_svc
 from app.services.jobs import set_job_status
 from app.storage.antivirus import VirusScanner
 from app.storage.objects import ObjectStorage
-from app.workers.queue import JobQueue
+from app.workers.queue import DCE_JOB_TIMEOUT_SECONDS, JobQueue
 
 logger = logging.getLogger("pilao.dce")
 JOB_KIND = "process_dce"
@@ -57,7 +59,11 @@ def create_version(
         )
     busy = db.scalar(
         select(DceVersion.id).where(
-            DceVersion.bid_id == bid.id, DceVersion.status.in_(("pending", "processing"))
+            DceVersion.bid_id == bid.id,
+            DceVersion.status.in_(("pending", "processing")),
+            # A worker killed after its last retry never finishes: do not block forever.
+            DceVersion.updated_at
+            > datetime.now(UTC) - timedelta(seconds=2 * DCE_JOB_TIMEOUT_SECONDS),
         )
     )
     if busy is not None:
@@ -147,12 +153,25 @@ def _members(record: File, data: BinaryIO, skipped: list[dict[str, Any]]) -> Ite
         yield Member(record.filename, data, size)
 
 
+def _sha256(data: BinaryIO) -> str:
+    digest = hashlib.sha256()
+    data.seek(0)
+    while chunk := data.read(1024 * 1024):
+        digest.update(chunk)
+    data.seek(0)
+    return digest.hexdigest()
+
+
 def _store_member(ctx: _Ctx, member: Member, source_name: str) -> None:
     path = member.path
-    if path in ctx.seen:  # same relative path from two deposited archives
-        path = f"{source_name}/{path}"
-        if path in ctx.seen:
+    if path in ctx.seen:  # same relative path twice (two archives, two uploads...)
+        digest = _sha256(member.data)
+        if digest == ctx.seen[path]:
+            ctx.skipped.append({"path": path, "reason": "doublon d'un fichier déjà déposé"})
             return  # the very same entry twice: nothing to add
+        path, n = f"{source_name}/{member.path}", 2
+        while path in ctx.seen:  # different content: keep it under a unique path
+            path, n = f"{source_name} ({n})/{member.path}", n + 1
     kind = detect(member.data)
     if kind is None or kind.mime not in MEMBER_MIMES:
         ctx.skipped.append({"path": path, "reason": "format non pris en charge"})
@@ -262,7 +281,7 @@ def run_process_dce(
         _finish(
             db,
             version_id,
-            "error",
+            "processing",  # a retry is scheduled: the version is not finished
             "Traitement interrompu, nouvelle tentative en cours.",
             ctx.skipped,
         )
@@ -291,7 +310,8 @@ def _finish(
         db.commit()
         return
     version.status, version.error, version.skipped = status, error, skipped
-    set_job_status(db, JOB_KIND, version_id, "done" if status == "ready" else "error", error)
+    job_status = {"ready": "done", "processing": "pending"}.get(status, "error")
+    set_job_status(db, JOB_KIND, version_id, job_status, error)
     db.commit()
 
 

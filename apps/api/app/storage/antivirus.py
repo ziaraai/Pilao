@@ -14,6 +14,10 @@ class ScannerUnavailable(Exception):
     """The scanner could not be reached or answered garbage: fail closed."""
 
 
+class ScanTooLarge(Exception):
+    """clamd refused the stream for its size (StreamMaxLength, 100 MB by default)."""
+
+
 class VirusScanner(Protocol):
     def scan(self, fileobj: BinaryIO) -> str | None:
         """Return the signature name if infected, None if clean."""
@@ -48,6 +52,8 @@ class ClamAvScanner:
         text = reply.rstrip(b"\0\n").decode(errors="replace")
         if text.endswith("OK"):
             return None
+        if "size limit exceeded" in text.lower():
+            raise ScanTooLarge(text)
         if text.endswith("FOUND"):
             return text.removeprefix("stream:").removesuffix("FOUND").strip()
         raise ScannerUnavailable(f"unexpected clamd reply: {text!r}")
