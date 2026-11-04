@@ -1,7 +1,7 @@
 import re
 import uuid
 from datetime import date, datetime
-from typing import Annotated, Literal
+from typing import Annotated, Literal, get_args
 
 from pydantic import (
     AfterValidator,
@@ -13,7 +13,7 @@ from pydantic import (
     model_validator,
 )
 
-from app.domain.vault import DATE_REQUIRED
+from app.domain.vault import DATE_REQUIRED, VALIDITY_RULES
 
 Kind = Literal[
     "kbis",
@@ -26,6 +26,7 @@ Kind = Literal[
     "qualification",
     "other",
 ]
+Status = Literal["pending_review", "valid", "expiring", "expired", "mismatch"]
 Short = Annotated[str, StringConstraints(strip_whitespace=True, min_length=1, max_length=300)]
 
 
@@ -64,10 +65,38 @@ class ReadingOut(BaseModel):
     def _text(cls, v: object) -> str | None:
         return str(v).strip()[:300] or None if v is not None else None
 
-    @field_validator("confidence")
+    # One unreadable field must not discard the whole reading: it becomes None (or "other").
+    @field_validator("kind", mode="before")
     @classmethod
-    def _confidence(cls, v: float | None) -> float | None:
-        return None if v is None else max(0.0, min(1.0, v))
+    def _lenient_kind(cls, v: object) -> object:
+        return v if v in get_args(Kind) else "other"
+
+    @field_validator("validity_rule", mode="before")
+    @classmethod
+    def _lenient_rule(cls, v: object) -> object:
+        return v if v in VALIDITY_RULES else None
+
+    @field_validator("issued_at", "valid_until", mode="before")
+    @classmethod
+    def _lenient_date(cls, v: object) -> date | None:
+        if v is None or isinstance(v, date):
+            return v
+        text = str(v).strip()
+        for fmt in ("%Y-%m-%d", "%d/%m/%Y", "%d.%m.%Y", "%d-%m-%Y"):
+            try:
+                return datetime.strptime(text, fmt).date()
+            except ValueError:
+                continue
+        return None
+
+    @field_validator("confidence", mode="before")
+    @classmethod
+    def _confidence(cls, v: object) -> float | None:
+        try:
+            value = float(v)  # type: ignore[arg-type]
+        except (TypeError, ValueError):
+            return None
+        return max(0.0, min(1.0, value))
 
 
 class ConfirmIn(BaseModel):
@@ -98,7 +127,7 @@ class ComplianceDocOut(BaseModel):
     issued_at: date | None
     valid_until: date | None
     validity_rule: str | None
-    status: Literal["pending_review", "valid", "expiring", "expired", "mismatch"]
+    status: Status
     days_left: int | None = None
     alerts: list[str] = Field(default_factory=list)
     reading_status: Literal["pending", "reading", "done", "error"]

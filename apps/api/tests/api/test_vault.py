@@ -216,6 +216,60 @@ def test_ai_never_overwrites_what_the_user_already_confirmed(
     assert doc["reading_status"] == "done"
 
 
+def test_confirmation_made_while_the_model_reads_is_kept(
+    make_client: Factory, outbox: Outbox, queue: FakeQueue, reader: FakeReader
+) -> None:
+    c = signed_in_client(make_client, outbox)
+    doc_id = deposit(c).json()["id"]
+
+    class ConfirmingReader(FakeReader):
+        def read(self, db, org, fileobj, mime):  # type: ignore[no-untyped-def]
+            confirm(c, doc_id, kind="tax_compliance", valid_until=day(60))
+            return reading(kind="kbis", valid_until=date(2031, 1, 1))
+
+    queue.drain_reads(ConfirmingReader())
+    doc = c.get(f"/vault/{doc_id}").json()
+    assert doc["kind"] == "tax_compliance" and doc["valid_until"] == day(60)
+    assert doc["status"] == "valid" and doc["reading_status"] == "done"
+
+
+def test_kind_chosen_at_upload_drives_the_derived_expiry(
+    make_client: Factory, outbox: Outbox, queue: FakeQueue, reader: FakeReader
+) -> None:
+    c = signed_in_client(make_client, outbox)
+    reader.result = reading(kind="other")
+    doc_id = deposit(c, kind="urssaf_vigilance").json()["id"]
+    queue.drain_reads(reader)
+    doc = c.get(f"/vault/{doc_id}").json()
+    assert doc["kind"] == "urssaf_vigilance" and doc["validity_rule"] == "urssaf_6_months"
+    assert doc["valid_until"] == add_months(TODAY - timedelta(days=10), 6).isoformat()
+
+
+def test_reading_keeps_the_rule_the_model_applied_and_confirm_resets_it(
+    make_client: Factory, outbox: Outbox, queue: FakeQueue, reader: FakeReader
+) -> None:
+    c = signed_in_client(make_client, outbox)
+    reader.result = reading(kind="kbis", valid_until=TODAY, validity_rule="kbis_3_months")
+    doc_id = deposit(c).json()["id"]
+    queue.drain_reads(reader)
+    assert c.get(f"/vault/{doc_id}").json()["validity_rule"] == "kbis_3_months"
+    assert confirm(c, doc_id, kind="kbis", valid_until=day(20)).json()["validity_rule"] == "written"
+
+
+def test_reading_is_lenient_field_by_field() -> None:
+    out = ReadingOut.model_validate(
+        {
+            "kind": "attestation URSSAF",
+            "issued_at": "15/10/2026",
+            "valid_until": "bientôt",
+            "validity_rule": "written | urssaf_6_months | kbis_3_months",
+            "confidence": "élevée",
+        }
+    )
+    assert out.kind == "other" and out.issued_at == date(2026, 10, 15)
+    assert out.valid_until is None and out.validity_rule is None and out.confidence is None
+
+
 def test_reread_rules(
     make_client: Factory, outbox: Outbox, queue: FakeQueue, reader: FakeReader
 ) -> None:

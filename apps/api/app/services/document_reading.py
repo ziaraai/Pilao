@@ -11,6 +11,7 @@ from sqlalchemy.orm import Session
 from app.ai import llm
 from app.ai.prompts import load_prompt
 from app.db.models import Organization
+from app.documents.extract import ExtractionError
 from app.domain.filetypes import JPEG, PDF, PNG
 from app.schemas.vault import ReadingOut
 
@@ -36,17 +37,20 @@ class DocumentReader(Protocol):
 def _pdf_text_or_images(fileobj: BinaryIO) -> tuple[str, list[bytes]]:
     """First pages' text; if the PDF has no text layer, PNG renderings of its first pages."""
     fileobj.seek(0)
-    with pdfplumber.open(io.BytesIO(fileobj.read())) as pdf:
-        pages = pdf.pages[: MAX_VISION_PAGES + 1]
-        text = "\n\n".join((p.extract_text() or "") for p in pages).strip()
-        if len(text) >= MIN_TEXT_CHARS:
-            return text[:MAX_TEXT_CHARS], []
-        images = []
-        for page in pdf.pages[:MAX_VISION_PAGES]:
-            buf = io.BytesIO()
-            page.to_image(resolution=150).original.save(buf, format="PNG")
-            images.append(buf.getvalue())
-        return "", images
+    try:
+        with pdfplumber.open(fileobj) as pdf:  # type: ignore[arg-type]
+            pages = pdf.pages[: MAX_VISION_PAGES + 1]
+            text = "\n\n".join((p.extract_text() or "") for p in pages).strip()
+            if len(text) >= MIN_TEXT_CHARS:
+                return text[:MAX_TEXT_CHARS], []
+            images = []
+            for page in pdf.pages[:MAX_VISION_PAGES]:
+                buf = io.BytesIO()
+                page.to_image(resolution=150).original.save(buf, format="PNG")
+                images.append(buf.getvalue())
+            return "", images
+    except Exception as exc:  # permanent: a corrupt or encrypted PDF will not read better later
+        raise ExtractionError("Impossible de lire ce PDF (fichier corrompu ou protégé).") from exc
 
 
 def _data_uri(content: bytes, mime: str) -> dict[str, Any]:

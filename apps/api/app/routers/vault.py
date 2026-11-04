@@ -9,7 +9,14 @@ from app.core.errors import ApiError
 from app.db.models import ComplianceDocument
 from app.domain import vault as rules
 from app.routers.files import Storage, _scanner
-from app.schemas.vault import ComplianceDocOut, ConfirmIn, HelpLinkOut, Kind, SummaryOut
+from app.schemas.vault import (
+    ComplianceDocOut,
+    ConfirmIn,
+    HelpLinkOut,
+    Kind,
+    Status,
+    SummaryOut,
+)
 from app.services import vault as svc
 from app.storage.antivirus import VirusScanner
 from app.workers.queue import JobQueue, get_job_queue
@@ -46,9 +53,7 @@ def upload(
 def list_documents(
     ctx: CurrentAuth,
     db: ScopedDb,
-    status: Annotated[
-        str | None, Query(pattern="^(pending_review|valid|expiring|expired|mismatch)$")
-    ] = None,
+    status: Annotated[Status | None, Query()] = None,
 ) -> list[ComplianceDocOut]:
     today = rules.paris_today()
     docs = [

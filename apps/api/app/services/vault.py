@@ -3,7 +3,7 @@ import uuid
 from datetime import UTC, date, datetime
 from typing import BinaryIO
 
-from sqlalchemy import select, update
+from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.ai import llm
@@ -32,14 +32,18 @@ def _now() -> datetime:
 # ---------- presentation ------------------------------------------------------------------
 
 
-def to_out(doc: ComplianceDocument, org: Organization, today: date) -> ComplianceDocOut:
-    siren_ok = rules.siren_matches(doc.siren_on_document, org.siren)
-    info = rules.effective_status(
+def _status(doc: ComplianceDocument, org: Organization, today: date) -> rules.StatusInfo:
+    return rules.effective_status(
         confirmed=doc.confirmed_at is not None,
-        siren_ok=siren_ok,
+        siren_ok=rules.siren_matches(doc.siren_on_document, org.siren),
         valid_until=doc.valid_until,
         today=today,
     )
+
+
+def to_out(doc: ComplianceDocument, org: Organization, today: date) -> ComplianceDocOut:
+    siren_ok = rules.siren_matches(doc.siren_on_document, org.siren)
+    info = _status(doc, org, today)
     alerts: list[str] = []
     if not siren_ok:
         alerts.append(
@@ -104,11 +108,14 @@ def reread(db: Session, doc: ComplianceDocument, queue: JobQueue) -> None:
 def confirm(
     db: Session, org: Organization, user: User, doc: ComplianceDocument, data: ConfirmIn
 ) -> ComplianceDocument:
+    if (data.kind, data.valid_until) != (doc.kind, doc.valid_until):
+        # The suggested rule no longer explains the date: it is now the user's own entry.
+        doc.validity_rule = "written" if data.valid_until else None
     doc.kind, doc.issuer = data.kind, data.issuer
     doc.siren_on_document = data.siren_on_document
     doc.issued_at, doc.valid_until = data.issued_at, data.valid_until
     doc.confirmed_by, doc.confirmed_at = user.id, _now()
-    doc.status = to_out(doc, org, rules.paris_today()).status
+    doc.status = _status(doc, org, rules.paris_today()).status
     db.add(
         AuditLog(
             user_id=user.id,
@@ -167,19 +174,22 @@ def run_read_document(
             result = reader.read(db, org, fileobj, record.mime)
         finally:
             fileobj.close()
-    except (
-        llm.LlmNotConfigured,
-        llm.LlmBudgetExceeded,
-        llm.LlmInvalidOutput,
-        ExtractionError,
-    ) as exc:
+    except llm.LlmProviderError:
+        _fail(db, doc_id, "Lecture interrompue, nouvelle tentative en cours.", permanent=False)
+        raise  # lets RQ retry
+    except (llm.LlmError, ExtractionError) as exc:  # permanent: retrying cannot help
         _fail(db, doc_id, _user_message(exc), permanent=True)
         return
     except Exception:
         _fail(db, doc_id, "Lecture interrompue, nouvelle tentative en cours.", permanent=False)
         raise
 
-    doc = db.get_one(ComplianceDocument, doc_id)
+    # The session does not expire on commit: reload (and lock) the row, so that a confirmation
+    # made by the user while the model was reading is seen, and a deleted document is skipped.
+    fresh = db.get(ComplianceDocument, doc_id, populate_existing=True, with_for_update=True)
+    if fresh is None:
+        return
+    doc = fresh
     data = result.data
     doc.extracted = {
         **result.raw,
@@ -187,12 +197,14 @@ def run_read_document(
     }
     doc.holder_name, doc.verification_code = data.holder_name, data.verification_code
     if doc.confirmed_at is None:  # never overwrite what the user has already confirmed
-        valid_until, rule = rules.derive_valid_until(data.kind, data.issued_at, data.valid_until)
         if doc.kind == "other":  # keep a kind the user chose when uploading
             doc.kind = data.kind
+        valid_until, rule = rules.derive_valid_until(doc.kind, data.issued_at, data.valid_until)
+        if data.valid_until is not None and data.validity_rule is not None:
+            rule = data.validity_rule  # e.g. the model applied the Kbis 3-month rule itself
         doc.issuer, doc.siren_on_document = data.issuer, data.siren_on_document
         doc.issued_at, doc.valid_until = data.issued_at, valid_until
-        doc.validity_rule = rule or data.validity_rule
+        doc.validity_rule = rule
     doc.reading_status = "done"
     _set_job(db, doc_id, "done")
     db.commit()
@@ -244,7 +256,7 @@ def usable_documents(db: Session, org: Organization, today: date) -> list[Compli
     return [
         d
         for d in db.scalars(select(ComplianceDocument))
-        if rules.is_usable(to_out(d, org, today).status)
+        if rules.is_usable(_status(d, org, today).status)
     ]
 
 
@@ -258,13 +270,9 @@ def refresh_stored_statuses(db: Session, today: date) -> int:
     for doc in db.scalars(
         select(ComplianceDocument).where(ComplianceDocument.confirmed_at.is_not(None))
     ):
-        status = to_out(doc, orgs[doc.org_id], today).status
+        status = _status(doc, orgs[doc.org_id], today).status
         if status != doc.status:
-            db.execute(
-                update(ComplianceDocument)
-                .where(ComplianceDocument.id == doc.id)
-                .values(status=status)
-            )
+            doc.status = status
             changed += 1
     db.commit()
     return changed
