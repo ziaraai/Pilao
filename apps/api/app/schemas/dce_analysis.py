@@ -33,7 +33,7 @@ def _number(v: object) -> float | None:
         return None
     if isinstance(v, int | float):
         return float(v)
-    text = re.sub(r"[\s €%]|HT", "", str(v)).replace(",", ".")
+    text = re.sub(r"[\s\u00a0€%]|HT", "", str(v)).replace(",", ".")
     try:
         return float(text)
     except ValueError:

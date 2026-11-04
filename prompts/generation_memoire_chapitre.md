@@ -1,8 +1,8 @@
 ---
 id: generation_memoire_chapitre
-version: 0.1.0
+version: 0.2.0
 task: memoir_section
-output: markdown + JSON (sources, flags)
+output: JSON (markdown, covered_requirements, sources, to_complete, commitments)
 ---
 
 # Système
@@ -32,9 +32,7 @@ Budget : environ {{word_budget}} mots.
 
 Exigences du CCTP liées à ce chapitre :
 <requirements>
-{{#each requirements}}
-- [{{ref}}] {{text}} (source : {{file}} p. {{page}})
-{{/each}}
+{{requirements}}
 </requirements>
 
 Données structurées de l'entreprise :
@@ -44,11 +42,7 @@ Données structurées de l'entreprise :
 
 Extraits de la base documentaire de l'entreprise (anciens mémoires, procédures) :
 <company_excerpts>
-{{#each chunks}}
-<excerpt id="{{chunk_id}}" source="{{document_title}} p. {{page}}">
-{{content}}
-</excerpt>
-{{/each}}
+{{company_excerpts}}
 </company_excerpts>
 
 Références retenues pour ce marché :
@@ -56,27 +50,15 @@ Références retenues pour ce marché :
 {{references_json}}
 </references>
 
-Réponds avec exactement deux blocs :
+{{instruction}}
 
-1. Le chapitre en Markdown, commençant par `## {{section_title}}`.
-2. Un bloc JSON :
+Réponds uniquement avec un objet JSON :
 ```json
 {
+  "markdown": "## {{section_title}}\n\nLe chapitre en Markdown…",
   "covered_requirements": ["CCTP-3", "CCTP-7"],
-  "sources": [{"excerpt_id": "...", "used_for": "..."}],
-  "to_complete": ["..."],
+  "sources": [{"excerpt_id": "…", "used_for": "…"}],
+  "to_complete": ["ce qui manque, dans les mêmes termes que les [À COMPLÉTER : …] du texte"],
   "commitments": ["phrases qui engagent l'entreprise, à faire valider"]
 }
 ```
-
-# Plan par défaut — nettoyage (si aucun plan imposé ni plan modèle)
-
-1. Présentation de l'entreprise et compréhension du besoin
-2. Organisation et moyens humains affectés au marché (encadrement, effectifs, horaires, remplacements, reprise du personnel)
-3. Méthodologie d'intervention par type de local et fréquences
-4. Moyens matériels et produits (fiches techniques, écolabels)
-5. Contrôle qualité et suivi de la prestation (grilles, réunions, réclamations)
-6. Hygiène, sécurité et formation du personnel
-7. Démarche environnementale et responsabilité sociale
-8. Planning de démarrage et de mise en place
-9. Références similaires

@@ -48,6 +48,27 @@ export const JOB_STATUS: Record<string, { label: string; tone: Tone }> = {
   error: { label: "Erreur", tone: "danger" },
 };
 
+export const SECTION_STATUS: Record<string, { label: string; tone: Tone }> = {
+  pending: { label: "En attente", tone: "neutral" },
+  generating: { label: "Rédaction en cours", tone: "info" },
+  ready: { label: "Rédigé", tone: "ok" },
+  error: { label: "Erreur", tone: "danger" },
+};
+
+export const FLAG_LABEL: Record<string, string> = {
+  to_complete: "À compléter",
+  commitment: "Engagement à valider",
+  number: "Chiffre à vérifier",
+  length: "Longueur",
+};
+
+export const CONFORMITY_STATUS: Record<string, { label: string; tone: Tone }> =
+  {
+    missing: { label: "Absente", tone: "danger" },
+    partial: { label: "Partielle", tone: "warning" },
+    covered: { label: "Couverte", tone: "ok" },
+  };
+
 export const DOC_CHECK: Record<string, { label: string; tone: Tone }> = {
   available: { label: "Disponible", tone: "ok" },
   expires_before_deadline: {

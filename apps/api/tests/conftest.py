@@ -171,6 +171,8 @@ class FakeQueue:
         self.pending_reads: list[uuid.UUID] = []
         self.pending_dce: list[uuid.UUID] = []
         self.pending_analyses: list[uuid.UUID] = []
+        self.pending_sections: list[uuid.UUID] = []
+        self.pending_conformity: list[uuid.UUID] = []
         self.ocr = None  # set to an OCR engine to exercise scanned pages
         self.down = False
 
@@ -219,6 +221,30 @@ class FakeQueue:
             analysis_id = self.pending_analyses.pop(0)
             with _new_session(self._conn) as session:
                 run_analyze_dce(session, analysis_id)
+
+    def enqueue_draft_section(self, section_id: uuid.UUID) -> None:
+        if self.down:
+            raise ConnectionError("redis down")
+        self.pending_sections.append(section_id)
+
+    def enqueue_conformity(self, memoir_id: uuid.UUID) -> None:
+        if self.down:
+            raise ConnectionError("redis down")
+        self.pending_conformity.append(memoir_id)
+
+    def drain_memoir(self) -> None:
+        """Every chapter job, then the conformity matrix they trigger (as RQ would)."""
+        from app.services.memoir_drafting import run_conformity, run_draft_section
+
+        while self.pending_sections or self.pending_conformity:
+            if self.pending_sections:
+                section_id = self.pending_sections.pop(0)
+                with _new_session(self._conn) as session:
+                    run_draft_section(session, section_id, self._embedder, self)
+            else:
+                memoir_id = self.pending_conformity.pop(0)
+                with _new_session(self._conn) as session:
+                    run_conformity(session, memoir_id)
 
     def drain(self) -> None:
         from app.services.knowledge import run_index_document

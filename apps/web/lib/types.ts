@@ -242,6 +242,16 @@ export type Analysis = {
   } | null;
 };
 
+export type ChapterFlag = {
+  type: "to_complete" | "commitment" | "number" | "length";
+  text: string;
+};
+export type ChapterSource = {
+  chunk_id: string;
+  document: string;
+  page: number | null;
+  used_for: string;
+};
 export type MemoirSection = {
   id: string;
   position: number;
@@ -253,8 +263,8 @@ export type MemoirSection = {
   status: string;
   error: string | null;
   content_md: string | null;
-  flags: { type: string; text: string }[];
-  sources: Record<string, unknown>[];
+  flags: ChapterFlag[];
+  sources: ChapterSource[];
   covered_refs: string[];
   edited_by_user: boolean;
 };
@@ -267,6 +277,11 @@ export type Memoir = {
   word_budget: number;
   sections: MemoirSection[];
   unassigned_requirements: string[];
+  conformity_status: "none" | "pending" | "ready" | "error";
+  conformity_error: string | null;
+  drafted_words: number;
+  estimated_pages: number | null;
+  page_warning: string | null;
   created_at: string;
   references: {
     id: string;
@@ -278,4 +293,23 @@ export type Memoir = {
     reasons: string[];
     selected: boolean;
   }[];
+};
+export type ConformityItem = {
+  requirement_ref: string;
+  requirement_text: string;
+  importance: string;
+  source: Source | null;
+  status: "covered" | "partial" | "missing";
+  method: "ai" | "declared";
+  excerpt: string | null;
+  comment: string | null;
+  section_id: string | null;
+  section_title: string | null;
+  target_section_id: string | null;
+};
+export type Conformity = {
+  status: Memoir["conformity_status"];
+  error: string | null;
+  counts: Record<ConformityItem["status"], number>;
+  items: ConformityItem[];
 };

@@ -1,5 +1,5 @@
-"""Minimal OpenAI-compatible server: answers the DCE analysis with sourced data."""
-import json, sys
+"""Minimal OpenAI-compatible server: DCE analysis with sourced data, chapters, conformity."""
+import json, re, sys
 from datetime import UTC, datetime, timedelta
 from http.server import BaseHTTPRequestHandler, HTTPServer
 
@@ -31,11 +31,43 @@ ANSWER = {
     "watch_points": [{"text": "Pénalités de retard prévues au CCAP", "severity": "warning", "source": {"file": RC, "page": 1}}],
 }
 
+
+def chapter(prompt):
+    """A careful writer: answers its requirements, never invents a number (CCTP-3 needs asking)."""
+    title = re.search(r"Chapitre à rédiger : \*\*(.+?)\*\*", prompt).group(1)
+    asked = "Consigne de l'entreprise" in prompt
+    refs = [r for r in re.findall(r"^- \[(CCTP-\d+)\]", prompt, re.M) if r != "CCTP-3" or asked]
+    excerpts = re.findall(r'<excerpt id="([^"]+)"', prompt)
+    lines = [f"## {title}", "", "Notre organisation pour ce marché :", ""]
+    lines += [f"- Exigence {r} : nous la traitons dans ce chapitre." for r in refs]
+    lines += ["", "| Zone | Fréquence |", "|---|---|", "| Bureaux | **quotidienne** |", "",
+              "Nous nous engageons à intervenir sous 2 heures.", "",
+              "Équipe dédiée : [À COMPLÉTER : nombre d'agents affectés au site]."]
+    return {"markdown": "\n".join(lines), "covered_requirements": refs,
+            "sources": [{"excerpt_id": e, "used_for": "matériel"} for e in excerpts[:1]],
+            "to_complete": ["nombre d'agents affectés au site"], "commitments": []}
+
+
+def matrix(prompt):
+    sections = re.findall(r'<section id="([^"]+)" title="[^"]*">\n(.*?)\n</section>', prompt, re.S)
+    items = []
+    for ref in re.findall(r"^- \[(CCTP-\d+)\]", prompt, re.M):
+        quote = f"Exigence {ref} : nous la traitons dans ce chapitre."
+        home = next((sid for sid, text in sections if quote in text), None)
+        items.append({"requirement_ref": ref, "status": "covered" if home else "missing",
+                      "section_id": home, "excerpt": quote if home else None,
+                      "comment": None if home else "Le mémoire n'en parle pas."})
+    return {"items": items}
+
+
 class H(BaseHTTPRequestHandler):
     def do_POST(self):
-        self.rfile.read(int(self.headers.get("content-length", 0)))
+        request = json.loads(self.rfile.read(int(self.headers.get("content-length", 0))) or b"{}")
+        prompt = request["messages"][1]["content"] if len(request.get("messages", [])) > 1 else ""
+        answer = (chapter(prompt) if "Chapitre à rédiger" in prompt
+                  else matrix(prompt) if "<memoir>" in prompt else ANSWER)
         body = {"id": "x", "object": "chat.completion", "created": 0, "model": "fake",
-                "choices": [{"index": 0, "finish_reason": "stop", "message": {"role": "assistant", "content": json.dumps(ANSWER)}}],
+                "choices": [{"index": 0, "finish_reason": "stop", "message": {"role": "assistant", "content": json.dumps(answer)}}],
                 "usage": {"prompt_tokens": 1000, "completion_tokens": 500, "total_tokens": 1500}}
         data = json.dumps(body).encode()
         self.send_response(200); self.send_header("content-type", "application/json"); self.send_header("content-length", str(len(data))); self.end_headers()

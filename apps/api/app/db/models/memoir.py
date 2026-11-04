@@ -49,6 +49,11 @@ class Memoir(IdMixin, TimestampMixin, OrgScoped, Base):
     reference_scores: Mapped[list[dict[str, Any]]] = mapped_column(
         JSONB, nullable=False, default=list
     )
+    # none | pending | ready | error — the conformity matrix runs once every chapter is drafted
+    conformity_status: Mapped[str] = mapped_column(
+        Text, nullable=False, default="none", server_default="none"
+    )
+    conformity_error: Mapped[str | None] = mapped_column(Text)
     created_by: Mapped[uuid.UUID | None] = mapped_column(
         UUID(as_uuid=True), ForeignKey("users.id", ondelete="SET NULL")
     )
@@ -75,6 +80,33 @@ class MemoirSection(IdMixin, TimestampMixin, OrgScoped, Base):
     sources: Mapped[list[dict[str, Any]]] = mapped_column(JSONB, nullable=False, default=list)
     flags: Mapped[list[dict[str, Any]]] = mapped_column(JSONB, nullable=False, default=list)
     covered_refs: Mapped[list[str]] = mapped_column(ARRAY(Text), nullable=False, default=list)
+    instruction: Mapped[str | None] = mapped_column(Text)  # free instruction for a regeneration
     generated_by_model: Mapped[str | None] = mapped_column(Text)
     prompt_version: Mapped[str | None] = mapped_column(Text)
     edited_by_user: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
+
+
+class ConformityItem(IdMixin, TimestampMixin, OrgScoped, Base):
+    """US-4.3: one row per CCTP requirement and memoir version."""
+
+    __tablename__ = "conformity_items"
+    __table_args__ = (
+        CheckConstraint("status in ('covered','partial','missing')", name="status"),
+        UniqueConstraint(
+            "memoir_id", "requirement_id", name="uq_conformity_items_memoir_id_requirement_id"
+        ),
+    )
+
+    memoir_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("memoirs.id", ondelete="CASCADE"), nullable=False, index=True
+    )
+    requirement_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("requirements.id", ondelete="CASCADE"), nullable=False
+    )
+    section_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("memoir_sections.id", ondelete="SET NULL")
+    )
+    status: Mapped[str] = mapped_column(Text, nullable=False)
+    excerpt: Mapped[str | None] = mapped_column(Text)
+    comment: Mapped[str | None] = mapped_column(Text)
+    method: Mapped[str] = mapped_column(Text, nullable=False, default="ai")  # ai | declared

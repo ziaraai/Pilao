@@ -2,20 +2,31 @@
 
 import { useState } from "react";
 
+import { SourceLink, SourceViewer } from "@/components/dossier/source";
+import { Markdown } from "@/components/markdown";
 import {
   Alert,
   Badge,
   Button,
   Card,
   Empty,
+  Field,
   Input,
   Loading,
   Select,
+  Textarea,
 } from "@/components/ui";
 import { api } from "@/lib/api";
 import { formatCents } from "@/lib/format";
 import { useAction, useApi } from "@/lib/hooks";
-import type { Analysis, Memoir } from "@/lib/types";
+import { CONFORMITY_STATUS, FLAG_LABEL, SECTION_STATUS } from "@/lib/labels";
+import type {
+  Analysis,
+  Conformity,
+  ConformityItem,
+  Memoir,
+  MemoirSection as Chapter,
+} from "@/lib/types";
 
 const SOURCE_LABEL: Record<Memoir["outline_source"], string> = {
   rc_imposed:
@@ -33,10 +44,19 @@ type Draft = {
   word_budget: number;
 };
 
+/** Chapters are drafted by background jobs, then the matrix: poll until both are done. */
+const working = (m: Memoir) =>
+  m.status === "generating" || m.conformity_status === "pending";
+
 export function MemoirSection({ bidId }: { bidId: string }) {
-  const memoir = useApi<Memoir>(`/bids/${bidId}/memoir`);
+  const memoir = useApi<Memoir>(`/bids/${bidId}/memoir`, working);
   const analysis = useApi<Analysis>(`/bids/${bidId}/analysis`);
   const create = useAction();
+
+  function update(m: Memoir) {
+    memoir.setData(m);
+    if (working(m)) memoir.reload(); // restarts the polling
+  }
 
   async function prepare() {
     const m = await create.run(() =>
@@ -83,7 +103,8 @@ export function MemoirSection({ bidId }: { bidId: string }) {
           text: r.text,
         })) ?? []
       }
-      onChange={memoir.setData}
+      onChange={update}
+      onRefresh={memoir.reload}
       onNewVersion={prepare}
       busyNewVersion={create.busy}
     />
@@ -94,12 +115,14 @@ function OutlineEditor({
   memoir,
   allRefs,
   onChange,
+  onRefresh,
   onNewVersion,
   busyNewVersion,
 }: {
   memoir: Memoir;
   allRefs: { ref: string; text: string }[];
   onChange: (m: Memoir) => void;
+  onRefresh: () => void;
   onNewVersion: () => void;
   busyNewVersion: boolean;
 }) {
@@ -114,6 +137,7 @@ function OutlineEditor({
   const [dirty, setDirty] = useState(false);
   const save = useAction();
   const refs = useAction();
+  const generate = useAction();
   const editable = memoir.status === "draft";
   const assigned = new Set(sections.flatMap((s) => s.requirement_refs));
   const unassigned = allRefs.filter((r) => !assigned.has(r.ref));
@@ -414,12 +438,447 @@ function OutlineEditor({
           inventée.
         </p>
       </Card>
-      <Card title="Rédaction">
-        <p className="text-sm text-slate-600">
-          La rédaction chapitre par chapitre s&apos;appuiera sur ce plan, vos
-          références et votre base documentaire.
-        </p>
-      </Card>
+      {editable ? (
+        <Card title="Rédaction">
+          <div className="space-y-3">
+            <p className="text-sm text-slate-600">
+              Chaque chapitre est rédigé à partir de ce plan, des exigences du
+              CCTP qui lui sont rattachées, de votre profil, des références
+              cochées et de votre base documentaire. Rien n&apos;est inventé :
+              ce qui manque est signalé « [À COMPLÉTER : …] ».
+            </p>
+            <Button
+              busy={generate.busy}
+              disabled={dirty}
+              onClick={async () => {
+                const m = await generate.run(() =>
+                  api<Memoir>(`/memoirs/${memoir.id}/generate`, {
+                    method: "POST",
+                  }),
+                );
+                if (m) onChange(m);
+              }}
+            >
+              Rédiger le mémoire
+            </Button>
+            {dirty && (
+              <p className="text-xs text-amber-800">
+                Enregistrez d&apos;abord le plan.
+              </p>
+            )}
+            {generate.error && <Alert tone="danger">{generate.error}</Alert>}
+          </div>
+        </Card>
+      ) : (
+        <SourceViewer>
+          <Drafting memoir={memoir} textOf={textOf} onChange={onChange} />
+          <ConformityCard
+            key={`${memoir.id}:${memoir.status}:${memoir.conformity_status}`}
+            memoir={memoir}
+            onChange={onChange}
+            onRefresh={onRefresh}
+          />
+        </SourceViewer>
+      )}
     </div>
+  );
+}
+
+function Drafting({
+  memoir,
+  textOf,
+  onChange,
+}: {
+  memoir: Memoir;
+  textOf: Record<string, string>;
+  onChange: (m: Memoir) => void;
+}) {
+  const total = memoir.sections.length;
+  const done = memoir.sections.filter(
+    (s) => s.status === "ready" || s.status === "error",
+  ).length;
+  return (
+    <Card title="Mémoire rédigé">
+      <div className="space-y-4">
+        <p className="text-sm text-slate-700" aria-live="polite">
+          {memoir.status === "generating"
+            ? `Rédaction en cours : ${done} chapitre${done > 1 ? "s" : ""} sur ${total}. La page se met à jour toute seule.`
+            : `${total} chapitre${total > 1 ? "s" : ""} rédigé${total > 1 ? "s" : ""}.`}
+          {memoir.estimated_pages != null &&
+            ` Environ ${memoir.drafted_words} mots, soit ${memoir.estimated_pages} page${memoir.estimated_pages > 1 ? "s" : ""}${memoir.max_pages ? ` pour ${memoir.max_pages} autorisée${memoir.max_pages > 1 ? "s" : ""}` : ""} (estimation).`}
+        </p>
+        {memoir.page_warning && (
+          <Alert tone="warning">{memoir.page_warning}</Alert>
+        )}
+        <Alert tone="info">
+          Brouillon à relire : vérifiez chaque passage signalé, complétez les «
+          [À COMPLÉTER] » et validez les engagements avant de déposer.
+        </Alert>
+        {memoir.sections.map((s) => (
+          <ChapterView
+            key={s.id}
+            section={s}
+            textOf={textOf}
+            onChange={onChange}
+          />
+        ))}
+      </div>
+    </Card>
+  );
+}
+
+function ChapterView({
+  section,
+  textOf,
+  onChange,
+}: {
+  section: Chapter;
+  textOf: Record<string, string>;
+  onChange: (m: Memoir) => void;
+}) {
+  const [instruction, setInstruction] = useState("");
+  const regenerate = useAction();
+  const status = SECTION_STATUS[section.status] ?? SECTION_STATUS.pending;
+  const busy = section.status === "pending" || section.status === "generating";
+  const flags = Object.entries(
+    section.flags.reduce<Record<string, string[]>>((by, f) => {
+      (by[f.type] ??= []).push(f.text);
+      return by;
+    }, {}),
+  );
+  return (
+    <article
+      id={`chapter-${section.id}`}
+      aria-busy={busy}
+      className="scroll-mt-4 space-y-3 rounded-md p-4 ring-1 ring-slate-200"
+    >
+      <div className="flex flex-wrap items-center gap-2">
+        <Badge tone={status.tone}>{status.label}</Badge>
+        {section.criterion_ref && (
+          <span className="text-xs text-slate-500">
+            Critère : {section.criterion_ref}
+          </span>
+        )}
+        <span className="text-xs text-slate-500">
+          Budget : {section.word_budget} mots
+        </span>
+      </div>
+      {section.error && (
+        <Alert tone={section.status === "error" ? "danger" : "info"}>
+          {section.error}
+        </Alert>
+      )}
+      {section.content_md ? (
+        <Markdown source={section.content_md} />
+      ) : (
+        <h3 className="text-base font-semibold text-brand-navy">
+          {section.title}
+        </h3>
+      )}
+      {flags.length > 0 && (
+        <div className="rounded-md bg-amber-50 p-3 ring-1 ring-amber-200">
+          <h4 className="text-sm font-semibold text-amber-900">
+            À vérifier avant dépôt
+          </h4>
+          <dl className="mt-1 space-y-1 text-sm text-amber-950">
+            {flags.map(([type, items]) => (
+              <div key={type}>
+                <dt className="font-medium">{FLAG_LABEL[type] ?? type}</dt>
+                {items.map((text, i) => (
+                  <dd key={i} className="ml-4 list-item list-disc">
+                    {text}
+                  </dd>
+                ))}
+              </div>
+            ))}
+          </dl>
+        </div>
+      )}
+      {section.requirement_refs.length > 0 && (
+        <p className="flex flex-wrap items-center gap-1.5 text-xs text-slate-600">
+          Exigences du chapitre :
+          {section.requirement_refs.map((ref) => (
+            <span
+              key={ref}
+              title={textOf[ref]}
+              className={`rounded-full px-2 py-0.5 font-mono ${
+                section.covered_refs.includes(ref)
+                  ? "bg-emerald-50 text-emerald-800"
+                  : "bg-slate-100 text-slate-700"
+              }`}
+            >
+              {ref}
+              {section.covered_refs.includes(ref) ? " ✓" : ""}
+            </span>
+          ))}
+        </p>
+      )}
+      {section.sources.length > 0 && (
+        <div className="text-xs text-slate-600">
+          <p className="font-medium">Sources de votre base documentaire :</p>
+          <ul className="ml-4 list-disc">
+            {section.sources.map((src) => (
+              <li key={src.chunk_id}>
+                {src.document}
+                {src.page ? `, p. ${src.page}` : ""}
+                {src.used_for ? ` — ${src.used_for}` : ""}
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
+      {!busy && (
+        <details className="text-sm">
+          <summary className="cursor-pointer font-medium text-brand-navy">
+            Régénérer ce chapitre
+          </summary>
+          <div className="mt-2 space-y-2">
+            <Field
+              label="Consigne (facultatif)"
+              htmlFor={`instruction-${section.id}`}
+            >
+              <Textarea
+                id={`instruction-${section.id}`}
+                rows={2}
+                maxLength={2000}
+                value={instruction}
+                placeholder="Ex. : plus concis, insister sur la sécurité des agents…"
+                onChange={(e) => setInstruction(e.target.value)}
+              />
+            </Field>
+            <Button
+              variant="secondary"
+              busy={regenerate.busy}
+              onClick={async () => {
+                const m = await regenerate.run(() =>
+                  api<Memoir>(`/memoir-sections/${section.id}/regenerate`, {
+                    method: "POST",
+                    json: { instruction: instruction || null },
+                  }),
+                );
+                if (m) {
+                  setInstruction("");
+                  onChange(m);
+                }
+              }}
+            >
+              Régénérer
+            </Button>
+            {regenerate.error && (
+              <Alert tone="danger">{regenerate.error}</Alert>
+            )}
+          </div>
+        </details>
+      )}
+    </article>
+  );
+}
+
+function ConformityCard({
+  memoir,
+  onChange,
+  onRefresh,
+}: {
+  memoir: Memoir;
+  onChange: (m: Memoir) => void;
+  onRefresh: () => void;
+}) {
+  const matrix = useApi<Conformity>(`/memoirs/${memoir.id}/conformity`);
+  const rerun = useAction();
+  const c = matrix.data;
+  const canRun =
+    memoir.status === "ready" || memoir.status === "exported"
+      ? memoir.conformity_status !== "pending"
+      : false;
+  return (
+    <Card
+      title="Matrice de conformité"
+      actions={
+        canRun && (
+          <Button
+            variant="secondary"
+            busy={rerun.busy}
+            onClick={async () => {
+              const ok = await rerun.run(() =>
+                api<Conformity>(`/memoirs/${memoir.id}/conformity`, {
+                  method: "POST",
+                }),
+              );
+              if (ok) onRefresh();
+            }}
+          >
+            {memoir.conformity_status === "none"
+              ? "Lancer la vérification"
+              : "Relancer la vérification"}
+          </Button>
+        )
+      }
+    >
+      <div className="space-y-3">
+        <p className="text-sm text-slate-600">
+          Chaque exigence du CCTP est cherchée dans le mémoire. « Couverte »
+          exige une citation exacte du mémoire : sinon l&apos;exigence reste
+          partielle.
+        </p>
+        {memoir.status === "generating" && (
+          <p className="text-sm text-slate-600">
+            La vérification démarre quand tous les chapitres sont rédigés.
+          </p>
+        )}
+        {memoir.conformity_status === "pending" && (
+          <p className="text-sm text-slate-600" aria-live="polite">
+            Vérification en cours…
+          </p>
+        )}
+        {memoir.conformity_status === "none" && memoir.status === "ready" && (
+          <p className="text-sm text-slate-600">
+            Un chapitre est en erreur : régénérez-le, ou lancez la vérification
+            sur le mémoire tel qu&apos;il est.
+          </p>
+        )}
+        {(rerun.error || matrix.error) && (
+          <Alert tone="danger">{rerun.error || matrix.error}</Alert>
+        )}
+        {c?.error && <Alert tone="warning">{c.error}</Alert>}
+        {c && c.status !== "ready" && c.items.length > 0 && (
+          <p className="text-xs text-slate-500">
+            Résultats de la dernière vérification, avant les dernières
+            modifications du mémoire.
+          </p>
+        )}
+        {!c ? (
+          matrix.loading && <Loading />
+        ) : c.items.length === 0 ? (
+          memoir.conformity_status === "ready" && (
+            <Empty>Aucune exigence relevée dans le CCTP.</Empty>
+          )
+        ) : (
+          <>
+            <p className="flex flex-wrap gap-2">
+              {(["missing", "partial", "covered"] as const).map((k) => (
+                <Badge key={k} tone={CONFORMITY_STATUS[k].tone}>
+                  {c.counts[k]} {CONFORMITY_STATUS[k].label.toLowerCase()}
+                  {c.counts[k] > 1 ? "s" : ""}
+                </Badge>
+              ))}
+            </p>
+            <ul className="divide-y divide-slate-100">
+              {c.items.map((item) => (
+                <ConformityRow
+                  key={item.requirement_ref}
+                  item={item}
+                  memoir={memoir}
+                  onChange={onChange}
+                />
+              ))}
+            </ul>
+          </>
+        )}
+      </div>
+    </Card>
+  );
+}
+
+function ConformityRow({
+  item,
+  memoir,
+  onChange,
+}: {
+  item: ConformityItem;
+  memoir: Memoir;
+  onChange: (m: Memoir) => void;
+}) {
+  const [target, setTarget] = useState(
+    item.target_section_id ?? memoir.sections[0]?.id ?? "",
+  );
+  const complete = useAction();
+  const status = CONFORMITY_STATUS[item.status];
+  const chapter = memoir.sections.find((s) => s.id === target);
+  const chapterBusy =
+    chapter?.status === "pending" || chapter?.status === "generating";
+  return (
+    <li className="space-y-1.5 py-3 text-sm">
+      <p>
+        <Badge tone={status.tone}>{status.label}</Badge>{" "}
+        <span className="font-mono text-xs text-slate-600">
+          {item.requirement_ref}
+        </span>{" "}
+        {item.requirement_text}
+        <SourceLink source={item.source} />
+      </p>
+      {item.excerpt && (
+        <blockquote className="border-l-2 border-slate-300 pl-3 text-slate-700">
+          « {item.excerpt} »
+          {item.section_id && (
+            <>
+              {" — "}
+              <a
+                href={`#chapter-${item.section_id}`}
+                className="text-brand-navy underline"
+              >
+                {item.section_title}
+              </a>
+            </>
+          )}
+        </blockquote>
+      )}
+      {item.comment && <p className="text-slate-600">{item.comment}</p>}
+      {item.method === "declared" && (
+        <p className="text-xs text-slate-500">
+          Statut déclaré par le chapitre, non vérifié par une citation.
+        </p>
+      )}
+      {item.status !== "covered" && (
+        <div className="flex flex-wrap items-center gap-2">
+          {!item.target_section_id && (
+            <>
+              <label
+                htmlFor={`target-${item.requirement_ref}`}
+                className="sr-only"
+              >
+                Chapitre où traiter {item.requirement_ref}
+              </label>
+              <Select
+                id={`target-${item.requirement_ref}`}
+                value={target}
+                className="w-auto py-1 text-xs"
+                onChange={(e) => setTarget(e.target.value)}
+              >
+                {memoir.sections.map((s) => (
+                  <option key={s.id} value={s.id}>
+                    {s.title}
+                  </option>
+                ))}
+              </Select>
+            </>
+          )}
+          <Button
+            variant="secondary"
+            busy={complete.busy}
+            disabled={!target || chapterBusy}
+            onClick={async () => {
+              const m = await complete.run(() =>
+                api<Memoir>(`/memoir-sections/${target}/regenerate`, {
+                  method: "POST",
+                  json: {
+                    instruction:
+                      `Traitez explicitement et concrètement l'exigence ${item.requirement_ref} du CCTP : « ${item.requirement_text} ».` +
+                      (item.comment
+                        ? ` Constat de la vérification : ${item.comment}`
+                        : ""),
+                    add_requirement_refs: [item.requirement_ref],
+                  },
+                }),
+              );
+              if (m) onChange(m);
+            }}
+          >
+            Compléter ce point
+            {item.target_section_id && chapter ? ` (${chapter.title})` : ""}
+          </Button>
+          {complete.error && <Alert tone="danger">{complete.error}</Alert>}
+        </div>
+      )}
+    </li>
   );
 }

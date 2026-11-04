@@ -214,6 +214,38 @@ let current; // the page, for a screenshot when a step fails
   step(
     "memoir outline: imposed plan kept, requirements attached, reference selected, edit saved",
   );
+
+  // 6c. Drafting chapter by chapter (P2-03), conformity matrix (P2-04)
+  await page.getByRole("button", { name: "Rédiger le mémoire" }).click();
+  await page
+    .getByText("2 chapitres rédigés.", { exact: false })
+    .waitFor({ timeout: 90000 });
+  await page
+    .getByRole("heading", { name: "2. Méthodologie et organisation" })
+    .waitFor();
+  await page
+    .locator("mark", {
+      hasText: "[À COMPLÉTER : nombre d'agents affectés au site]",
+    })
+    .first()
+    .waitFor();
+  await page.getByText("Engagement à valider").first().waitFor();
+  await page.getByRole("cell", { name: "quotidienne" }).first().waitFor();
+  const matrixCard = page.locator("section", {
+    has: page.getByRole("heading", { name: "Matrice de conformité" }),
+  });
+  await matrixCard.getByText("1 absente").waitFor({ timeout: 90000 });
+  const missing = matrixCard.locator("li").first();
+  if (!(await missing.textContent()).includes("CCTP-3"))
+    throw new Error("missing requirement not shown first");
+  await page.screenshot({ path: `${S}/05-redaction.png`, fullPage: true });
+  await missing.getByRole("button", { name: /Compléter ce point/ }).click();
+  await matrixCard.getByText("3 couvertes").waitFor({ timeout: 90000 });
+  await matrixCard.getByText("0 absente").waitFor();
+  await matrixCard.screenshot({ path: `${S}/06-conformite.png` });
+  step(
+    "memoir drafted per chapter, missing requirement listed first, « compléter ce point » covers it",
+  );
   await page
     .locator("h1 + p")
     .filter({ visible: true })

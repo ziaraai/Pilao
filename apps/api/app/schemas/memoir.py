@@ -22,6 +22,12 @@ class ReferencesIn(BaseModel):
     reference_ids: list[uuid.UUID] = Field(default_factory=list, max_length=20)
 
 
+class RegenerateIn(BaseModel):
+    instruction: str | None = Field(default=None, max_length=2000)
+    # "compléter ce point" (US-4.3 CA2): requirements to hand to this chapter as well
+    add_requirement_refs: list[str] = Field(default_factory=list, max_length=50)
+
+
 class SectionOut(BaseModel):
     id: uuid.UUID
     position: int
@@ -60,4 +66,37 @@ class MemoirOut(BaseModel):
     sections: list[SectionOut]
     references: list[ReferenceChoiceOut]
     unassigned_requirements: list[str]
+    conformity_status: Literal["none", "pending", "ready", "error"]
+    conformity_error: str | None
+    drafted_words: int
+    estimated_pages: int | None  # None until a chapter is drafted (US-4.2 CA5)
+    page_warning: str | None
     created_at: datetime
+
+
+class SourceRef(BaseModel):
+    file: str
+    page: int | None
+    dce_file_id: uuid.UUID
+
+
+class ConformityItemOut(BaseModel):
+    requirement_ref: str
+    requirement_text: str
+    importance: str
+    source: SourceRef | None
+    status: Literal["covered", "partial", "missing"]
+    method: Literal["ai", "declared"]
+    excerpt: str | None
+    comment: str | None
+    section_id: uuid.UUID | None
+    section_title: str | None
+    # the chapter "compléter ce point" regenerates: the one quoted, else the one in the outline
+    target_section_id: uuid.UUID | None
+
+
+class ConformityOut(BaseModel):
+    status: Literal["none", "pending", "ready", "error"]
+    error: str | None
+    counts: dict[str, int]
+    items: list[ConformityItemOut]  # missing first, then partial, then covered (US-4.3 CA2)
