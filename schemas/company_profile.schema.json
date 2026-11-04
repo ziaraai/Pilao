@@ -1,0 +1,61 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://pilao.app/schemas/company_profile.schema.json",
+  "title": "CompanyProfileForAI",
+  "description": "Données structurées de l'entreprise transmises au modèle (<company_data>). Uniquement des faits saisis ou confirmés par l'entreprise.",
+  "type": "object",
+  "properties": {
+    "identity": {
+      "type": "object",
+      "properties": {
+        "name": { "type": "string" },
+        "siret": { "type": "string" },
+        "legal_form": { "type": ["string", "null"] },
+        "address": { "type": ["string", "null"] },
+        "creation_year": { "type": ["integer", "null"] },
+        "headcount": { "type": ["integer", "null"] }
+      },
+      "required": ["name", "siret"]
+    },
+    "trades": { "type": "array", "items": { "type": "string" } },
+    "departments": { "type": "array", "items": { "type": "string" } },
+    "revenue_last_3_years_eur": { "type": "array", "items": { "type": ["number", "null"] } },
+    "human_resources": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "qualification": { "type": "string" },
+          "count": { "type": "integer" },
+          "description": { "type": ["string", "null"] }
+        },
+        "required": ["qualification", "count"]
+      }
+    },
+    "equipment": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "name": { "type": "string" },
+          "category": { "type": ["string", "null"] },
+          "quantity": { "type": ["integer", "null"] }
+        },
+        "required": ["name"]
+      }
+    },
+    "certifications": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "name": { "type": "string" },
+          "valid_until": { "type": ["string", "null"] }
+        },
+        "required": ["name"]
+      }
+    },
+    "products_and_labels": { "type": "array", "items": { "type": "string" } }
+  },
+  "required": ["identity", "trades"]
+}

@@ -1,0 +1,87 @@
+# Pilao — mémoire de projet pour Claude Code
+
+> **Pilao, le pilote de vos appels d'offres.**
+> Plateforme SaaS qui aide les PME (d'abord le **nettoyage**, ensuite le **BTP**) à trouver les appels d'offres publics qui leur correspondent, puis à **générer un mémoire technique et des documents adaptés au DCE** de chaque appel d'offres.
+
+Ce fichier est le point d'entrée. Lis-le en entier au début de chaque session, puis ouvre les documents de `docs/` utiles à la tâche.
+
+## 1. Résumé en 30 secondes
+
+- **Utilisateur cible** : une PME française qui répond à des marchés publics (persona de référence : Abdraouf, entreprise de nettoyage / BTP).
+- **Problème** : chercher les annonces, lire le DCE (RC, CCTP…), adapter le mémoire technique et réunir les attestations prend des heures par dossier, souvent fait à la main par une secrétaire.
+- **Solution** : profil d'entreprise saisi une fois → veille automatique BOAMP/TED avec score → dépôt du DCE → analyse automatique → mémoire technique adapté + documents pré-remplis → relecture → export Word/PDF.
+- **Principe absolu** : la plateforme produit un **brouillon à relire**. Elle ne dépose **jamais** une offre à la place de l'entreprise.
+
+## 2. Où trouver quoi
+
+| Besoin | Fichier |
+|---|---|
+| Vision, cible, positionnement | `docs/01-vision-produit.md` |
+| Vocabulaire métier (DCE, CCTP, DC1, DUME…) | `docs/02-glossaire-metier.md` |
+| Comment une entreprise répond à un AO aujourd'hui | `docs/03-processus-metier.md` |
+| Spécifications fonctionnelles et user stories | `docs/04-specifications-fonctionnelles.md` |
+| Architecture, stack, arborescence, variables d'env | `docs/05-architecture.md` |
+| Modèle de données | `docs/06-modele-de-donnees.md` |
+| API externes (BOAMP, TED, SIRENE…) | `docs/07-integrations-api.md` |
+| Pipeline IA (extraction, RAG, génération) | `docs/08-pipeline-ia.md` |
+| Sécurité, RGPD | `docs/09-securite-rgpd.md` |
+| Roadmap et tickets | `docs/10-roadmap-taches.md` |
+| Protocole de test et d'évaluation IA | `docs/11-tests-evaluation.md` |
+| Décisions d'architecture (ADR) | `docs/12-decisions.md` |
+| Questions ouvertes | `docs/13-questions-ouvertes.md` |
+| Prompts IA | `prompts/*.md` |
+| Schémas JSON | `schemas/*.json` |
+| Codes CPV du nettoyage | `data/cpv-nettoyage.md` |
+
+## 3. Stack (décision ADR-001, modifiable)
+
+- **Front** : Next.js (App Router, TypeScript), Tailwind, interface 100 % en français.
+- **Back** : Python 3.12, FastAPI, SQLAlchemy 2 + Alembic, Pydantic v2.
+- **Worker** : file de tâches (RQ ou Celery) sur Redis pour l'import des annonces, l'analyse des DCE et la génération.
+- **Base** : PostgreSQL 16 + extension `pgvector`.
+- **Fichiers** : stockage objet compatible S3 (MinIO en local, Scaleway ou OVHcloud en production, région UE).
+- **IA** : appels via une couche d'abstraction (LiteLLM) branchée sur OpenRouter pendant les tests. **Jamais** d'appel direct à un SDK fournisseur dans le code métier : tout passe par `app/ai/llm.py`.
+- **Export** : `python-docx` pour le Word, conversion PDF (LibreOffice headless ou équivalent).
+- **Paiement** : Stripe (plus tard). **E-mails** : service transactionnel (plus tard).
+
+## 4. Conventions
+
+- Code, noms de variables, tables et API en **anglais**. Textes de l'interface, prompts et documentation en **français**.
+- Python : `ruff` + `black` + `mypy` strict sur `app/`. TypeScript : `eslint` + `prettier`, `strict: true`.
+- Chaque endpoint a un test (`pytest`). Chaque prompt a au moins un cas de test dans `tests/ai/`.
+- Migrations Alembic pour **tout** changement de schéma.
+- Multi-tenant : **toute** table métier porte `org_id`, et **toute** requête filtre par `org_id` (voir `docs/09-securite-rgpd.md`). Pas d'exception.
+- Les sorties IA structurées sont validées par un schéma Pydantic (ou `schemas/*.json`). En cas d'échec de validation : 1 nouvelle tentative, puis erreur explicite.
+- Chaque appel IA est journalisé dans `ai_calls` (tâche, modèle, tokens, coût, durée).
+- Dates en UTC en base, affichées en heure de Paris. Montants en euros HT, stockés en centimes (`integer`).
+
+## 5. Règles métier non négociables
+
+1. L'IA **n'invente jamais** une donnée de l'entreprise (effectif, chiffre d'affaires, référence, certification, matériel). Si l'info manque : `[À COMPLÉTER : …]` dans le texte + alerte.
+2. Chaque information extraite d'un DCE garde sa **source** (fichier + page).
+3. Les données d'une entreprise ne servent **jamais** à générer pour une autre entreprise.
+4. Le plan imposé par le RC prime toujours sur le plan modèle de l'entreprise.
+5. Pas de téléchargement automatique des DCE en V1 : l'utilisateur dépose le DCE (voir ADR-004).
+
+## 6. Phase en cours
+
+**Phase 0 — test des modèles d'IA** puis **Phase 1 — socle** (voir `docs/10-roadmap-taches.md`).
+En attente : 3 vrais DCE + mémoires techniques + plan type envoyés par Abdraouf (à placer dans `samples/` — dossier **non versionné**, ajouté au `.gitignore`).
+
+## 7. Commandes (à compléter quand le repo sera initialisé)
+
+```bash
+docker compose -f infra/docker-compose.yml up -d   # postgres+pgvector, redis, minio
+cd apps/api && uv sync && uv run alembic upgrade head && uv run fastapi dev app/main.py
+cd apps/api && uv run rq worker                      # worker
+cd apps/web && pnpm install && pnpm dev
+cd apps/api && uv run pytest
+```
+
+## 8. Comment travailler avec moi (Claude Code)
+
+- Avant de coder une fonctionnalité, relis la user story correspondante dans `docs/04-specifications-fonctionnelles.md` et ses critères d'acceptation.
+- Propose un plan court, puis code par petites étapes testées.
+- Si une information de `docs/07-integrations-api.md` est marquée **« à vérifier »**, vérifie-la d'abord (appel réel ou doc officielle) et mets le document à jour.
+- Toute décision structurante → une entrée dans `docs/12-decisions.md`.
+- Toute question sans réponse → `docs/13-questions-ouvertes.md`.

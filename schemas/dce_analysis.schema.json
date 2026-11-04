@@ -1,0 +1,155 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://pilao.app/schemas/dce_analysis.schema.json",
+  "title": "DceAnalysis",
+  "description": "Fiche d'analyse d'un DCE produite par prompts/extraction_dce.md",
+  "type": "object",
+  "$defs": {
+    "source": {
+      "type": "object",
+      "properties": {
+        "file": { "type": "string" },
+        "page": { "type": ["integer", "null"], "minimum": 1 }
+      },
+      "required": ["file", "page"],
+      "additionalProperties": false
+    },
+    "sourcedText": {
+      "type": ["object", "null"],
+      "properties": {
+        "value": { "type": ["string", "null"] },
+        "source": { "$ref": "#/$defs/source" }
+      },
+      "required": ["value", "source"]
+    },
+    "sourcedDate": {
+      "type": ["object", "null"],
+      "properties": {
+        "value": { "type": ["string", "null"], "description": "ISO 8601" },
+        "source": { "$ref": "#/$defs/source" }
+      },
+      "required": ["value", "source"]
+    },
+    "sourcedNumber": {
+      "type": ["object", "null"],
+      "properties": {
+        "value": { "type": ["number", "null"] },
+        "source": { "$ref": "#/$defs/source" }
+      },
+      "required": ["value", "source"]
+    }
+  },
+  "properties": {
+    "key_info": {
+      "type": "object",
+      "properties": {
+        "buyer_name": { "$ref": "#/$defs/sourcedText" },
+        "title": { "$ref": "#/$defs/sourcedText" },
+        "procedure": { "$ref": "#/$defs/sourcedText" },
+        "estimated_amount_eur_ht": { "$ref": "#/$defs/sourcedNumber" },
+        "duration": { "$ref": "#/$defs/sourcedText" },
+        "submission_deadline": { "$ref": "#/$defs/sourcedDate" },
+        "submission_platform": { "$ref": "#/$defs/sourcedText" },
+        "lots": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "number": { "type": ["string", "null"] },
+              "title": { "type": "string" },
+              "estimated_amount_eur_ht": { "type": ["number", "null"] },
+              "source": { "$ref": "#/$defs/source" }
+            },
+            "required": ["title", "source"]
+          }
+        }
+      },
+      "required": ["buyer_name", "title", "submission_deadline", "lots"]
+    },
+    "site_visit": {
+      "type": "object",
+      "properties": {
+        "mandatory": { "type": ["boolean", "null"] },
+        "dates": { "type": "array", "items": { "type": "string" } },
+        "details": { "type": ["string", "null"] },
+        "source": { "anyOf": [{ "$ref": "#/$defs/source" }, { "type": "null" }] }
+      },
+      "required": ["mandatory", "dates"]
+    },
+    "questions_deadline": { "$ref": "#/$defs/sourcedDate" },
+    "award_criteria": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "name": { "type": "string" },
+          "weight_pct": { "type": ["number", "null"] },
+          "subcriteria": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "name": { "type": "string" },
+                "weight_pct": { "type": ["number", "null"] }
+              },
+              "required": ["name"]
+            }
+          },
+          "source": { "$ref": "#/$defs/source" }
+        },
+        "required": ["name", "source"]
+      }
+    },
+    "memoir_requirements": {
+      "type": "object",
+      "properties": {
+        "imposed_outline": { "type": "array", "items": { "type": "string" }, "description": "Titres dans l'ordre, tels qu'écrits dans le RC ; vide si aucun plan imposé" },
+        "response_template_provided": { "type": ["boolean", "null"] },
+        "max_pages": { "type": ["integer", "null"] },
+        "format_constraints": { "type": ["string", "null"] },
+        "source": { "anyOf": [{ "$ref": "#/$defs/source" }, { "type": "null" }] }
+      },
+      "required": ["imposed_outline", "max_pages"]
+    },
+    "required_documents": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "name": { "type": "string" },
+          "phase": { "enum": ["candidature", "offre"] },
+          "compliance_kind": { "type": ["string", "null"], "description": "kind du coffre-fort si applicable (urssaf_vigilance, kbis…)" },
+          "source": { "$ref": "#/$defs/source" }
+        },
+        "required": ["name", "phase", "source"]
+      }
+    },
+    "requirements": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "ref": { "type": "string", "pattern": "^CCTP-[0-9]+$" },
+          "text": { "type": "string" },
+          "category": { "enum": ["frequency", "surface", "product", "schedule", "staff", "equipment", "quality", "safety", "environment", "reporting", "other"] },
+          "importance": { "enum": ["mandatory", "expected", "nice_to_have"] },
+          "source": { "$ref": "#/$defs/source" }
+        },
+        "required": ["ref", "text", "category", "importance", "source"]
+      }
+    },
+    "watch_points": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "text": { "type": "string" },
+          "severity": { "enum": ["info", "warning", "blocking"] },
+          "source": { "$ref": "#/$defs/source" }
+        },
+        "required": ["text", "severity", "source"]
+      }
+    }
+  },
+  "required": ["key_info", "site_visit", "award_criteria", "memoir_requirements", "required_documents", "requirements", "watch_points"]
+}
