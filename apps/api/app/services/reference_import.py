@@ -22,6 +22,9 @@ from app.schemas.profile import ReferenceIn
 
 MAX_BYTES = 5 * 1024 * 1024
 MAX_ROWS = 500
+# Physical rows read (blank lines included) and header cells read, whatever the sheet claims.
+MAX_SCANNED_ROWS = 20 * MAX_ROWS
+MAX_COLUMNS = 100
 
 # (field, header shown in the template, required)
 COLUMNS: tuple[tuple[str, str, bool], ...] = (
@@ -109,22 +112,32 @@ def _amount_cents(value: Any) -> int | None:
     if value is None or str(value).strip() == "":
         return None
     raw = str(value).replace("\xa0", "").replace(" ", "").replace("€", "").replace(",", ".")
-    try:
-        euros = Decimal(raw)
-    except InvalidOperation:
-        raise ValueError(f"montant illisible : « {value} »") from None
+    euros = _decimal(raw, value, "montant")
     if euros < 0:
         raise ValueError("le montant ne peut pas être négatif")
     return int((euros * 100).quantize(Decimal(1)))
 
 
+# Far above any real amount, year or duration; keeps int()/quantize() cheap and in range
+# ("1e999999999" would otherwise build a billion-digit integer or overflow the context).
+_MAX_ADJUSTED_EXPONENT = 15
+
+
+def _decimal(raw: str, value: Any, label: str) -> Decimal:
+    """Parse a finite, reasonably sized decimal, or raise a ``ValueError`` for the row."""
+    try:
+        number = Decimal(raw)
+    except InvalidOperation:
+        raise ValueError(f"{label} illisible : « {value} »") from None
+    if not number.is_finite() or number.adjusted() > _MAX_ADJUSTED_EXPONENT:
+        raise ValueError(f"{label} illisible : « {value} »")
+    return number
+
+
 def _int(value: Any, label: str) -> int | None:
     if value is None or str(value).strip() == "":
         return None
-    try:
-        number = Decimal(str(value).strip().replace(",", "."))
-    except InvalidOperation:
-        raise ValueError(f"{label} illisible : « {value} »") from None
+    number = _decimal(str(value).strip().replace(",", "."), value, label)
     if number != number.to_integral_value():
         raise ValueError(f"{label} doit être un nombre entier")
     return int(number)
@@ -165,10 +178,15 @@ def _row_to_reference(values: dict[str, Any]) -> ReferenceIn:
     )
 
 
+# ``ReferenceIn`` field -> template column, where the names differ.
+_MODEL_TO_COLUMN = {"amount_cents": "amount"}
+
+
 def _friendly(exc: ValidationError) -> str:
     parts = []
     for err in exc.errors():
         field = str(err["loc"][0]) if err["loc"] else "ligne"
+        field = _MODEL_TO_COLUMN.get(field, field)
         label = next((lbl for f, lbl, _ in COLUMNS if f == field), field)
         parts.append(f"{label} : {err['msg'].removeprefix('Value error, ')}")
     return " ; ".join(parts)
@@ -182,11 +200,20 @@ def parse_workbook(content: bytes) -> tuple[list[RowResult], list[str]]:
         raise ApiError(422, "bad_file", "Le fichier doit être un classeur Excel (.xlsx).")
     try:
         wb = load_workbook(io.BytesIO(content), read_only=True, data_only=True)
-        ws = wb.worksheets[0]
-        rows = ws.iter_rows(values_only=True)
-        header = next(rows, None)
     except Exception:  # noqa: BLE001 - any parser failure on an untrusted file is a 422
         raise ApiError(422, "bad_file", "Impossible de lire ce classeur Excel.") from None
+    try:
+        return _parse_sheet(wb.worksheets[0])
+    except ApiError:
+        raise
+    except Exception:  # noqa: BLE001 - rows are parsed lazily: a corrupt row fails here
+        raise ApiError(422, "bad_file", "Impossible de lire ce classeur Excel.") from None
+    finally:
+        wb.close()
+
+
+def _parse_sheet(ws: Any) -> tuple[list[RowResult], list[str]]:
+    header = next(ws.iter_rows(max_row=1, max_col=MAX_COLUMNS, values_only=True), None)
     if header is None:
         raise ApiError(422, "empty_file", "Le classeur est vide.")
     mapping = {
@@ -200,7 +227,12 @@ def parse_workbook(content: bytes) -> tuple[list[RowResult], list[str]]:
         raise ApiError(422, "missing_columns", f"Colonnes manquantes : {', '.join(missing)}.")
 
     results: list[RowResult] = []
+    # Only the recognized columns are read, and blank lines count toward a physical cap:
+    # a few kilobytes of zipped XML can otherwise expand into millions of empty rows/cells.
+    rows = ws.iter_rows(min_row=2, max_col=max(mapping) + 1, values_only=True)
     for number, row in enumerate(rows, start=2):
+        if number > MAX_SCANNED_ROWS + 1:
+            raise ApiError(422, "too_many_rows", f"{MAX_ROWS} lignes maximum par import.")
         values = {mapping[i]: v for i, v in enumerate(row) if i in mapping}
         if all(_text(v) is None for v in values.values()):
             continue  # blank line

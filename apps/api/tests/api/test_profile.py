@@ -2,7 +2,10 @@ import uuid
 from collections.abc import Callable
 
 from fastapi.testclient import TestClient
+from sqlalchemy import select
+from sqlalchemy.orm import Session
 
+from app.db.models import AuditLog
 from tests.api.helpers import signed_in_client
 from tests.conftest import Outbox
 
@@ -60,6 +63,22 @@ def test_trade_defaults_merge_cpv_and_keywords(make_client: Factory, outbox: Out
     assert "bionettoyage" in body["keywords_include"]
 
 
+def test_trade_defaults_never_reinclude_an_excluded_keyword(
+    make_client: Factory, outbox: Outbox
+) -> None:
+    c = client(make_client, outbox)
+    body = c.put(
+        "/profile",
+        json={
+            "trades": ["hygiene"],
+            "keywords_exclude": ["Désinfection"],
+            "apply_trade_defaults": True,
+        },
+    ).json()
+    assert body["keywords_include"] == ["bionettoyage"]
+    assert body["keywords_exclude"] == ["Désinfection"]
+
+
 def test_profile_validation(make_client: Factory, outbox: Outbox) -> None:
     c = client(make_client, outbox)
     bad = [
@@ -90,6 +109,16 @@ def test_completeness_grows_with_data(make_client: Factory, outbox: Outbox) -> N
     assert after["pct"] == pct + 10 + 10
     assert "Moyens humains" not in after["missing"] and "Certifications" in after["missing"]
     assert c.get("/profile").json()["completeness"]["pct"] == after["pct"]
+
+
+def test_profile_writes_are_audited(make_client: Factory, outbox: Outbox, db: Session) -> None:
+    c = client(make_client, outbox)
+    rid = c.post("/profile/equipment", json={"name": "Autolaveuse"}).json()["id"]
+    c.put(f"/profile/equipment/{rid}", json={"name": "Autolaveuse autoportée"})
+    c.delete(f"/profile/equipment/{rid}")
+    logs = db.scalars(select(AuditLog).where(AuditLog.entity == "equipment")).all()
+    assert sorted(log.action for log in logs) == ["create", "delete", "update"]
+    assert {log.entity_id for log in logs} == {uuid.UUID(rid)}
 
 
 def test_crud_human_resources(make_client: Factory, outbox: Outbox) -> None:

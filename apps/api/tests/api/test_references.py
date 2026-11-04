@@ -1,12 +1,13 @@
 import io
 import uuid
+import zipfile
 from collections.abc import Callable
 from typing import Any
 
 from fastapi.testclient import TestClient
 from openpyxl import Workbook, load_workbook
 
-from app.services.reference_import import MAX_ROWS
+from app.services.reference_import import MAX_ROWS, MAX_SCANNED_ROWS
 from tests.api.helpers import signed_in_client
 from tests.conftest import Outbox
 
@@ -189,6 +190,49 @@ def test_import_rejects_bad_files(make_client: Factory, outbox: Outbox) -> None:
     big = workbook([["C", "public", f"T{i}"] + [None] * 7 for i in range(MAX_ROWS + 1)])
     assert upload(c, big).json()["error"]["code"] == "too_many_rows"
     assert c.get("/profile/references").json() == []
+
+
+def test_import_reports_non_finite_or_huge_numbers_as_row_errors(
+    make_client: Factory, outbox: Outbox
+) -> None:
+    c = signed_in_client(make_client, outbox)
+    rows = [
+        ["A", "public", "T", None, None, "NaN", None, None, None, None],
+        ["B", "public", "T", None, None, "Infinity", None, None, None, None],
+        ["C", "public", "T", None, None, 1e308, None, None, None, None],
+        ["D", "public", "T", None, None, None, "Infinity", None, None, None],
+        # Would otherwise build a 30-million-digit integer.
+        ["E", "public", "T", None, None, None, None, "1e30000000", None, None],
+        GOOD,
+    ]
+    report = upload(c, workbook(rows)).json()
+    assert report["created"] == 1
+    assert [e["row"] for e in report["errors"]] == [2, 3, 4, 5, 6]
+
+
+def test_import_rejects_a_sheet_corrupted_after_the_header(
+    make_client: Factory, outbox: Outbox
+) -> None:
+    c = signed_in_client(make_client, outbox)
+    src = zipfile.ZipFile(io.BytesIO(workbook([GOOD, GOOD])))
+    out = io.BytesIO()
+    with zipfile.ZipFile(out, "w") as dst:
+        for info in src.infolist():
+            data = src.read(info.filename)
+            if info.filename == "xl/worksheets/sheet1.xml":
+                text = data.decode()
+                data = text[: text.index('<row r="3"')].encode() + b'<row r="3"><c r="A3"'
+            dst.writestr(info, data)
+    res = upload(c, out.getvalue())
+    assert res.status_code == 422 and res.json()["error"]["code"] == "bad_file"
+    assert c.get("/profile/references").json() == []
+
+
+def test_import_caps_blank_rows(make_client: Factory, outbox: Outbox) -> None:
+    c = signed_in_client(make_client, outbox)
+    rows: list[list[Any]] = [[None, None, " "] for _ in range(MAX_SCANNED_ROWS + 1)]
+    res = upload(c, workbook([*rows, GOOD]))
+    assert res.json()["error"]["code"] == "too_many_rows"
 
 
 def test_import_rejects_oversized_file(make_client: Factory, outbox: Outbox) -> None:
