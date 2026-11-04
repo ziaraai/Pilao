@@ -1,4 +1,5 @@
 from app.db.models.ai_call import AiCall
+from app.db.models.analysis import DceAnalysis, Requirement
 from app.db.models.audit_log import AuditLog
 from app.db.models.auth import AuthToken, LoginAttempt, UserSession
 from app.db.models.bid import Bid, DceFile, DcePage, DceVersion
@@ -25,6 +26,7 @@ __all__ = [
     "CompanyProfile",
     "CompanyReference",
     "ComplianceDocument",
+    "DceAnalysis",
     "DceFile",
     "DcePage",
     "DceVersion",
@@ -37,6 +39,7 @@ __all__ = [
     "LoginAttempt",
     "Organization",
     "PlatformAdmin",
+    "Requirement",
     "User",
     "UserSession",
 ]

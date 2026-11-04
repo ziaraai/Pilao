@@ -220,7 +220,9 @@ def run_process_dce(
     storage: ObjectStorage,
     scanner: VirusScanner,
     ocr: OcrEngine | None = None,
+    queue: JobQueue | None = None,
 ) -> None:
+    """Expand, store, extract and type the pieces; then start the AI analysis (if a queue)."""
     version = db.get(DceVersion, version_id)
     if version is None:
         return
@@ -271,6 +273,10 @@ def run_process_dce(
         return
     fresh.diff, fresh.diff_summary = compute_diff(db, fresh)
     _finish(db, version_id, "ready", None, ctx.skipped)
+    if queue is not None:
+        from app.services.dce_analysis import request_analysis  # avoid an import cycle
+
+        request_analysis(db, fresh, queue)
 
 
 def _finish(

@@ -84,3 +84,31 @@ class DceVersionOut(BaseModel):
 
 class DceKindIn(BaseModel):
     kind: DceKind
+
+
+class SourceOut(BaseModel):
+    file: str
+    page: int | None
+    dce_file_id: uuid.UUID
+
+
+class RequirementOut(BaseModel):
+    id: uuid.UUID
+    ref: str
+    text: str
+    category: str
+    importance: str
+    source: SourceOut | None
+
+
+class AnalysisOut(BaseModel):
+    id: uuid.UUID
+    status: Literal["pending", "processing", "ready", "error"]
+    error: str | None
+    dce_version: int
+    data: dict[str, Any] | None
+    requirements: list[RequirementOut]
+    warnings: list[str]
+    model: str | None
+    prompt_version: str | None
+    created_at: datetime

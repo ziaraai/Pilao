@@ -104,7 +104,9 @@ def parse_json_object(text: str) -> dict[str, Any]:
     return data
 
 
-def _call_provider(model: str, messages: list[dict[str, Any]]) -> tuple[str, int, int, float]:
+def _call_provider(
+    model: str, messages: list[dict[str, Any]], max_tokens: int | None = None
+) -> tuple[str, int, int, float]:
     import litellm  # imported lazily: heavy, and unnecessary when no model is configured
 
     resp = litellm.completion(
@@ -112,8 +114,9 @@ def _call_provider(model: str, messages: list[dict[str, Any]]) -> tuple[str, int
         messages=messages,
         response_format={"type": "json_object"},
         temperature=0,
-        timeout=90,
+        timeout=300 if max_tokens and max_tokens > 4000 else 90,
         num_retries=2,
+        **({"max_tokens": max_tokens} if max_tokens else {}),
     )
     content = resp.choices[0].message.content or ""
     usage = getattr(resp, "usage", None)
@@ -138,6 +141,7 @@ def complete[T: BaseModel](
     response_model: type[T],
     prompt_version: str | None = None,
     bid_id: uuid.UUID | None = None,
+    max_tokens: int | None = None,
 ) -> LlmResult[T]:
     model = model_for(task)
     ensure_budget(db, org_id)
@@ -149,7 +153,7 @@ def complete[T: BaseModel](
     for attempt in range(2):  # one call + one corrective retry
         began = time.monotonic()
         try:
-            content, t_in, t_out, c = _call_provider(model, conversation)
+            content, t_in, t_out, c = _call_provider(model, conversation, max_tokens)
         except Exception as exc:
             _journal(
                 db, org_id, bid_id, task, model, prompt_version, 0, 0, 0.0, began, str(exc)[:500]

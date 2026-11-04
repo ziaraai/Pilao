@@ -167,6 +167,7 @@ class FakeQueue:
         self.pending: list[uuid.UUID] = []
         self.pending_reads: list[uuid.UUID] = []
         self.pending_dce: list[uuid.UUID] = []
+        self.pending_analyses: list[uuid.UUID] = []
         self.ocr = None  # set to an OCR engine to exercise scanned pages
         self.down = False
 
@@ -199,7 +200,22 @@ class FakeQueue:
         while self.pending_dce:
             version_id = self.pending_dce.pop(0)
             with _new_session(self._conn) as session:
-                run_process_dce(session, version_id, self._storage, self._scanner, self.ocr)
+                run_process_dce(
+                    session, version_id, self._storage, self._scanner, self.ocr, queue=self
+                )
+
+    def enqueue_analyze_dce(self, analysis_id: uuid.UUID) -> None:
+        if self.down:
+            raise ConnectionError("redis down")
+        self.pending_analyses.append(analysis_id)
+
+    def drain_analyses(self) -> None:
+        from app.services.dce_analysis import run_analyze_dce
+
+        while self.pending_analyses:
+            analysis_id = self.pending_analyses.pop(0)
+            with _new_session(self._conn) as session:
+                run_analyze_dce(session, analysis_id)
 
     def drain(self) -> None:
         from app.services.knowledge import run_index_document

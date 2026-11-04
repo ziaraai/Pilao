@@ -6,9 +6,10 @@ from sqlalchemy import select
 
 from app.core.deps import CurrentAuth, ScopedDb
 from app.core.errors import ApiError
-from app.db.models import Bid, DceFile, DcePage, DceVersion
+from app.db.models import Bid, DceAnalysis, DceFile, DcePage, DceVersion, Requirement
 from app.routers.files import Storage, _scanner
 from app.schemas.bids import (
+    AnalysisOut,
     BidIn,
     BidOut,
     BidPatch,
@@ -17,9 +18,12 @@ from app.schemas.bids import (
     DceKindIn,
     DcePageOut,
     DceVersionOut,
+    RequirementOut,
+    SourceOut,
 )
 from app.services import bids as svc
 from app.services import dce as dce_svc
+from app.services import dce_analysis as analysis_svc
 from app.storage.antivirus import VirusScanner
 from app.workers.queue import JobQueue, get_job_queue
 
@@ -145,3 +149,62 @@ def get_pages(
         .limit(count)
     )
     return [DcePageOut.model_validate(p) for p in pages]
+
+
+@router.post("/bids/{bid_id}/analysis", status_code=202)
+def run_analysis(bid_id: uuid.UUID, db: ScopedDb, queue: Queue) -> AnalysisOut:
+    """Re-run the AI analysis on the latest ready DCE version."""
+    return _analysis_out(db, analysis_svc.rerun(db, _bid(db, bid_id), queue))
+
+
+@router.get("/bids/{bid_id}/analysis")
+def get_analysis(bid_id: uuid.UUID, db: ScopedDb) -> AnalysisOut:
+    """Latest analysis sheet. Every item carries its source: file, page, dce_file_id."""
+    bid = _bid(db, bid_id)
+    analysis = db.scalars(
+        select(DceAnalysis)
+        .where(DceAnalysis.bid_id == bid.id)
+        .order_by(DceAnalysis.created_at.desc())
+    ).first()
+    if analysis is None:
+        raise ApiError(404, "not_found", "Aucune analyse pour ce dossier.")
+    return _analysis_out(db, analysis)
+
+
+def _analysis_out(db: ScopedDb, analysis: DceAnalysis) -> AnalysisOut:
+    version = db.get_one(DceVersion, analysis.dce_version_id)
+    files = {
+        f.id: f.path
+        for f in db.scalars(select(DceFile).where(DceFile.dce_version_id == version.id))
+    }
+    requirements = [
+        RequirementOut(
+            id=r.id,
+            ref=r.ref,
+            text=r.text,
+            category=r.category,
+            importance=r.importance,
+            source=(
+                SourceOut(file=files[r.source_file_id], page=r.page, dce_file_id=r.source_file_id)
+                if r.source_file_id in files
+                else None
+            ),
+        )
+        for r in db.scalars(
+            select(Requirement)
+            .where(Requirement.dce_analysis_id == analysis.id)
+            .order_by(Requirement.position)
+        )
+    ]
+    return AnalysisOut(
+        id=analysis.id,
+        status=analysis.status,
+        error=analysis.error,
+        dce_version=version.version,
+        data=analysis.data,
+        requirements=requirements,
+        warnings=analysis.warnings,
+        model=analysis.model,
+        prompt_version=analysis.prompt_version,
+        created_at=analysis.created_at,
+    )

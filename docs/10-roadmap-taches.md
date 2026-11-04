@@ -25,7 +25,7 @@ Objectif : savoir si la génération est assez bonne, avec quel modèle, à quel
 - [x] P1-07 Base documentaire : extraction, découpage, embeddings (US-1.4)
 - [x] P1-08 Coffre-fort : dépôt, lecture IA, confirmation, statuts (US-5.1)
 - [x] P1-09 Dossiers (`bids`) + dépôt du DCE, décompression, typage, OCR (US-3.1)
-- [ ] P1-10 Analyse du DCE + exigences + fiche d'analyse avec sources cliquables (US-3.2, 3.3)
+- [ ] P1-10 Analyse du DCE + exigences + fiche d'analyse avec sources cliquables (US-3.2, 3.3) — livraison 1 faite (analyse, sources vérifiées, exigences) ; reste croisement coffre-fort (CA5), Go/No-Go (US-3.3), pré-remplissage du dossier
 - [ ] P1-11 Front : inscription, profil, coffre-fort, dossier, fiche d'analyse
 - [ ] P1-INT-01 Vérifier les champs BOAMP (voir `docs/07-integrations-api.md`)
 

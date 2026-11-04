@@ -30,6 +30,9 @@ class Settings(BaseSettings):
     llm_model_scoring: str = ""
     llm_model_vision: str = ""
     ai_monthly_budget_eur_per_org: float = 50.0
+    # DCE text sent per analysis call (~3.8 chars/token: 300k chars ≈ 80k tokens).
+    dce_analysis_max_chars: int = 300_000
+    dce_analysis_max_calls: int = 8
     prompts_dir: str = str(Path(__file__).resolve().parents[4] / "prompts")
     # Embedding model (LiteLLM name, e.g. "openrouter/..."), fixed after phase 0 (ADR-005).
     # Empty = deterministic local HashEmbedder (development and tests only).

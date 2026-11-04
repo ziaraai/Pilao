@@ -6,11 +6,13 @@ from app.ai.embeddings import get_embedder
 from app.db.session import get_sessionmaker
 from app.documents.ocr import get_ocr_engine
 from app.services.dce import run_process_dce
+from app.services.dce_analysis import run_analyze_dce
 from app.services.document_reading import get_document_reader
 from app.services.knowledge import run_index_document
 from app.services.vault import run_read_document
 from app.storage.antivirus import get_scanner
 from app.storage.objects import get_storage
+from app.workers.queue import get_job_queue
 
 
 def index_document_job(doc_id: str) -> None:
@@ -25,4 +27,16 @@ def read_compliance_document_job(doc_id: str) -> None:
 
 def process_dce_job(version_id: str) -> None:
     with get_sessionmaker()() as db:
-        run_process_dce(db, uuid.UUID(version_id), get_storage(), get_scanner(), get_ocr_engine())
+        run_process_dce(
+            db,
+            uuid.UUID(version_id),
+            get_storage(),
+            get_scanner(),
+            get_ocr_engine(),
+            queue=get_job_queue(),
+        )
+
+
+def analyze_dce_job(analysis_id: str) -> None:
+    with get_sessionmaker()() as db:
+        run_analyze_dce(db, uuid.UUID(analysis_id))

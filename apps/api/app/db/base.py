@@ -6,7 +6,7 @@ inheriting from :class:`TenantOwned`; the session layer (``app.core.tenancy``) i
 """
 
 import uuid
-from datetime import datetime
+from datetime import UTC, datetime
 
 from sqlalchemy import DateTime, ForeignKey, MetaData, func, text
 from sqlalchemy.dialects.postgresql import UUID
@@ -34,9 +34,15 @@ class IdMixin:
     )
 
 
+def _utc_now() -> datetime:
+    return datetime.now(UTC)
+
+
 class TimestampMixin:
+    # Set by the application on ORM inserts: Postgres' now() is frozen for a whole
+    # transaction, which made "latest row" ordering ambiguous within one transaction.
     created_at: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True), server_default=func.now(), nullable=False
+        DateTime(timezone=True), default=_utc_now, server_default=func.now(), nullable=False
     )
     updated_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),

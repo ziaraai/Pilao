@@ -146,6 +146,7 @@ def test_new_deposit_is_a_new_version_with_differences(
         bid,
         ("DCE.zip", zipped({"RC.pdf": RC, "CCTP.pdf": CCTP_V1, "Annexe.pdf": RC + b"%"})),
     )
+    bpu = _xlsx()  # built once: openpyxl stamps the creation time into the file
     v2 = processed(
         c,
         queue,
@@ -156,7 +157,7 @@ def test_new_deposit_is_a_new_version_with_differences(
                 {
                     "RC.pdf": RC,
                     "CCTP.pdf": CCTP_V2,
-                    "BPU.xlsx": _xlsx(),
+                    "BPU.xlsx": bpu,
                 }
             ),
         ),
@@ -176,7 +177,7 @@ def test_new_deposit_is_a_new_version_with_differences(
         c,
         queue,
         bid,
-        ("encore.zip", zipped({"RC.pdf": RC, "CCTP.pdf": CCTP_V2, "BPU.xlsx": _xlsx()})),
+        ("encore.zip", zipped({"RC.pdf": RC, "CCTP.pdf": CCTP_V2, "BPU.xlsx": bpu})),
     )
     assert same["diff_summary"] == "Aucun changement de fichier par rapport à la version 2."
     assert [v["version"] for v in c.get(f"/bids/{bid}/dce").json()] == [3, 2, 1]

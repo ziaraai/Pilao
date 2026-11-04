@@ -97,3 +97,13 @@ Format : numéro, date, décision, raison, statut. Ajouter une entrée pour chaq
 - **Performances mesurées (4 cœurs)** : 300 pages avec couche texte ≈ 14 s ; page scannée ≈ 1,4 s. Un DCE de 300 pages surtout textuel tient l'objectif de 5 min (CA8) ; un DCE entièrement scanné en demande ≈ 7 : à paralléliser (une page par cœur) si cela se présente.
 - **Déploiement** : Tesseract et la langue `fra` doivent être installés sur les machines du worker (`apt-get install tesseract-ocr tesseract-ocr-fra`) ; la CI les installe.
 - **Statut** : validé.
+
+## ADR-015 — Analyse du DCE : découpage, sources vérifiées, déclenchement
+- **Date** : 2026-11-04
+- **Déclenchement** : l'analyse démarre automatiquement quand une version du DCE est prête ; elle peut être relancée (`POST /bids/{id}/analysis`, une seule à la fois). Sans modèle configuré, hors budget ou en cas de réponse inexploitable, l'analyse passe en erreur avec un message clair ; le DCE reste utilisable. Les pannes du fournisseur sont relancées par la file.
+- **Découpage** : si le texte tient dans `DCE_ANALYSIS_MAX_CHARS` (300 000 caractères ≈ 80 000 tokens), un seul appel. Sinon : un appel pour RC, CCAP, AE, annexes (dans cet ordre, la dernière pièce tronquée avec avertissement), puis un appel par tranche du CCTP limité aux exigences (8 appels maximum). Les exigences sont fusionnées et renumérotées `CCTP-1…n` sans trou. BPU / DPGF / DQE ne sont pas envoyés (chiffrage hors V1).
+- **Sources (CLAUDE.md §5.2)** : une source n'est acceptée que si elle désigne un fichier réellement fourni et une page **effectivement transmise au modèle** dans cette analyse (le nom de base est accepté s'il est sans ambiguïté). Sinon l'élément est écarté (ou le champ vidé) et un avertissement l'explique. Le plan imposé et le nombre de pages ne sont jamais conservés sans source (ils pilotent le mémoire). Chaque source stockée porte `dce_file_id` pour ouvrir la page citée.
+- **Robustesse** : modèles Pydantic tolérants sur la forme (pourcentages en texte, catégorie inconnue → `other`, élément mal formé écarté seul) ; une réponse non JSON déclenche une relance corrective puis une erreur. Le texte des documents ne peut pas fermer sa balise `<document>` (injection).
+- **Horodatage** : `created_at` est désormais posé par l'application à l'insertion (en plus du défaut base) : `now()` de Postgres est figé pour toute une transaction, ce qui rendait ambigu l'ordre « le plus récent ».
+- **À évaluer en phase 0** : qualité de l'extraction sur les 3 vrais DCE (critères, plan imposé, exigences), coût et durée par DCE (`docs/11-tests-evaluation.md`).
+- **Statut** : validé.

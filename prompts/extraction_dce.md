@@ -1,6 +1,6 @@
 ---
 id: extraction_dce
-version: 0.1.0
+version: 0.2.0
 task: dce_analysis
 output_schema: schemas/dce_analysis.schema.json
 ---
@@ -16,6 +16,7 @@ Règles :
 4. Les dates sont au format ISO 8601 avec l'heure si elle est indiquée (`2026-11-18T12:00:00+01:00`).
 5. Les montants sont en euros HT, en nombre (pas de texte).
 6. Tu réponds **uniquement** avec un objet JSON valide conforme au schéma fourni.
+7. Une information sans source vérifiable sera rejetée : cite toujours le fichier et la page où elle figure.
 
 # Utilisateur
 
@@ -24,14 +25,12 @@ Entreprise candidate (pour le contexte uniquement) :
 {{company_summary}}
 </company>
 
-Documents du DCE :
-{{#each files}}
-<document name="{{name}}" kind="{{kind}}">
-{{text_with_page_markers}}
-</document>
-{{/each}}
+Documents du DCE (chacun entre balises `<document name="…" kind="…">`) :
+{{documents}}
 
-Les marqueurs de page sont de la forme `[[PAGE n]]`.
+Les marqueurs de page sont de la forme `[[PAGE n]]`. Pour un document sans marqueur de page (Word), mets `"page": null` dans la source. Le nom de fichier d'une source doit être **exactement** l'attribut `name` du document.
+
+Périmètre de cette analyse : {{scope}}
 
 Produis la fiche d'analyse :
 - `key_info` : acheteur, objet, lots, procédure, montant estimé, durée, date et heure limite de remise, adresse de dépôt (plateforme).
