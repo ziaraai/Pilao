@@ -1,14 +1,14 @@
 import uuid
-from typing import Any
+from typing import Annotated, Any
 
-from fastapi import APIRouter, Response
+from fastapi import APIRouter, Query, Response, UploadFile
 from pydantic import BaseModel
 from sqlalchemy import select
 
 from app.core.deps import CurrentAuth, ScopedDb
 from app.core.errors import ApiError
 from app.db.base import Base
-from app.db.models import Certification, Equipment, HumanResource
+from app.db.models import Certification, CompanyReference, Equipment, HumanResource
 from app.domain.trades import TRADES
 from app.schemas.profile import (
     CertificationIn,
@@ -18,11 +18,16 @@ from app.schemas.profile import (
     EquipmentOut,
     HumanResourceIn,
     HumanResourceOut,
+    ImportErrorOut,
+    ImportReportOut,
     ProfileIn,
     ProfileOut,
+    ReferenceIn,
+    ReferenceOut,
     TradeOut,
 )
 from app.services import profile as svc
+from app.services import reference_import as xl
 
 router = APIRouter(prefix="/profile", tags=["profile"])
 
@@ -82,7 +87,11 @@ def add_crud(
         return item
 
     def apply(db: ScopedDb, ctx: CurrentAuth, item: Any, data: BaseModel) -> None:
-        svc.ensure_files_belong_to_org(db, *(getattr(data, f) for f in file_fields))
+        ids: list[Any] = []
+        for f in file_fields:
+            value = getattr(data, f)
+            ids.extend(value if isinstance(value, list) else [value])
+        svc.ensure_files_belong_to_org(db, *ids)
         for key, value in data.model_dump().items():
             setattr(item, key, value)
         db.add(item)
@@ -124,3 +133,46 @@ add_crud("equipment", Equipment, EquipmentIn, EquipmentOut, file_fields=("spec_f
 add_crud(
     "certifications", Certification, CertificationIn, CertificationOut, file_fields=("file_id",)
 )
+
+
+XLSX = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+
+
+# Declared before the generic CRUD so "/references/template.xlsx" is not read as an item id.
+@router.get("/references/template.xlsx")
+def references_template(_: CurrentAuth) -> Response:
+    return Response(
+        xl.build_template(),
+        media_type=XLSX,
+        headers={"Content-Disposition": 'attachment; filename="modele-references-pilao.xlsx"'},
+    )
+
+
+@router.post("/references/import")
+async def import_references(
+    file: UploadFile,
+    ctx: CurrentAuth,
+    db: ScopedDb,
+    dry_run: Annotated[bool, Query()] = False,
+) -> ImportReportOut:
+    """Import the valid rows and report the others (``dry_run`` validates without saving)."""
+    content = await file.read(xl.MAX_BYTES + 1)
+    results, ignored = xl.parse_workbook(content)
+    valid = [r for r in results if r.data is not None]
+    if not dry_run and valid:
+        for r in valid:
+            assert r.data is not None
+            db.add(CompanyReference(**r.data.model_dump()))
+        db.flush()
+        svc.refresh_completeness(db, ctx.org)
+        db.commit()
+    return ImportReportOut(
+        dry_run=dry_run,
+        total=len(results),
+        created=0 if dry_run else len(valid),
+        errors=[ImportErrorOut(row=r.row, message=r.error or "") for r in results if r.error],
+        ignored_columns=ignored,
+    )
+
+
+add_crud("references", CompanyReference, ReferenceIn, ReferenceOut, file_fields=("photo_file_ids",))

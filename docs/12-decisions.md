@@ -55,3 +55,10 @@ Format : numéro, date, décision, raison, statut. Ajouter une entrée pour chaq
 - **Raison** : sessions révocables et simples à auditer, sans dépendance à Redis pour l'authentification ; compatible avec une montée en charge horizontale (état en base).
 - **À faire plus tard** : réinitialisation de mot de passe, lien magique (même table `auth_tokens`), invitation de collaborateurs, fournisseur d'e-mail réel (aujourd'hui `ConsoleMailer` qui journalise). Derrière un proxy, lancer uvicorn avec `--proxy-headers`.
 - **Statut** : validé.
+
+## ADR-010 — Profil d'entreprise : règles de saisie et de complétude
+- **Date** : 2026-11-04
+- **Décision** : montants en centimes, départements normalisés (`2A`, `974`…), CPV sur 8 chiffres (le chiffre de contrôle `-3` est toléré et retiré). Un mot-clé ne peut pas être à la fois inclus et exclu. Un seul `company_profiles` par organisation, créé à la première lecture. Tous les membres d'une organisation peuvent modifier le profil et les moyens (pas de restriction par rôle en V1). Complétude = 9 critères pondérés (`app/domain/completeness.py`) recalculée à chaque écriture ; la liste de ce qui manque est renvoyée à l'écran (US-1.3 CA3).
+- **Import Excel des références** : `.xlsx` uniquement, 5 Mo et 500 lignes maximum, lecture sans évaluation de formules. Les lignes valides sont importées, les autres sont listées avec leur numéro de ligne ; `dry_run` valide sans enregistrer ; les colonnes non reconnues sont signalées au lieu d'être ignorées en silence.
+- **Reporté** : le recalcul des scores après modification des paramètres (US-1.2 CA4) attend le moteur de scoring (P3-03) ; la colonne `embedding` des références arrive avec P1-07 (dimension à fixer après la phase 0) ; l'upload des photos arrive avec P1-06 (les `photo_file_ids` sont déjà validés contre l'organisation).
+- **Statut** : validé.

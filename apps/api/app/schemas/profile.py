@@ -153,3 +153,47 @@ class CertificationIn(BaseModel):
 class CertificationOut(CertificationIn):
     model_config = ConfigDict(from_attributes=True)
     id: uuid.UUID
+
+
+class ReferenceIn(BaseModel):
+    client_name: Text
+    client_type: str
+    title: Text
+    location: Text | None = None
+    department: Department | None = None
+    amount_cents: Cents | None = None
+    year: int | None = Field(default=None, ge=1950, le=2100)
+    duration_months: int | None = Field(default=None, ge=0, le=1200)
+    description: LongText | None = None
+    cpv_codes: list[Cpv] = Field(default_factory=list, max_length=50)
+    photo_file_ids: list[uuid.UUID] = Field(default_factory=list, max_length=20)
+
+    @field_validator("client_type")
+    @classmethod
+    def _client_type(cls, v: str) -> str:
+        if v not in ("public", "private"):
+            raise ValueError("type de client : 'public' ou 'private'")
+        return v
+
+    @field_validator("cpv_codes", "photo_file_ids")
+    @classmethod
+    def _unique_list(cls, v: list) -> list:  # type: ignore[type-arg]
+        return list(dict.fromkeys(v))
+
+
+class ReferenceOut(ReferenceIn):
+    model_config = ConfigDict(from_attributes=True)
+    id: uuid.UUID
+
+
+class ImportErrorOut(BaseModel):
+    row: int
+    message: str
+
+
+class ImportReportOut(BaseModel):
+    dry_run: bool
+    total: int
+    created: int
+    errors: list[ImportErrorOut]
+    ignored_columns: list[str] = Field(default_factory=list)
