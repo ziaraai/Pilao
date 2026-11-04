@@ -125,3 +125,28 @@ def test_csrf_rejects_missing_or_foreign_origin(make_client: Factory, outbox: Ou
     c.headers.pop("Origin")
     assert c.post("/auth/logout").status_code == 403
     assert c.get("/auth/me").status_code == 200  # safe methods are fine
+
+
+def test_resend_verification_is_capped_per_account(make_client: Factory, outbox: Outbox) -> None:
+    c = make_client()
+    c.post("/auth/register", json=register_payload())
+    for _ in range(10):
+        assert (
+            c.post("/auth/resend-verification", json={"email": "user1@example.fr"}).status_code
+            == 200
+        )
+    assert len(outbox.sent) == 5  # register + 4 resends, then silently capped
+
+
+def test_console_mailer_is_refused_in_production(monkeypatch) -> None:  # type: ignore[no-untyped-def]
+    import pytest
+
+    from app.core.config import get_settings
+    from app.core.email import get_mailer
+    from app.core.errors import ApiError
+
+    get_mailer.cache_clear()
+    monkeypatch.setattr(get_settings(), "environment", "production")
+    with pytest.raises(ApiError):
+        get_mailer()
+    get_mailer.cache_clear()

@@ -28,7 +28,8 @@ def _audit(db: Session, user: User, action: str, entity: str, entity_id: uuid.UU
     )
 
 
-def _send_verification(db: Session, user: User, mailer: Mailer) -> None:
+def _verification_email(db: Session, user: User) -> Email:
+    """Stage a new verification token; send the returned e-mail only once it is committed."""
     s = get_settings()
     token = new_token()
     db.add(
@@ -40,16 +41,14 @@ def _send_verification(db: Session, user: User, mailer: Mailer) -> None:
             expires_at=_now() + timedelta(hours=s.email_verify_ttl_hours),
         )
     )
-    mailer.send(
-        Email(
-            to=user.email,
-            subject="Confirmez votre adresse e-mail — Pilao",
-            body=(
-                "Bonjour,\n\nPour activer votre compte Pilao, ouvrez ce lien "
-                f"(valable {s.email_verify_ttl_hours} h) :\n"
-                f"{s.app_base_url}/verifier-email?token={token}\n"
-            ),
-        )
+    return Email(
+        to=user.email,
+        subject="Confirmez votre adresse e-mail — Pilao",
+        body=(
+            "Bonjour,\n\nPour activer votre compte Pilao, ouvrez ce lien "
+            f"(valable {s.email_verify_ttl_hours} h) :\n"
+            f"{s.app_base_url}/verifier-email?token={token}\n"
+        ),
     )
 
 
@@ -84,18 +83,19 @@ def register(
         db.add(user)
         db.flush()
         _audit(db, user, "register", "user", user.id)
-        _send_verification(db, user, mailer)
+        message = _verification_email(db, user)
         db.commit()
     except IntegrityError:  # concurrent registration with the same SIRET / e-mail
         db.rollback()
         raise ApiError(409, "already_exists", "Ce compte existe déjà.") from None
+    mailer.send(message)  # only once the token exists: never mail a dead link
 
 
 def verify_email(db: Session, token: str) -> None:
     row = db.scalar(
-        select(AuthToken).where(
-            AuthToken.token_hash == hash_token(token), AuthToken.kind == VERIFY_KIND
-        )
+        select(AuthToken)
+        .where(AuthToken.token_hash == hash_token(token), AuthToken.kind == VERIFY_KIND)
+        .with_for_update()  # single use even under concurrent requests
     )
     if row is None or row.used_at is not None or row.expires_at < _now():
         raise ApiError(400, "invalid_token", "Lien invalide ou expiré.")
@@ -109,9 +109,23 @@ def verify_email(db: Session, token: str) -> None:
 def resend_verification(db: Session, email: str, mailer: Mailer) -> None:
     """Always succeeds from the caller's point of view (no account enumeration)."""
     user = db.scalar(select(User).where(User.email == email))
-    if user is not None and user.email_verified_at is None:
-        _send_verification(db, user, mailer)
-        db.commit()
+    if user is None or user.email_verified_at is not None:
+        return
+    s = get_settings()
+    recent = db.scalar(
+        select(func.count())
+        .select_from(AuthToken)
+        .where(
+            AuthToken.user_id == user.id,
+            AuthToken.kind == VERIFY_KIND,
+            AuthToken.created_at >= _now() - timedelta(hours=1),
+        )
+    )
+    if (recent or 0) >= s.email_verify_max_per_hour:  # silent cap: no mail-bombing
+        return
+    message = _verification_email(db, user)
+    db.commit()
+    mailer.send(message)
 
 
 def _check_throttle(db: Session, email: str, ip: str | None) -> None:
@@ -134,6 +148,9 @@ def login(
     db: Session, email: str, password: str, ip: str | None, user_agent: str | None
 ) -> tuple[str, User]:
     email = email.lower()
+    # Serialize attempts on the same e-mail (lock held until commit) so that concurrent
+    # requests cannot all pass the throttle check before any failure is recorded.
+    db.execute(select(func.pg_advisory_xact_lock(func.hashtext(f"login:{email}"))))
     _check_throttle(db, email, ip)
     user = db.scalar(select(User).where(User.email == email))
     ok = verify_password(user.password_hash if user else None, password)
@@ -163,8 +180,7 @@ def login(
     return token, user
 
 
-def logout(db: Session, token: str) -> None:
-    session = db.scalar(select(UserSession).where(UserSession.token_hash == hash_token(token)))
-    if session is not None and session.revoked_at is None:
+def logout(db: Session, session: UserSession) -> None:
+    if session.revoked_at is None:
         session.revoked_at = _now()
         db.commit()

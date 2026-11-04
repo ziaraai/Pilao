@@ -5,6 +5,9 @@ from dataclasses import dataclass
 from functools import lru_cache
 from typing import Protocol
 
+from app.core.config import get_settings
+from app.core.errors import ApiError
+
 logger = logging.getLogger("pilao.email")
 
 
@@ -28,4 +31,7 @@ class ConsoleMailer:
 
 @lru_cache
 def get_mailer() -> Mailer:
+    # The console mailer logs one-shot tokens in clear and delivers nothing: fail closed.
+    if get_settings().environment == "production":
+        raise ApiError(503, "email_unavailable", "L'envoi d'e-mails n'est pas encore configuré.")
     return ConsoleMailer()

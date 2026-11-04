@@ -11,3 +11,5 @@
 | Q7 | Hébergeur de production (Scaleway, OVHcloud…) | Faycal | À décider |
 | Q8 | Format de mise en page Word attendu (charte, page de garde) | Abdraouf | À demander |
 | Q9 | Vérifier l'API Recherche d'entreprises sur un appel réel (domaine `recherche-entreprises.api.gouv.fr` à autoriser dans le réseau de l'environnement de développement) | Faycal | À faire |
+| Q10 | Politique de blocage des connexions : aujourd'hui 5 échecs en 15 min bloquent l'e-mail, même pour son vrai titulaire, et un tiers peut bloquer un compte connu. Remettre le compteur à zéro après une connexion réussie ? Bloquer par couple e-mail + IP ? Ajouter un CAPTCHA ? | Faycal | À décider |
+| Q11 | Fournisseur d'e-mails transactionnels (UE) : en production, l'inscription est refusée tant qu'il n'est pas branché | Faycal | À décider |

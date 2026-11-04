@@ -78,10 +78,9 @@ def login(data: LoginIn, request: Request, response: Response, db: Db) -> MeOut:
 
 
 @router.post("/logout")
-def logout(request: Request, response: Response, db: Db, _: CurrentAuth) -> MessageOut:
-    s = get_settings()
-    svc.logout(db, request.cookies[s.session_cookie_name])
-    response.delete_cookie(s.session_cookie_name, path="/")
+def logout(response: Response, db: Db, ctx: CurrentAuth) -> MessageOut:
+    svc.logout(db, ctx.session)
+    response.delete_cookie(get_settings().session_cookie_name, path="/")
     return MessageOut(message="Déconnecté.")
 
 

@@ -40,7 +40,7 @@ class Settings(BaseSettings):
     session_cookie_name: str = "pilao_session"
     session_ttl_hours: int = 24 * 14
     email_verify_ttl_hours: int = 48
-    password_min_length: int = 12
+    email_verify_max_per_hour: int = 5  # resend cap per account (anti mail-bombing)
     login_max_failures_per_email: int = 5
     login_max_failures_per_ip: int = 30
     login_window_minutes: int = 15

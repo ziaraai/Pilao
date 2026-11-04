@@ -5,6 +5,7 @@ depend on :func:`get_current_org`). That is what guarantees multi-tenant isolati
 """
 
 from dataclasses import dataclass
+from datetime import UTC, datetime
 from typing import Annotated
 from urllib.parse import urlsplit
 
@@ -18,7 +19,6 @@ from app.core.security import hash_token
 from app.core.tenancy import scope_session
 from app.db.models import Organization, User, UserSession
 from app.db.session import get_db
-from app.services.auth import _now
 
 SAFE_METHODS = {"GET", "HEAD", "OPTIONS"}
 
@@ -51,7 +51,7 @@ def get_auth_context(request: Request, db: Annotated[Session, Depends(get_db)]) 
         select(UserSession).where(
             UserSession.token_hash == hash_token(token),
             UserSession.revoked_at.is_(None),
-            UserSession.expires_at > _now(),
+            UserSession.expires_at > datetime.now(UTC),
         )
     )
     if session is None:
