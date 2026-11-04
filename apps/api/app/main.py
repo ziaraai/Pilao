@@ -1,3 +1,6 @@
+from collections.abc import AsyncIterator
+from contextlib import asynccontextmanager
+
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
@@ -5,8 +8,16 @@ from app.core.config import get_settings
 from app.core.errors import install_error_handlers
 from app.core.limits import BodySizeLimitMiddleware
 from app.routers import auth, companies, files, knowledge, profile, vault
+from app.storage.antivirus import get_scanner
 
-app = FastAPI(title="Pilao API")
+
+@asynccontextmanager
+async def lifespan(_: FastAPI) -> AsyncIterator[None]:
+    get_scanner()  # production without CLAMAV_HOST: refuse to start (ADR-011), fail closed
+    yield
+
+
+app = FastAPI(title="Pilao API", lifespan=lifespan)
 install_error_handlers(app)
 app.add_middleware(BodySizeLimitMiddleware)
 # The web app (APP_BASE_URL) calls the API with the session cookie: only that origin is allowed.

@@ -103,7 +103,61 @@ def test_oversized_content_length_is_refused_before_reading(
     c = signed_in_client(make_client, outbox)
     monkeypatch.setattr(get_settings(), "max_upload_bytes", 100)
     big = PDF + b"0" * (3 * 1024 * 1024)
-    assert up(c, big).status_code == 413
+    res = up(c, big)  # refused by the middleware itself, not by the service after spooling
+    assert res.status_code == 413 and res.json()["error"]["code"] == "payload_too_large"
+
+
+def test_chunked_body_without_content_length_is_bounded_too(
+    make_client: Factory, outbox: Outbox, monkeypatch  # type: ignore[no-untyped-def]
+) -> None:
+    c = signed_in_client(make_client, outbox)
+    monkeypatch.setattr(get_settings(), "max_upload_bytes", 100)
+
+    def chunks():  # type: ignore[no-untyped-def]
+        for _ in range(3):
+            yield b"0" * (1024 * 1024)
+
+    res = c.post(
+        "/files", content=chunks(), headers={"Content-Type": "multipart/form-data; boundary=x"}
+    )
+    assert res.status_code == 413 and res.json()["error"]["code"] == "payload_too_large"
+
+
+def test_jpeg_spellings_and_invisible_characters_in_names() -> None:
+    from app.services.files import clean_filename
+
+    assert clean_filename("photo.jpeg", "jpg") == "photo.jpeg"
+    assert clean_filename("photo.JPG", "jpg") == "photo.JPG"
+    assert clean_filename("facture\u202efdp.exe", "pdf") == "facturefdp.exe.pdf"
+    assert clean_filename("a\x85b.pdf", "pdf") == "a_b.pdf"
+
+
+def test_file_used_as_reference_photo_cannot_be_deleted(
+    make_client: Factory, outbox: Outbox, storage: MemoryStorage
+) -> None:
+    c = signed_in_client(make_client, outbox)
+    fid = up(c, b"\x89PNG\r\n\x1a\n" + b"0" * 20, "p.png").json()["id"]
+    ref = {"client_name": "A", "client_type": "public", "title": "T", "photo_file_ids": [fid]}
+    assert c.post("/profile/references", json=ref).status_code == 201
+    res = c.delete(f"/files/{fid}")
+    assert res.status_code == 409 and res.json()["error"]["code"] == "file_in_use"
+    assert len(storage.objects) == 1
+
+
+def test_production_without_antivirus_refuses_to_start(monkeypatch) -> None:  # type: ignore[no-untyped-def]
+    import pytest
+
+    from app.main import app
+    from app.storage.antivirus import ScannerUnavailable, get_scanner
+
+    get_scanner.cache_clear()
+    monkeypatch.setattr(get_settings(), "environment", "production")
+    monkeypatch.setattr(get_settings(), "clamav_host", None)
+    try:
+        with pytest.raises(ScannerUnavailable), TestClient(app):
+            pass
+    finally:
+        get_scanner.cache_clear()
 
 
 def test_org_storage_quota(make_client: Factory, outbox: Outbox, monkeypatch) -> None:  # type: ignore[no-untyped-def]
@@ -153,6 +207,29 @@ def test_database_failure_removes_orphan_object(
     )
     assert up(c2, PDF).status_code == 500
     assert storage.objects == {}
+
+
+def test_failed_cleanup_does_not_hide_the_database_error(
+    make_client: Factory, outbox: Outbox, storage: MemoryStorage, monkeypatch  # type: ignore[no-untyped-def]
+) -> None:
+    import pytest
+    from sqlalchemy.orm import Session as S
+
+    c = signed_in_client(make_client, outbox)
+    original = S.commit
+
+    def boom(self):  # type: ignore[no-untyped-def]
+        if any(isinstance(o, File) for o in self.new):
+            raise RuntimeError("db down")
+        return original(self)
+
+    def broken_delete(key: str) -> None:
+        raise ConnectionError("s3 down")
+
+    monkeypatch.setattr(S, "commit", boom)
+    monkeypatch.setattr(storage, "delete", broken_delete)
+    with pytest.raises(RuntimeError, match="db down"):
+        up(c, PDF)
 
 
 def test_storage_failure_creates_no_database_row(

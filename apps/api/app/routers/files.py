@@ -2,12 +2,12 @@ import uuid
 from typing import Annotated
 
 from fastapi import APIRouter, Depends, Query, Response, UploadFile
-from sqlalchemy import select
+from sqlalchemy import any_, select
 
 from app.core.config import get_settings
 from app.core.deps import CurrentAuth, ScopedDb
 from app.core.errors import ApiError
-from app.db.models import ComplianceDocument, File, KnowledgeDocument
+from app.db.models import CompanyReference, ComplianceDocument, File, KnowledgeDocument
 from app.schemas.files import DownloadUrlOut, FileOut
 from app.services import files as svc
 from app.storage.antivirus import ScannerUnavailable, VirusScanner, get_scanner
@@ -21,7 +21,7 @@ def _scanner() -> VirusScanner:
     try:
         return get_scanner()
     except ScannerUnavailable:  # production without ClamAV configured: fail closed
-        raise ApiError(503, "scan_unavailable", "Analyse antivirus indisponible.") from None
+        raise svc.scan_unavailable() from None
 
 
 def _get(db: ScopedDb, file_id: uuid.UUID) -> File:
@@ -80,5 +80,13 @@ def delete(file_id: uuid.UUID, ctx: CurrentAuth, db: ScopedDb, storage: Storage)
                 "file_in_use",
                 "Ce fichier est utilisé par un document : supprimez le document lui-même.",
             )
+    # Reference photos are plain id lists (no foreign key): refuse rather than leave a dangling id.
+    photo_of = select(CompanyReference.id).where(any_(CompanyReference.photo_file_ids) == record.id)
+    if db.scalar(photo_of.limit(1)) is not None:
+        raise ApiError(
+            409,
+            "file_in_use",
+            "Ce fichier est une photo d'une référence : retirez-la de la référence d'abord.",
+        )
     svc.delete_file(db, ctx.user, record, storage)
     return Response(status_code=204)

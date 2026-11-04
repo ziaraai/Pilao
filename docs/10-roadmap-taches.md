@@ -38,7 +38,6 @@ Reste à faire :
 - [ ] Limiteur de débit public (`/companies/lookup`) en mémoire par processus → Redis quand l'API aura plusieurs instances.
 - [ ] Code de suivi des jobs dupliqué entre `services/knowledge.py` et `services/vault.py` ; deux écritures de `ai_calls` (`ai/calls.py`, `ai/llm.py`) → factoriser.
 - [ ] « Relire » une attestation pendant qu'une relance automatique RQ est programmée peut lancer deux lectures.
-- [ ] Quota de stockage vérifié sans verrou : deux envois simultanés peuvent le dépasser légèrement.
 - [ ] L'inscription révèle si un e-mail est déjà utilisé (409) : acceptable en V1, à revoir avec un parcours « vérifiez votre e-mail » neutre.
 
 ## Phase 2 — Mémoire technique, éditeur, export (4 semaines)

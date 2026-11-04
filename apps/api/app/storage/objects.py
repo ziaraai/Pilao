@@ -5,12 +5,16 @@ Files are never served by the API: clients get short-lived signed URLs.
 
 import tempfile
 from functools import lru_cache
-from typing import BinaryIO, Protocol
+from typing import TYPE_CHECKING, BinaryIO, Protocol
+from urllib.parse import quote
 
 import boto3
 from botocore.client import Config
 
 from app.core.config import get_settings
+
+if TYPE_CHECKING:
+    from mypy_boto3_s3 import S3Client
 
 
 class ObjectStorage(Protocol):
@@ -25,10 +29,10 @@ def _ascii_fallback(filename: str) -> str:
 
 
 class S3Storage:
-    def __init__(self, client: object | None = None, bucket: str | None = None) -> None:
+    def __init__(self, client: "S3Client | None" = None, bucket: str | None = None) -> None:
         s = get_settings()
         self._bucket = bucket or s.s3_bucket
-        self._s3 = client or boto3.client(
+        self._s3: S3Client = client or boto3.client(
             "s3",
             endpoint_url=s.s3_endpoint,
             aws_access_key_id=s.s3_access_key or None,
@@ -38,7 +42,7 @@ class S3Storage:
         )
 
     def put(self, key: str, fileobj: BinaryIO, content_type: str) -> None:
-        self._s3.upload_fileobj(  # type: ignore[attr-defined]
+        self._s3.upload_fileobj(
             fileobj,
             self._bucket,
             key,
@@ -52,27 +56,22 @@ class S3Storage:
     def get(self, key: str) -> BinaryIO:
         """Download to a spooled temp file (RAM up to 16 MB, then disk), cursor at 0."""
         buf = tempfile.SpooledTemporaryFile(max_size=16 * 1024 * 1024)  # noqa: SIM115
-        self._s3.download_fileobj(self._bucket, key, buf)  # type: ignore[attr-defined]
+        self._s3.download_fileobj(self._bucket, key, buf)
         buf.seek(0)
         return buf  # type: ignore[return-value]
 
     def delete(self, key: str) -> None:
-        self._s3.delete_object(Bucket=self._bucket, Key=key)  # type: ignore[attr-defined]
+        self._s3.delete_object(Bucket=self._bucket, Key=key)
 
     def signed_download_url(self, key: str, filename: str, ttl_seconds: int) -> str:
-        from urllib.parse import quote
-
-        disposition = f"attachment; filename=\"{_ascii_fallback(filename)}\"; filename*=UTF-8''{quote(filename)}"
-        return str(
-            self._s3.generate_presigned_url(  # type: ignore[attr-defined]
-                "get_object",
-                Params={
-                    "Bucket": self._bucket,
-                    "Key": key,
-                    "ResponseContentDisposition": disposition,
-                },
-                ExpiresIn=ttl_seconds,
-            )
+        disposition = (
+            f'attachment; filename="{_ascii_fallback(filename)}"; '
+            f"filename*=UTF-8''{quote(filename)}"
+        )
+        return self._s3.generate_presigned_url(
+            "get_object",
+            Params={"Bucket": self._bucket, "Key": key, "ResponseContentDisposition": disposition},
+            ExpiresIn=ttl_seconds,
         )
 
 
