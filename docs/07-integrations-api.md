@@ -62,6 +62,8 @@ Légende : **Vérifié** = confirmé sur la documentation officielle (novembre 2
 - **Recherche** (à vérifier) : `GET /search?q={siren_ou_siret_ou_nom}&page=1&per_page=1`
 - **Champs attendus** (à vérifier sur un appel réel) : `nom_complet`, `siren`, `siege.siret`, `siege.adresse`, `siege.code_postal`, `siege.libelle_commune`, `activite_principale`, `nature_juridique`, `tranche_effectif_salarie`, `dirigeants[]`.
 - **Usage** : US-1.1 (pré-remplissage). Mettre en cache 24 h, gérer le 429 avec un délai.
+- **Implémentation** : `apps/api/app/integrations/recherche_entreprises.py` (3 tentatives, attente exponentielle, `Retry-After` respecté, cache 24 h en mémoire). Endpoint public `GET /companies/lookup?siret=` (limité à 20 appels/min/IP) ; à l'inscription, l'identité de l'organisation est complétée côté serveur, sans jamais bloquer si l'API est en panne.
+- **⚠ Non vérifié sur un appel réel** : le domaine était bloqué dans la session de développement. Le parseur est tolérant (tous les champs sont optionnels) et la fixture `tests/fixtures/recherche_entreprises_sample.json` est **écrite à la main** d'après la liste ci-dessus. À faire : appeler `GET /search?q=<siret>`, remplacer la fixture par la vraie réponse, corriger le parseur si besoin (noms de champs, `etat_administratif`, `departement`, code `tranche_effectif_salarie`).
 
 ## 4. DECP — Données essentielles de la commande publique (V2)
 

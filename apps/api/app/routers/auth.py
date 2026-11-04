@@ -9,6 +9,7 @@ from app.core.deps import CurrentAuth
 from app.core.email import Mailer, get_mailer
 from app.db.models import Organization, User
 from app.db.session import get_db
+from app.integrations.recherche_entreprises import CompanyDirectory, get_company_directory
 from app.schemas.auth import LoginIn, MeOut, MessageOut, OrgOut, RegisterIn, ResendIn, VerifyEmailIn
 from app.services import auth as svc
 
@@ -37,8 +38,13 @@ def _me_from(user: User, org: Organization) -> MeOut:
 
 
 @router.post("/register", status_code=201)
-def register(data: RegisterIn, db: Db, mailer: MailerDep) -> MessageOut:
-    svc.register(db, data, mailer)
+def register(
+    data: RegisterIn,
+    db: Db,
+    mailer: MailerDep,
+    directory: Annotated[CompanyDirectory, Depends(get_company_directory)],
+) -> MessageOut:
+    svc.register(db, data, mailer, directory)
     return MessageOut(message="Compte créé. Consultez votre e-mail pour le confirmer.")
 
 

@@ -10,6 +10,7 @@ from app.core.email import Email, Mailer
 from app.core.errors import ApiError
 from app.core.security import hash_password, hash_token, needs_rehash, new_token, verify_password
 from app.db.models import AuditLog, AuthToken, LoginAttempt, Organization, User, UserSession
+from app.integrations.recherche_entreprises import CompanyDirectory, CompanyLookupUnavailable
 from app.schemas.auth import RegisterIn
 
 VERIFY_KIND = "email_verify"
@@ -52,13 +53,25 @@ def _send_verification(db: Session, user: User, mailer: Mailer) -> None:
     )
 
 
-def register(db: Session, data: RegisterIn, mailer: Mailer) -> None:
+def register(
+    db: Session, data: RegisterIn, mailer: Mailer, directory: CompanyDirectory | None = None
+) -> None:
     if db.scalar(select(Organization.id).where(Organization.siret == data.siret)):
         raise ApiError(409, "siret_taken", "Ce SIRET est déjà associé à un compte.")
     if db.scalar(select(User.id).where(User.email == data.email)):
         raise ApiError(409, "email_taken", "Cette adresse e-mail est déjà utilisée.")
+    org = Organization(siren=data.siret[:9], siret=data.siret, name=data.org_name)
+    if directory is not None:  # best effort: the registry being down must never block sign-up
+        try:
+            info = directory.lookup_siret(data.siret)
+        except CompanyLookupUnavailable:
+            info = None
+        if info is not None:
+            org.legal_form, org.naf_code = info.legal_form, info.naf_code
+            org.address_line, org.postal_code = info.address_line, info.postal_code
+            org.city, org.department = info.city, info.department
+            org.headcount_range = info.headcount_range
     try:
-        org = Organization(siren=data.siret[:9], siret=data.siret, name=data.org_name)
         db.add(org)
         db.flush()
         user = User(

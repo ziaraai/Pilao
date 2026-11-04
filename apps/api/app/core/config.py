@@ -10,6 +10,7 @@ class Settings(BaseSettings):
     redis_url: str = "redis://localhost:6379/0"
     app_secret_key: str = "change-me"
     app_base_url: str = "http://localhost:3000"
+    recherche_entreprises_base_url: str = "https://recherche-entreprises.api.gouv.fr"
     environment: str = "local"  # local | test | production
 
     session_cookie_name: str = "pilao_session"

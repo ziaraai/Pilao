@@ -1,0 +1,29 @@
+{
+  "_comment": "FIXTURE ECRITE A LA MAIN d'après docs/07 §3 — NON ISSUE D'UN APPEL REEL. A remplacer par une vraie réponse (ticket P1-04 vérification).",
+  "results": [
+    {
+      "siren": "123456789",
+      "nom_complet": "NETTOYAGE EXEMPLE",
+      "nature_juridique": "5710",
+      "activite_principale": "81.21Z",
+      "tranche_effectif_salarie": "12",
+      "siege": {
+        "siret": "12345678900019",
+        "adresse": "1 RUE DE LA PAIX 75002 PARIS",
+        "code_postal": "75002",
+        "libelle_commune": "PARIS",
+        "departement": "75",
+        "activite_principale": "81.21Z",
+        "etat_administratif": "A"
+      },
+      "matching_etablissements": [
+        {"siret": "12345678900027", "adresse": "5 AVENUE X 69001 LYON", "code_postal": "69001",
+         "libelle_commune": "LYON", "departement": "69"}
+      ],
+      "dirigeants": [
+        {"type_dirigeant": "personne physique", "nom": "DUPONT", "prenoms": "Jeanne"},
+        {"type_dirigeant": "personne morale", "denomination": "HOLDING SA"}
+      ]
+    }
+  ]
+}

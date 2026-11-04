@@ -10,3 +10,4 @@
 | Q6 | Quelles plateformes d'acheteurs Abdraouf utilise le plus (priorité V2 du téléchargement automatique) ? | Abdraouf | À demander |
 | Q7 | Hébergeur de production (Scaleway, OVHcloud…) | Faycal | À décider |
 | Q8 | Format de mise en page Word attendu (charte, page de garde) | Abdraouf | À demander |
+| Q9 | Vérifier l'API Recherche d'entreprises sur un appel réel (domaine `recherche-entreprises.api.gouv.fr` à autoriser dans le réseau de l'environnement de développement) | Faycal | À faire |

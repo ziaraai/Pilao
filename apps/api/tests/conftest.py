@@ -64,6 +64,13 @@ class Outbox:
         return self.sent[-1].body.split("token=")[1].split()[0]
 
 
+class NoDirectory:
+    """Default registry stub: knows no company."""
+
+    def lookup_siret(self, siret: str) -> None:
+        return None
+
+
 @pytest.fixture
 def outbox() -> Outbox:
     return Outbox()
@@ -74,6 +81,7 @@ def make_client(conn: Connection, outbox: Outbox) -> Iterator[Callable[[], TestC
     """Factory of independent HTTP clients (own cookie jar), one DB session per request."""
     from app.core.email import get_mailer
     from app.db.session import get_db
+    from app.integrations.recherche_entreprises import get_company_directory
     from app.main import app
 
     def override_db() -> Iterator[Session]:
@@ -82,5 +90,6 @@ def make_client(conn: Connection, outbox: Outbox) -> Iterator[Callable[[], TestC
 
     app.dependency_overrides[get_db] = override_db
     app.dependency_overrides[get_mailer] = lambda: outbox
+    app.dependency_overrides[get_company_directory] = lambda: NoDirectory()  # never hit the network
     yield lambda: TestClient(app, headers={"Origin": "http://localhost:3000"})
     app.dependency_overrides.clear()
