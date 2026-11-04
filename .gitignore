@@ -1,1 +1,8 @@
 samples/
+__pycache__/
+.venv/
+.env
+*.pyc
+.mypy_cache/
+.ruff_cache/
+.pytest_cache/
