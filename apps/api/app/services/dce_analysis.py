@@ -3,8 +3,10 @@
 import logging
 import uuid
 from dataclasses import dataclass, field
+from datetime import UTC, date, datetime, time
 from pathlib import Path
 from typing import Any
+from zoneinfo import ZoneInfo
 
 from sqlalchemy import select
 from sqlalchemy.orm import Session
@@ -17,6 +19,7 @@ from app.core.tenancy import scope_session
 from app.db.models import (
     Bid,
     CompanyProfile,
+    ComplianceDocument,
     DceAnalysis,
     DceFile,
     DcePage,
@@ -25,8 +28,11 @@ from app.db.models import (
     Organization,
     Requirement,
 )
+from app.domain import go_no_go as gng
+from app.domain import vault as vault_rules
 from app.domain.trades import TRADES
 from app.schemas.dce_analysis import DceAnalysisData, Source
+from app.services import vault as vault_svc
 from app.services.jobs import set_job_status
 from app.workers.queue import JobQueue
 
@@ -443,6 +449,10 @@ def run_analyze_dce(db: Session, analysis_id: uuid.UUID) -> None:
                 page=req["source"]["page"],
             )
         )
+    bid = db.get_one(Bid, fresh.bid_id)
+    prefill_bid(bid, data, warnings)
+    _, opinion = review(db, org, bid, data)
+    fresh.go_no_go_score = opinion.score
     fresh.data, fresh.warnings, fresh.calls = data, warnings, len(calls)
     fresh.model, fresh.prompt_version, fresh.status = model, prompt.version, "ready"
     set_job_status(db, JOB_KIND, analysis_id, "done")
@@ -456,3 +466,102 @@ def _fail(db: Session, analysis_id: uuid.UUID, message: str) -> None:
         analysis.status, analysis.error = "error", message
         set_job_status(db, JOB_KIND, analysis_id, "error", message)
     db.commit()
+
+
+# ---------- review: vault cross-check (CA5), Go / No-Go (US-3.3), bid pre-fill -------------
+
+PARIS = ZoneInfo("Europe/Paris")
+
+
+def parse_datetime(value: str | None) -> datetime | None:
+    """ISO 8601 from the model; a date without time means end of day, Paris time."""
+    if not value:
+        return None
+    text = value.strip()
+    try:
+        if len(text) == 10:  # "2026-12-15": a whole day, not midnight
+            parsed = datetime.combine(date.fromisoformat(text), time(23, 59))
+        else:
+            parsed = datetime.fromisoformat(text)
+    except ValueError:
+        return None
+    return parsed if parsed.tzinfo else parsed.replace(tzinfo=PARIS)
+
+
+def _value(data: dict[str, Any], *path: str) -> Any:
+    node: Any = data
+    for key in path:
+        if not isinstance(node, dict):
+            return None
+        node = node.get(key)
+    return node
+
+
+def review(
+    db: Session, org: Organization, bid: Bid, data: dict[str, Any]
+) -> tuple[list[gng.DocumentCheck], gng.Opinion]:
+    """Computed at read time: the vault, the profile and the clock all move."""
+    today = vault_rules.paris_today()
+    vault = [
+        gng.VaultEntry(d.kind, vault_svc.to_out(d, org, today).status, d.valid_until)
+        for d in db.scalars(select(ComplianceDocument))
+    ]
+    deadline = (
+        parse_datetime(_value(data, "key_info", "submission_deadline", "value")) or bid.deadline_at
+    )
+    documents = gng.check_documents(
+        [
+            (d["name"], d["phase"], d.get("compliance_kind"))
+            for d in data.get("required_documents", [])
+        ],
+        vault,
+        deadline,
+    )
+    profile = db.scalar(select(CompanyProfile))
+    trade_keywords = [
+        k for t in (profile.trades if profile else []) if t in TRADES for k in TRADES[t].keywords
+    ]
+    amount = _value(data, "key_info", "estimated_amount_eur_ht", "value")
+    visit_dates = [
+        d for d in (parse_datetime(x) for x in _value(data, "site_visit", "dates") or []) if d
+    ]
+    text = " ".join(
+        [str(_value(data, "key_info", "title", "value") or ""), bid.title]
+        + [r["text"] for r in data.get("requirements", [])]
+    )
+    opinion = gng.opinion(
+        gng.Inputs(
+            now=datetime.now(UTC),
+            deadline=deadline,
+            estimated_amount_cents=round(amount * 100) if isinstance(amount, int | float) else None,
+            min_amount_cents=profile.min_amount_cents if profile else None,
+            max_amount_cents=profile.max_amount_cents if profile else None,
+            profile_keywords=[*(profile.keywords_include if profile else []), *trade_keywords],
+            excluded_keywords=profile.keywords_exclude if profile else [],
+            tender_text=text,
+            documents=documents,
+            blocking_watch_points=[
+                w["text"] for w in data.get("watch_points", []) if w["severity"] == "blocking"
+            ],
+            visit_mandatory=_value(data, "site_visit", "mandatory"),
+            visit_dates=visit_dates,
+        )
+    )
+    return documents, opinion
+
+
+def prefill_bid(bid: Bid, data: dict[str, Any], warnings: list[str]) -> None:
+    """Fill what the user left empty; never overwrite what they typed (only warn)."""
+    buyer = _value(data, "key_info", "buyer_name", "value")
+    if buyer and not bid.buyer_name:
+        bid.buyer_name = str(buyer)[:300]
+    deadline = parse_datetime(_value(data, "key_info", "submission_deadline", "value"))
+    if deadline is None:
+        return
+    if bid.deadline_at is None:
+        bid.deadline_at = deadline
+    elif abs((bid.deadline_at - deadline).total_seconds()) > 60:
+        warnings.append(
+            f"La date limite du DCE ({deadline.astimezone(PARIS):%d/%m/%Y %H:%M}) diffère de celle "
+            f"du dossier ({bid.deadline_at.astimezone(PARIS):%d/%m/%Y %H:%M}) : vérifiez-la."
+        )

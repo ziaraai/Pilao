@@ -101,6 +101,27 @@ class RequirementOut(BaseModel):
     source: SourceOut | None
 
 
+class DocumentCheckOut(BaseModel):
+    name: str
+    phase: str
+    compliance_kind: str | None
+    status: str
+    detail: str
+
+
+class FactorOut(BaseModel):
+    label: str
+    status: Literal["ok", "warning", "blocking", "unknown"]
+    detail: str
+
+
+class GoNoGoOut(BaseModel):
+    score: int
+    verdict: Literal["go", "to_study", "no_go"]
+    factors: list[FactorOut]
+    disclaimer: str
+
+
 class AnalysisOut(BaseModel):
     id: uuid.UUID
     status: Literal["pending", "processing", "ready", "error"]
@@ -112,3 +133,5 @@ class AnalysisOut(BaseModel):
     model: str | None
     prompt_version: str | None
     created_at: datetime
+    documents: list[DocumentCheckOut] = Field(default_factory=list)
+    go_no_go: GoNoGoOut | None = None

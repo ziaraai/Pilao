@@ -6,7 +6,15 @@ from sqlalchemy import select
 
 from app.core.deps import CurrentAuth, ScopedDb
 from app.core.errors import ApiError
-from app.db.models import Bid, DceAnalysis, DceFile, DcePage, DceVersion, Requirement
+from app.db.models import (
+    Bid,
+    DceAnalysis,
+    DceFile,
+    DcePage,
+    DceVersion,
+    Organization,
+    Requirement,
+)
 from app.routers.files import Storage, _scanner
 from app.schemas.bids import (
     AnalysisOut,
@@ -18,6 +26,9 @@ from app.schemas.bids import (
     DceKindIn,
     DcePageOut,
     DceVersionOut,
+    DocumentCheckOut,
+    FactorOut,
+    GoNoGoOut,
     RequirementOut,
     SourceOut,
 )
@@ -196,7 +207,22 @@ def _analysis_out(db: ScopedDb, analysis: DceAnalysis) -> AnalysisOut:
             .order_by(Requirement.position)
         )
     ]
+    documents: list[DocumentCheckOut] = []
+    go_no_go: GoNoGoOut | None = None
+    if analysis.status == "ready" and analysis.data is not None:
+        bid = db.get_one(Bid, analysis.bid_id)
+        org = db.get_one(Organization, analysis.org_id)
+        checks, opinion = analysis_svc.review(db, org, bid, analysis.data)
+        documents = [DocumentCheckOut(**vars(c)) for c in checks]
+        go_no_go = GoNoGoOut(
+            score=opinion.score,
+            verdict=opinion.verdict,
+            factors=[FactorOut(**vars(f)) for f in opinion.factors],
+            disclaimer=opinion.disclaimer,
+        )
     return AnalysisOut(
+        documents=documents,
+        go_no_go=go_no_go,
         id=analysis.id,
         status=analysis.status,
         error=analysis.error,

@@ -1,6 +1,7 @@
 import json
 import uuid
 from collections.abc import Callable
+from datetime import UTC, datetime, timedelta
 from typing import Any
 
 import pytest
@@ -46,13 +47,16 @@ SRC_RC = "DCE/RC.pdf"
 SRC_CCTP = "DCE/CCTP.pdf"
 
 
+DEADLINE = (datetime.now(UTC) + timedelta(days=30)).replace(microsecond=0)
+
+
 def full_answer() -> dict[str, Any]:
     return {
         "key_info": {
             "buyer_name": {"value": "Ville de Lyon", "source": {"file": SRC_RC, "page": 1}},
             "title": {"value": "Nettoyage des bureaux", "source": {"file": SRC_RC, "page": 1}},
             "submission_deadline": {
-                "value": "2026-12-15T12:00:00+01:00",
+                "value": DEADLINE.isoformat(),
                 "source": {"file": SRC_RC, "page": 1},
             },
             "lots": [],
@@ -102,6 +106,7 @@ class FakeModel:
         self.prompts: list[str] = []
         self.error: Exception | None = None
         self.reply: str | None = None
+        self.extra: dict[str, Any] = {}  # merged into the full answer
 
     def __call__(
         self, model: str, messages: list[dict[str, Any]], max_tokens: int | None = None
@@ -112,7 +117,7 @@ class FakeModel:
         self.prompts.append(user)
         if self.reply is not None:
             return self.reply, 100, 50, 0.01
-        answer = full_answer()
+        answer = {**full_answer(), **self.extra}
         if "ne remplis QUE" in user:  # a CCTP slice: requirements of the pages it received
             pages = [int(p) for p in __import__("re").findall(r"\[\[PAGE (\d+)\]\]", user)]
             answer = {
@@ -281,3 +286,100 @@ def test_requires_authentication(make_client: Factory) -> None:
     anon = make_client()
     assert anon.get(f"/bids/{uuid.uuid4()}/analysis").status_code == 401
     assert anon.post(f"/bids/{uuid.uuid4()}/analysis").status_code == 401
+
+
+# ---------- delivery 2: vault cross-check, Go / No-Go, bid pre-fill -------------------------
+
+
+def test_required_documents_are_checked_against_the_vault(
+    make_client: Factory, outbox: Outbox, queue: FakeQueue, model: FakeModel
+) -> None:
+    from tests.api.test_vault import confirm as vault_confirm
+    from tests.api.test_vault import deposit as vault_deposit
+
+    c = signed_in_client(make_client, outbox)
+    urssaf = vault_deposit(c).json()["id"]
+    vault_confirm(c, urssaf, valid_until=(DEADLINE + timedelta(days=60)).date().isoformat())
+    model.extra = {
+        "required_documents": [
+            {
+                "name": "Attestation de vigilance URSSAF",
+                "phase": "candidature",
+                "source": {"file": SRC_RC, "page": 2},
+            },
+            {
+                "name": "Extrait Kbis de moins de 3 mois",
+                "phase": "candidature",
+                "source": {"file": SRC_RC, "page": 2},
+            },
+            {
+                "name": "DC1 - lettre de candidature",
+                "phase": "candidature",
+                "source": {"file": SRC_RC, "page": 2},
+            },
+        ]
+    }
+    _, a = analyzed(c, queue, DCE)
+    statuses = {d["name"]: d["status"] for d in a["documents"]}
+    assert statuses == {
+        "Attestation de vigilance URSSAF": "available",
+        "Extrait Kbis de moins de 3 mois": "missing",
+        "DC1 - lettre de candidature": "to_prepare",
+    }
+    # The vault moves: once the Kbis is in, the same analysis shows it as available.
+    kbis = vault_deposit(c, kind="kbis").json()["id"]
+    vault_confirm(
+        c, kbis, kind="kbis", valid_until=(DEADLINE + timedelta(days=10)).date().isoformat()
+    )
+    bid = c.get("/bids").json()[0]["id"]
+    again = {d["name"]: d["status"] for d in c.get(f"/bids/{bid}/analysis").json()["documents"]}
+    assert again["Extrait Kbis de moins de 3 mois"] == "available"
+
+
+def test_go_no_go_is_explained_and_stored(
+    make_client: Factory, outbox: Outbox, queue: FakeQueue, model: FakeModel, db: Session
+) -> None:
+    from app.db.models import DceAnalysis
+
+    c = signed_in_client(make_client, outbox)
+    c.put(
+        "/profile",
+        json={"trades": ["nettoyage_locaux"], "apply_trade_defaults": True, "departments": ["69"]},
+    )
+    _, a = analyzed(c, queue, DCE)
+    g = a["go_no_go"]
+    assert g["verdict"] == "go" and g["score"] >= 70 and "indicatif" in g["disclaimer"]
+    factors = {f["label"]: f["status"] for f in g["factors"]}
+    assert (
+        factors["Métier"] == "ok" and factors["Délai"] == "ok" and factors["Montant"] == "unknown"
+    )
+    assert db.scalars(select(DceAnalysis)).one().go_no_go_score == g["score"]
+
+
+def test_bid_is_prefilled_but_user_values_win(
+    make_client: Factory, outbox: Outbox, queue: FakeQueue, model: FakeModel
+) -> None:
+    c = signed_in_client(make_client, outbox)
+    bid = c.post("/bids", json={"title": "Dossier vide"}).json()["id"]
+    deposit(c, bid, DCE)
+    queue.drain_dce()
+    queue.drain_analyses()
+    filled = c.get(f"/bids/{bid}").json()
+    assert filled["buyer_name"] == "Ville de Lyon"
+    assert datetime.fromisoformat(filled["deadline_at"]) == DEADLINE
+
+    mine = c.post(
+        "/bids",
+        json={
+            "title": "Dossier saisi",
+            "buyer_name": "Métropole",
+            "deadline_at": (DEADLINE + timedelta(days=2)).isoformat(),
+        },
+    ).json()["id"]
+    deposit(c, mine, DCE)
+    queue.drain_dce()
+    queue.drain_analyses()
+    kept = c.get(f"/bids/{mine}").json()
+    assert kept["buyer_name"] == "Métropole"  # never overwritten
+    assert datetime.fromisoformat(kept["deadline_at"]) == DEADLINE + timedelta(days=2)
+    assert any("diffère" in w for w in c.get(f"/bids/{mine}/analysis").json()["warnings"])
