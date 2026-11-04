@@ -37,3 +37,14 @@ Format : numéro, date, décision, raison, statut. Ajouter une entrée pour chaq
 - **Décision** : dépôt manuel des attestations, lecture IA des dates, alertes.
 - **Raison** : l'API Entreprise est réservée aux acteurs publics ; pas d'API URSSAF ni assurance ouverte aux entreprises.
 - **Statut** : validé.
+
+## ADR-007 — Isolation multi-tenant appliquée dans l'ORM
+- **Date** : 2026-11-04
+- **Décision** : toute table avec `org_id` hérite de `OrgScoped` ou `OptionalOrgScoped`. `scope_session(session, org_id)` ajoute automatiquement le filtre `org_id` à tous les SELECT/UPDATE/DELETE de ces modèles et refuse (`TenancyViolation`) l'écriture d'une ligne d'une autre org. Une session sans `scope_session` est réservée à l'authentification, aux jobs de plateforme et au back-office.
+- **Raison** : le filtre ne dépend plus de la vigilance de chaque développeur. Défense en profondeur : Row Level Security PostgreSQL à ajouter avant l'ouverture aux clients (voir `docs/09-securite-rgpd.md`).
+- **Statut** : validé.
+
+## ADR-008 — Migrations : pgvector ajouté avec la base documentaire
+- **Date** : 2026-11-04
+- **Décision** : l'extension `vector` et la dimension des embeddings sont créées dans la migration du ticket P1-07, après le choix du modèle (phase 0). `citext` est créée dès la migration 0001.
+- **Statut** : validé.

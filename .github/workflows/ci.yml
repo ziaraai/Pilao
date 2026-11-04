@@ -6,6 +6,15 @@ jobs:
   api:
     runs-on: ubuntu-latest
     defaults: { run: { working-directory: apps/api } }
+    services:
+      postgres:
+        image: pgvector/pgvector:pg16
+        env: { POSTGRES_USER: pilao, POSTGRES_PASSWORD: pilao, POSTGRES_DB: pilao_test }
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd "pg_isready -U pilao" --health-interval 5s --health-retries 10
+    env:
+      DATABASE_URL: postgresql+psycopg://pilao:pilao@localhost:5432/pilao_test
     steps:
       - uses: actions/checkout@v4
       - uses: astral-sh/setup-uv@v5
