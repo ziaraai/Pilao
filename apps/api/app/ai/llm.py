@@ -86,6 +86,12 @@ def month_spend_eur(db: Session, org_id: uuid.UUID) -> float:
     return float(total or 0)
 
 
+def ensure_budget(db: Session, org_id: uuid.UUID) -> None:
+    """Raise if the organization has used its monthly AI budget (all AI tasks included)."""
+    if month_spend_eur(db, org_id) >= get_settings().ai_monthly_budget_eur_per_org:
+        raise LlmBudgetExceeded("Budget IA mensuel de l'organisation atteint.")
+
+
 def parse_json_object(text: str) -> dict[str, Any]:
     """Accept raw JSON or JSON wrapped in a Markdown code fence."""
     text = text.strip()
@@ -134,9 +140,7 @@ def complete[T: BaseModel](
     bid_id: uuid.UUID | None = None,
 ) -> LlmResult[T]:
     model = model_for(task)
-    budget = get_settings().ai_monthly_budget_eur_per_org
-    if month_spend_eur(db, org_id) >= budget:
-        raise LlmBudgetExceeded("Budget IA mensuel de l'organisation atteint.")
+    ensure_budget(db, org_id)
 
     conversation = list(messages)
     in_tokens = out_tokens = 0

@@ -7,7 +7,7 @@ from sqlalchemy import select
 from app.core.config import get_settings
 from app.core.deps import CurrentAuth, ScopedDb
 from app.core.errors import ApiError
-from app.db.models import File
+from app.db.models import ComplianceDocument, File, KnowledgeDocument
 from app.schemas.files import DownloadUrlOut, FileOut
 from app.services import files as svc
 from app.storage.antivirus import ScannerUnavailable, VirusScanner, get_scanner
@@ -70,5 +70,15 @@ def download_url(file_id: uuid.UUID, db: ScopedDb, storage: Storage) -> Download
 
 @router.delete("/{file_id}", status_code=204)
 def delete(file_id: uuid.UUID, ctx: CurrentAuth, db: ScopedDb, storage: Storage) -> Response:
-    svc.delete_file(db, ctx.user, _get(db, file_id), storage)
+    record = _get(db, file_id)
+    # A file that backs an indexed document or an attestation must be deleted through its
+    # owner, which also removes the derived data (search index...). Never leave orphans.
+    for owner in (KnowledgeDocument, ComplianceDocument):
+        if db.scalar(select(owner.id).where(owner.file_id == record.id)) is not None:
+            raise ApiError(
+                409,
+                "file_in_use",
+                "Ce fichier est utilisé par un document : supprimez le document lui-même.",
+            )
+    svc.delete_file(db, ctx.user, record, storage)
     return Response(status_code=204)

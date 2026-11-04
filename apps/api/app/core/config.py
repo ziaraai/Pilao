@@ -33,7 +33,9 @@ class Settings(BaseSettings):
     # Empty = deterministic local HashEmbedder (development and tests only).
     embedding_model: str = ""
     embedding_dim: int = 1024  # changing it needs a migration AND a full re-embedding
-    environment: str = "local"  # local | test | production
+    # Secure by default: without an explicit ENVIRONMENT=local|test, production rules apply
+    # (real antivirus and embeddings required, Secure cookies).
+    environment: str = "production"  # local | test | production
 
     session_cookie_name: str = "pilao_session"
     session_ttl_hours: int = 24 * 14

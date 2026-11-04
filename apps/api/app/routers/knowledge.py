@@ -5,6 +5,7 @@ from fastapi import APIRouter, Depends, Form, Query, Response, UploadFile
 from sqlalchemy import select
 
 from app.ai.embeddings import Embedder, EmbeddingError, get_embedder
+from app.ai.llm import LlmBudgetExceeded
 from app.core.deps import CurrentAuth, ScopedDb
 from app.core.errors import ApiError
 from app.db.models import KnowledgeDocument
@@ -59,6 +60,8 @@ def search(
 ) -> list[SearchHitOut]:
     try:
         hits = svc.search_chunks(db, ctx.org, embedder, q, k)
+    except LlmBudgetExceeded:
+        raise ApiError(429, "ai_budget_exceeded", "Budget IA mensuel atteint.") from None
     except EmbeddingError:
         raise ApiError(503, "embedding_unavailable", "Recherche indisponible, réessayez.") from None
     return [

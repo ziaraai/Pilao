@@ -10,6 +10,7 @@ from sqlalchemy.orm import Session
 
 from app.ai.calls import log_embedding_call
 from app.ai.embeddings import Embedder, EmbeddingError
+from app.ai.llm import LlmBudgetExceeded, ensure_budget
 from app.core.config import get_settings
 from app.core.errors import ApiError
 from app.core.tenancy import scope_session
@@ -134,6 +135,8 @@ def _embed_chunks(
         known[content_hash] = [float(x) for x in vector]
 
     missing = [i for i, h in enumerate(hashes) if h not in known]
+    if missing:
+        ensure_budget(db, org_id)
     dim = get_settings().embedding_dim
     for start in range(0, len(missing), EMBED_BATCH):
         batch = missing[start : start + EMBED_BATCH]
@@ -178,7 +181,7 @@ def run_index_document(
         if not chunks:
             raise ExtractionError("Aucun texte exploitable dans ce document.")
         vectors = _embed_chunks(db, org_id, chunks, embedder)
-    except ExtractionError as exc:  # permanent: no retry, the message is shown to the user
+    except (ExtractionError, LlmBudgetExceeded) as exc:  # permanent: shown to the user
         db.rollback()
         doc = db.get_one(KnowledgeDocument, doc_id)
         doc.status, doc.error = "error", str(exc)
@@ -193,6 +196,12 @@ def run_index_document(
         db.commit()
         raise  # lets RQ retry
 
+    # The session does not expire on commit: reload and lock the row, so that a document
+    # deleted by the user while it was being indexed is not resurrected as orphan chunks.
+    fresh = db.get(KnowledgeDocument, doc_id, populate_existing=True, with_for_update=True)
+    if fresh is None:
+        db.commit()  # keep the ai_calls journal, write nothing else
+        return
     db.execute(
         delete(DocumentChunk).where(
             DocumentChunk.source_type == "knowledge", DocumentChunk.source_id == doc_id
@@ -214,7 +223,7 @@ def run_index_document(
                 embedding=vector,
             )
         )
-    doc = db.get_one(KnowledgeDocument, doc_id)
+    doc = fresh
     doc.status, doc.error, doc.chunk_count = "ready", None, len(chunks)
     pages = [b.page for b in blocks if b.page is not None]
     doc.page_count = max(pages) if pages else None
@@ -230,6 +239,7 @@ def search_chunks(
     The ``org_id`` filter is part of the SQL (docs/09-securite-rgpd.md), in addition to the
     session scope: it is never applied after the vector search.
     """
+    ensure_budget(db, org.id)
     began = time.monotonic()
     result = embedder.embed([query])
     log_embedding_call(db, org.id, result, int((time.monotonic() - began) * 1000), result.model)

@@ -29,6 +29,18 @@ Objectif : savoir si la génération est assez bonne, avec quel modèle, à quel
 - [ ] P1-11 Front : inscription, profil, coffre-fort, dossier, fiche d'analyse
 - [ ] P1-INT-01 Vérifier les champs BOAMP (voir `docs/07-integrations-api.md`)
 
+## Dette technique (revue complète du 2026-11-04)
+
+Corrigé pendant la revue : suppression d'un fichier via `/files` qui laissait l'index orphelin (désormais refusée, 409) ; document supprimé pendant son indexation ou sa lecture IA ; environnement par défaut non sécurisé (désormais `production`) ; CORS absent pour le front ; budget IA non appliqué aux embeddings ; lecture d'attestation trop stricte ou relancée à tort.
+
+Reste à faire :
+- [ ] Job de purge : `login_attempts` (> 30 jours), `user_sessions` expirées, `auth_tokens` utilisés ou expirés, objets S3 orphelins.
+- [ ] Limiteur de débit public (`/companies/lookup`) en mémoire par processus → Redis quand l'API aura plusieurs instances.
+- [ ] Code de suivi des jobs dupliqué entre `services/knowledge.py` et `services/vault.py` ; deux écritures de `ai_calls` (`ai/calls.py`, `ai/llm.py`) → factoriser.
+- [ ] « Relire » une attestation pendant qu'une relance automatique RQ est programmée peut lancer deux lectures.
+- [ ] Quota de stockage vérifié sans verrou : deux envois simultanés peuvent le dépasser légèrement.
+- [ ] L'inscription révèle si un e-mail est déjà utilisé (409) : acceptable en V1, à revoir avec un parcours « vérifiez votre e-mail » neutre.
+
 ## Phase 2 — Mémoire technique, éditeur, export (4 semaines)
 
 - [ ] P2-01 Génération du plan (US-4.1)
