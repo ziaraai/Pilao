@@ -13,6 +13,7 @@ from app.db.models.profile import (
     HumanResource,
 )
 from app.db.models.user import PlatformAdmin, User
+from app.db.models.vault import ComplianceDocument
 
 __all__ = [
     "AiCall",
@@ -21,6 +22,7 @@ __all__ = [
     "Certification",
     "CompanyProfile",
     "CompanyReference",
+    "ComplianceDocument",
     "DocumentChunk",
     "Equipment",
     "File",

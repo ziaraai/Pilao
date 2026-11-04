@@ -1,4 +1,5 @@
 from functools import lru_cache
+from pathlib import Path
 
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
@@ -21,6 +22,13 @@ class Settings(BaseSettings):
     signed_url_ttl_seconds: int = 300
     clamav_host: str | None = None  # unset = no antivirus (refused in production)
     clamav_port: int = 3310
+    # LLM models per task (LiteLLM names), fixed after phase 0 (ADR-005). Empty = not configured.
+    llm_model_extraction: str = ""
+    llm_model_generation: str = ""
+    llm_model_scoring: str = ""
+    llm_model_vision: str = ""
+    ai_monthly_budget_eur_per_org: float = 50.0
+    prompts_dir: str = str(Path(__file__).resolve().parents[4] / "prompts")
     # Embedding model (LiteLLM name, e.g. "openrouter/..."), fixed after phase 0 (ADR-005).
     # Empty = deterministic local HashEmbedder (development and tests only).
     embedding_model: str = ""

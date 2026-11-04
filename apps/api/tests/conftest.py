@@ -153,12 +153,26 @@ class FakeQueue:
     ) -> None:
         self._conn, self._storage, self._embedder = conn, storage, embedder
         self.pending: list[uuid.UUID] = []
+        self.pending_reads: list[uuid.UUID] = []
         self.down = False
 
     def enqueue_index_document(self, doc_id: uuid.UUID) -> None:
         if self.down:
             raise ConnectionError("redis down")
         self.pending.append(doc_id)
+
+    def enqueue_read_compliance_document(self, doc_id: uuid.UUID) -> None:
+        if self.down:
+            raise ConnectionError("redis down")
+        self.pending_reads.append(doc_id)
+
+    def drain_reads(self, reader) -> None:  # type: ignore[no-untyped-def]
+        from app.services.vault import run_read_document
+
+        while self.pending_reads:
+            doc_id = self.pending_reads.pop(0)
+            with _new_session(self._conn) as session:
+                run_read_document(session, doc_id, self._storage, reader)
 
     def drain(self) -> None:
         from app.services.knowledge import run_index_document
@@ -177,6 +191,26 @@ def embedder() -> CountingEmbedder:
 @pytest.fixture
 def queue(conn: Connection, storage: MemoryStorage, embedder: CountingEmbedder) -> FakeQueue:
     return FakeQueue(conn, storage, embedder)
+
+
+class FakeReader:
+    """Stands in for the vision model: returns ``result`` or raises ``error``."""
+
+    def __init__(self) -> None:
+        self.result = None
+        self.error: Exception | None = None
+        self.calls = 0
+
+    def read(self, db, org, fileobj, mime):  # type: ignore[no-untyped-def]
+        self.calls += 1
+        if self.error is not None:
+            raise self.error
+        return self.result
+
+
+@pytest.fixture
+def reader() -> FakeReader:
+    return FakeReader()
 
 
 class NoDirectory:
