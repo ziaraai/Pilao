@@ -1,3 +1,5 @@
+import io
+
 """Object storage (S3-compatible: MinIO locally, Scaleway / OVHcloud in production, EU only).
 
 Files are never served by the API: clients get short-lived signed URLs.
@@ -5,7 +7,7 @@ Files are never served by the API: clients get short-lived signed URLs.
 
 import tempfile
 from functools import lru_cache
-from typing import TYPE_CHECKING, BinaryIO, Protocol
+from typing import TYPE_CHECKING, Any, BinaryIO, Protocol
 from urllib.parse import quote
 
 import boto3
@@ -28,6 +30,33 @@ def _ascii_fallback(filename: str) -> str:
     return filename.encode("ascii", "replace").decode().replace("?", "_").replace('"', "_")
 
 
+class _NonClosing(io.RawIOBase):
+    """Read-through wrapper whose ``close`` leaves the wrapped file open."""
+
+    def __init__(self, inner: BinaryIO) -> None:
+        self._inner = inner
+
+    def readable(self) -> bool:
+        return True
+
+    def read(self, size: int = -1) -> bytes:
+        return self._inner.read(size)
+
+    def readinto(self, buffer: Any) -> int:
+        data = self._inner.read(len(buffer))
+        buffer[: len(data)] = data
+        return len(data)
+
+    def seekable(self) -> bool:
+        return True
+
+    def seek(self, offset: int, whence: int = io.SEEK_SET) -> int:
+        return self._inner.seek(offset, whence)
+
+    def tell(self) -> int:
+        return self._inner.tell()
+
+
 class S3Storage:
     def __init__(self, client: "S3Client | None" = None, bucket: str | None = None) -> None:
         s = get_settings()
@@ -42,8 +71,11 @@ class S3Storage:
         )
 
     def put(self, key: str, fileobj: BinaryIO, content_type: str) -> None:
+        """Upload ``fileobj`` from its start. The caller's file stays open and is rewound
+        (boto3 would otherwise close it, and the DCE pipeline reads it again afterwards)."""
+        fileobj.seek(0)
         self._s3.upload_fileobj(
-            fileobj,
+            _NonClosing(fileobj),  # type: ignore[arg-type]
             self._bucket,
             key,
             ExtraArgs=(
@@ -52,6 +84,7 @@ class S3Storage:
                 else {"ContentType": content_type}
             ),
         )
+        fileobj.seek(0)
 
     def get(self, key: str) -> BinaryIO:
         """Download to a spooled temp file (RAM up to 16 MB, then disk), cursor at 0."""

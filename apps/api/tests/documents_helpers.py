@@ -45,3 +45,25 @@ def make_docx(items: list[tuple[str, str]], table: list[list[str]] | None = None
     out = io.BytesIO()
     doc.save(out)
     return out.getvalue()
+
+
+def make_scanned_pdf(lines: list[str], pages: int = 1) -> bytes:
+    """A PDF whose pages are *images* of text (no text layer), like a scanner output."""
+    from PIL import Image, ImageDraw, ImageFont
+    from reportlab.lib.utils import ImageReader
+
+    try:
+        font = ImageFont.truetype("DejaVuSans.ttf", 34)
+    except OSError:
+        font = ImageFont.load_default(size=34)
+    buf = io.BytesIO()
+    pdf = canvas.Canvas(buf, pagesize=A4)
+    for _ in range(pages):
+        image = Image.new("L", (1240, 1754), 255)  # A4 at 150 dpi
+        draw = ImageDraw.Draw(image)
+        for i, line in enumerate(lines):
+            draw.text((90, 120 + i * 60), line, fill=0, font=font)
+        pdf.drawImage(ImageReader(image), 0, 0, width=A4[0], height=A4[1])
+        pdf.showPage()
+    pdf.save()
+    return buf.getvalue()

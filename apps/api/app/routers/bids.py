@@ -6,7 +6,7 @@ from sqlalchemy import select
 
 from app.core.deps import CurrentAuth, ScopedDb
 from app.core.errors import ApiError
-from app.db.models import Bid, DceFile, DceVersion
+from app.db.models import Bid, DceFile, DcePage, DceVersion
 from app.routers.files import Storage, _scanner
 from app.schemas.bids import (
     BidIn,
@@ -15,6 +15,7 @@ from app.schemas.bids import (
     BidStatus,
     DceFileOut,
     DceKindIn,
+    DcePageOut,
     DceVersionOut,
 )
 from app.services import bids as svc
@@ -124,3 +125,23 @@ def set_kind(file_id: uuid.UUID, data: DceKindIn, db: ScopedDb) -> DceFileOut:
     row.detected_kind, row.kind_source, row.kind_confirmed = data.kind, "user", True
     db.commit()
     return DceFileOut.model_validate(row)
+
+
+@router.get("/dce-files/{file_id}/pages")
+def get_pages(
+    file_id: uuid.UUID,
+    db: ScopedDb,
+    first: Annotated[int, Query(alias="from", ge=1)] = 1,
+    count: Annotated[int, Query(ge=1, le=50)] = 20,
+) -> list[DcePageOut]:
+    """Page texts of a DCE piece, used to show the source of an extracted fact."""
+    row = db.get(DceFile, file_id)
+    if row is None:
+        raise ApiError(404, "not_found", "Fichier introuvable.")
+    pages = db.scalars(
+        select(DcePage)
+        .where(DcePage.dce_file_id == row.id, DcePage.page >= first)
+        .order_by(DcePage.page)
+        .limit(count)
+    )
+    return [DcePageOut.model_validate(p) for p in pages]

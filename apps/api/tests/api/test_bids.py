@@ -271,9 +271,10 @@ def test_queue_down_is_visible(make_client: Factory, outbox: Outbox, queue: Fake
 
 def test_user_corrects_the_kind(make_client: Factory, outbox: Outbox, queue: FakeQueue) -> None:
     c = signed_in_client(make_client, outbox)
-    version = processed(c, queue, new_bid(c), ("piece3.pdf", RC))
+    letter = make_pdf([["Lettre d'information aux candidats", "Merci de votre interet"]])
+    version = processed(c, queue, new_bid(c), ("piece3.pdf", letter))
     file_id = version["files"][0]["id"]
-    assert version["files"][0]["detected_kind"] == "other"
+    assert version["files"][0]["detected_kind"] == "other"  # neither name nor title helps
     fixed = c.patch(f"/dce-files/{file_id}", json={"kind": "rc"}).json()
     assert (
         fixed["detected_kind"] == "rc"
@@ -347,3 +348,111 @@ def test_same_content_under_two_names_is_kept(
         c, queue, new_bid(c), ("DCE.zip", zipped({"RC.pdf": RC, "Annexe RC copie.pdf": RC}))
     )
     assert sorted(f["path"] for f in version["files"]) == ["Annexe RC copie.pdf", "RC.pdf"]
+
+
+# ---------- page-by-page text, OCR, typing by content (delivery 2) ------------------------
+
+from tests.documents_helpers import make_scanned_pdf
+
+
+class FakeOcr:
+    def image_to_text(self, image: Any) -> str:
+        return "REGLEMENT DE LA CONSULTATION\nDate limite de remise des offres : 15 décembre"
+
+
+def test_pages_are_extracted_and_served(
+    make_client: Factory, outbox: Outbox, queue: FakeQueue
+) -> None:
+    c = signed_in_client(make_client, outbox)
+    cctp = make_pdf(
+        [[f"Article {i} - Nettoyage des locaux, prestation numero {i}"] for i in range(1, 4)][0:1]
+        * 3
+    )
+    version = processed(c, queue, new_bid(c), ("CCTP.pdf", cctp))
+    f = version["files"][0]
+    assert (f["text_status"], f["page_count"], f["paginated"], f["ocr_used"]) == (
+        "ready",
+        3,
+        True,
+        False,
+    )
+    pages = c.get(f"/dce-files/{f['id']}/pages").json()
+    assert [p["page"] for p in pages] == [1, 2, 3] and "Nettoyage des locaux" in pages[0]["text"]
+    assert [
+        p["page"]
+        for p in c.get(f"/dce-files/{f['id']}/pages", params={"from": 2, "count": 1}).json()
+    ] == [2]
+    assert c.get(f"/dce-files/{f['id']}/pages", params={"count": 500}).status_code == 422
+
+
+def test_unnamed_piece_is_typed_from_its_first_page(
+    make_client: Factory, outbox: Outbox, queue: FakeQueue
+) -> None:
+    c = signed_in_client(make_client, outbox)
+    titled = make_pdf(
+        [
+            [
+                "CAHIER DES CLAUSES TECHNIQUES PARTICULIERES",
+                "Voir aussi le reglement de la consultation",
+            ]
+        ]
+    )
+    version = processed(c, queue, new_bid(c), ("piece_02.pdf", titled))
+    f = version["files"][0]
+    assert f["detected_kind"] == "cctp" and f["kind_source"] == "content"
+
+
+def test_scanned_piece_without_ocr_is_flagged_but_version_ready(
+    make_client: Factory, outbox: Outbox, queue: FakeQueue
+) -> None:
+    c = signed_in_client(make_client, outbox)
+    version = processed(c, queue, new_bid(c), ("scan.pdf", make_scanned_pdf(["x"])))
+    assert version["status"] == "ready"
+    assert version["files"][0]["text_status"] == "ocr_unavailable"
+
+
+def test_scanned_piece_goes_through_ocr_and_is_typed(
+    make_client: Factory, outbox: Outbox, queue: FakeQueue
+) -> None:
+    c = signed_in_client(make_client, outbox)
+    queue.ocr = FakeOcr()
+    version = processed(c, queue, new_bid(c), ("scan_001.pdf", make_scanned_pdf(["x"], pages=2)))
+    f = version["files"][0]
+    assert f["ocr_used"] and f["text_status"] == "ready" and f["detected_kind"] == "rc"
+    pages = c.get(f"/dce-files/{f['id']}/pages").json()
+    assert all(p["ocr_used"] and "15 décembre" in p["text"] for p in pages)
+
+
+def test_word_piece_is_unpaginated(make_client: Factory, outbox: Outbox, queue: FakeQueue) -> None:
+    c = signed_in_client(make_client, outbox)
+    version = processed(
+        c,
+        queue,
+        new_bid(c),
+        ("CCAP.docx", make_docx([("Normal", "Pénalités de retard : 100 € par jour.")])),
+    )
+    f = version["files"][0]
+    assert (f["paginated"], f["page_count"], f["detected_kind"]) == (False, None, "ccap")
+    assert "Pénalités" in c.get(f"/dce-files/{f['id']}/pages").json()[0]["text"]
+
+
+def test_pages_are_tenant_isolated(make_client: Factory, outbox: Outbox, queue: FakeQueue) -> None:
+    a, b = signed_in_client(make_client, outbox, 1), signed_in_client(make_client, outbox, 2)
+    version = processed(b, queue, new_bid(b), ("RC.pdf", RC))
+    file_id = version["files"][0]["id"]
+    assert a.get(f"/dce-files/{file_id}/pages").status_code == 404
+    assert b.get(f"/dce-files/{file_id}/pages").status_code == 200
+
+
+def test_rq_enqueue_targets_the_dce_job() -> None:
+    import fakeredis
+    from rq import Queue
+
+    from app.workers.queue import DCE_JOB_TIMEOUT_SECONDS, RqJobQueue
+
+    q = Queue("default", connection=fakeredis.FakeRedis())
+    version_id = uuid.uuid4()
+    RqJobQueue(q).enqueue_process_dce(version_id)
+    (job,) = q.jobs
+    assert job.func_name == "app.workers.jobs.process_dce_job" and job.args == (str(version_id),)
+    assert job.timeout == DCE_JOB_TIMEOUT_SECONDS and job.retries_left == 2

@@ -12,6 +12,7 @@ from sqlalchemy import (
     Integer,
     Text,
     UniqueConstraint,
+    true,
 )
 from sqlalchemy.dialects.postgresql import JSONB, UUID
 from sqlalchemy.orm import Mapped, mapped_column
@@ -103,3 +104,23 @@ class DceFile(IdMixin, TimestampMixin, OrgScoped, Base):
     page_count: Mapped[int | None] = mapped_column(Integer)
     ocr_used: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
     text_status: Mapped[str] = mapped_column(Text, nullable=False, default="pending")
+    text_error: Mapped[str | None] = mapped_column(Text)
+    paginated: Mapped[bool] = mapped_column(
+        Boolean, nullable=False, default=True, server_default=true()
+    )
+
+
+class DcePage(IdMixin, OrgScoped, Base):
+    """Text of one page of a DCE piece: the unit every extracted fact cites (file + page)."""
+
+    __tablename__ = "dce_pages"
+    __table_args__ = (
+        UniqueConstraint("dce_file_id", "page", name="uq_dce_pages_dce_file_id_page"),
+    )
+
+    dce_file_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("dce_files.id", ondelete="CASCADE"), nullable=False
+    )
+    page: Mapped[int] = mapped_column(Integer, nullable=False)
+    text: Mapped[str] = mapped_column(Text, nullable=False, default="")
+    ocr_used: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)

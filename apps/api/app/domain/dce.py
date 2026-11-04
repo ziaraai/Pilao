@@ -55,3 +55,29 @@ def kind_from_filename(path: str) -> Typing:
     if re.search(r"\bannexe?s?\b|\bplans?\b|cadre (de )?(reponse|memoire)", name):
         return Typing("annex", "filename")
     return Typing("other", "none")
+
+
+# Titles printed on the first page of each piece (normalized, accent-free).
+_CONTENT_RULES: tuple[tuple[str, str], ...] = (
+    ("rc", r"reglement (de )?(la )?consultation"),
+    ("ccap", r"cahier des clauses administratives particulieres"),
+    ("cctp", r"cahier des clauses techniques particulieres"),
+    ("ae", r"acte (d )?engagement"),
+    ("bpu", r"bordereau (des )?prix unitaires"),
+    ("dpgf", r"decomposition (du )?prix global (et )?forfaitaire"),
+    ("dqe", r"detail quantitatif (et )?estimatif"),
+)
+
+
+def kind_from_content(first_pages: str) -> Typing:
+    """Typing from the beginning of the document, used when the name says nothing.
+
+    Only the start is read: a CCTP often *mentions* the RC later on.
+    """
+    head = normalize(first_pages[:1500])
+    best: tuple[int, str] | None = None
+    for kind, pattern in _CONTENT_RULES:
+        match = re.search(pattern, head)
+        if match and (best is None or match.start() < best[0]):
+            best = (match.start(), kind)
+    return Typing(best[1], "content") if best else Typing("other", "none")

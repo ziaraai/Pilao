@@ -23,6 +23,7 @@ dependencies = [
   "python-docx>=1.2.0",
   "litellm>=1.108.0",
   "tzdata>=2026.6",
+  "pytesseract>=0.3.13",
 ]
 
 [dependency-groups]
@@ -49,3 +50,7 @@ files = ["app"]
 plugins = ["pydantic.mypy"]
 [tool.pytest.ini_options]
 testpaths = ["tests"]
+
+[[tool.mypy.overrides]]
+module = ["pytesseract"]  # no type information published
+ignore_missing_imports = true

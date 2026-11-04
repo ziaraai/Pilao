@@ -13,9 +13,11 @@ from sqlalchemy.orm import Session
 from app.core.config import get_settings
 from app.core.errors import ApiError
 from app.core.tenancy import scope_session
-from app.db.models import Bid, DceFile, DceVersion, File, Job, Organization, User
+from app.db.models import Bid, DceFile, DcePage, DceVersion, File, Job, Organization, User
 from app.documents.archive import ArchiveError, Member, expand
-from app.domain.dce import kind_from_filename, normalize
+from app.documents.ocr import OcrEngine
+from app.documents.pages import extract_pages
+from app.domain.dce import kind_from_content, kind_from_filename, normalize
 from app.domain.filetypes import DOCX, JPEG, PDF, PNG, XLSX, ZIP, detect
 from app.services import files as files_svc
 from app.services.jobs import set_job_status
@@ -131,6 +133,7 @@ class _Ctx:
     scanner: VirusScanner
     skipped: list[dict[str, Any]]
     seen: dict[str, str]  # stored path -> sha256
+    ocr: OcrEngine | None
 
 
 def _members(record: File, data: BinaryIO, skipped: list[dict[str, Any]]) -> Iterator[Member]:
@@ -174,16 +177,28 @@ def _store_member(ctx: _Ctx, member: Member, source_name: str) -> None:
         ctx.skipped.append({"path": path, "reason": exc.message})
         return
     ctx.seen[path] = record.sha256  # same content under two names is kept: never drop silently
+    extraction = extract_pages(member.data, record.mime, ctx.ocr)
     typing = kind_from_filename(path)
-    ctx.db.add(
-        DceFile(
-            dce_version_id=ctx.version.id,
-            file_id=record.id,
-            path=path,
-            sha256=record.sha256,
-            detected_kind=typing.kind,
-            kind_source=typing.source,
-        )
+    if typing.source == "none" and extraction.pages:
+        typing = kind_from_content("\n".join(p.text for p in extraction.pages[:2]))
+    dce_file = DceFile(
+        id=uuid.uuid4(),  # the pages below reference it before the flush
+        dce_version_id=ctx.version.id,
+        file_id=record.id,
+        path=path,
+        sha256=record.sha256,
+        detected_kind=typing.kind,
+        kind_source=typing.source,
+        page_count=len(extraction.pages) if extraction.paginated and extraction.pages else None,
+        paginated=extraction.paginated,
+        ocr_used=extraction.ocr_used,
+        text_status=extraction.status,
+        text_error=extraction.error,
+    )
+    ctx.db.add(dce_file)
+    ctx.db.add_all(
+        DcePage(dce_file_id=dce_file.id, page=p.page, text=p.text, ocr_used=p.ocr_used)
+        for p in extraction.pages
     )
     ctx.db.commit()
 
@@ -200,7 +215,11 @@ def _cleanup(db: Session, user: User | None, version_id: uuid.UUID, storage: Obj
 
 
 def run_process_dce(
-    db: Session, version_id: uuid.UUID, storage: ObjectStorage, scanner: VirusScanner
+    db: Session,
+    version_id: uuid.UUID,
+    storage: ObjectStorage,
+    scanner: VirusScanner,
+    ocr: OcrEngine | None = None,
 ) -> None:
     version = db.get(DceVersion, version_id)
     if version is None:
@@ -212,7 +231,7 @@ def run_process_dce(
     set_job_status(db, JOB_KIND, version_id, "running")
     db.commit()
 
-    ctx = _Ctx(db, org, user, version, storage, scanner, [], {})
+    ctx = _Ctx(db, org, user, version, storage, scanner, [], {}, ocr)
     try:
         _cleanup(db, user, version_id, storage)
         for file_id in version.source_file_ids:

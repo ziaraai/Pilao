@@ -58,6 +58,15 @@ class DceFileOut(BaseModel):
     page_count: int | None
     ocr_used: bool
     text_status: str
+    text_error: str | None
+    paginated: bool
+
+
+class DcePageOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+    page: int
+    text: str
+    ocr_used: bool
 
 
 class DceVersionOut(BaseModel):

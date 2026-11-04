@@ -55,3 +55,13 @@ def test_delete(s3: S3Storage) -> None:
     with pytest.raises(ClientError) as err:
         s3.raw.head_object(Bucket=BUCKET, Key="org/x")  # type: ignore[attr-defined]
     assert err.value.response["Error"]["Code"] == "404"
+
+
+def test_put_leaves_the_callers_file_open_and_rewound(s3: S3Storage) -> None:
+    data = io.BytesIO(b"%PDF-1.4 contenu du DCE")
+    data.read(3)  # cursor anywhere: the whole file is uploaded anyway
+    s3.put("org/keep", data, "application/pdf")
+    assert not data.closed and data.tell() == 0
+    assert data.read() == b"%PDF-1.4 contenu du DCE"  # still readable (text extraction)
+    stored = s3.raw.get_object(Bucket=BUCKET, Key="org/keep")["Body"].read()  # type: ignore[attr-defined]
+    assert stored == b"%PDF-1.4 contenu du DCE"

@@ -76,7 +76,9 @@ class MemoryStorage:
     def put(self, key: str, fileobj, content_type: str) -> None:  # type: ignore[no-untyped-def]
         if self.fail_put:
             raise RuntimeError("storage down")
+        fileobj.seek(0)
         self.objects[key] = fileobj.read()
+        fileobj.seek(0)
 
     def get(self, key: str):  # type: ignore[no-untyped-def]
         import io
@@ -165,6 +167,7 @@ class FakeQueue:
         self.pending: list[uuid.UUID] = []
         self.pending_reads: list[uuid.UUID] = []
         self.pending_dce: list[uuid.UUID] = []
+        self.ocr = None  # set to an OCR engine to exercise scanned pages
         self.down = False
 
     def enqueue_index_document(self, doc_id: uuid.UUID) -> None:
@@ -196,7 +199,7 @@ class FakeQueue:
         while self.pending_dce:
             version_id = self.pending_dce.pop(0)
             with _new_session(self._conn) as session:
-                run_process_dce(session, version_id, self._storage, self._scanner)
+                run_process_dce(session, version_id, self._storage, self._scanner, self.ocr)
 
     def drain(self) -> None:
         from app.services.knowledge import run_index_document
