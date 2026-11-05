@@ -125,11 +125,10 @@ class RqJobQueue:
         )
 
     def enqueue_score_tenders(self, org_id: uuid.UUID) -> None:
-        # One scoring job per company at a time: a second request joins the queued one.
+        # Jobs of one company may overlap: each match is claimed before it is scored.
         self._q.enqueue(
             "app.workers.jobs.score_tenders_job",
             str(org_id),
-            job_id=f"score-tenders-{org_id}",
             job_timeout=TENDER_JOB_TIMEOUT_SECONDS,
             result_ttl=0,
             failure_ttl=7 * 24 * 3600,

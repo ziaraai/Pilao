@@ -276,7 +276,7 @@ class FakeQueue:
     def enqueue_score_tenders(self, org_id: uuid.UUID) -> None:
         if self.down:
             raise ConnectionError("redis down")
-        if org_id not in self.pending_score:  # one queued job per company, as with RQ
+        if org_id not in self.pending_score:  # several queued jobs would score nothing more
             self.pending_score.append(org_id)
 
     def drain_tenders(self) -> None:
@@ -295,7 +295,7 @@ class FakeQueue:
             else:
                 org_id = self.pending_score.pop(0)
                 with _new_session(self._conn) as session:
-                    score_org(session, org_id)
+                    score_org(session, org_id, self)
 
     def drain(self) -> None:
         from app.services.knowledge import run_index_document

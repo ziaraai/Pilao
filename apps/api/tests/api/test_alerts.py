@@ -94,6 +94,9 @@ def test_attestations_are_announced_at_30_and_7_days_then_once_expired(
     assert subjects_on(27) == []
     body = outbox.sent[-1].body
     assert "n'est plus jointe à vos exports" in body and "/coffre-fort" in body
+    old = deposit(c).json()["id"]
+    confirm(c, old, valid_until=day(-40))  # expired long before Pilao: no e-mail about it
+    assert subjects_on(0) == []
     confirm(c, doc, valid_until=day(60))  # renewed: its new end date is watched again
     renewed = "Attestation à renouveler : Attestation de vigilance URSSAF (fin le " + (
         f"{french_date(TODAY + timedelta(days=60))})"

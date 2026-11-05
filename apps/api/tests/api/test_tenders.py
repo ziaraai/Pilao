@@ -311,3 +311,58 @@ def test_requires_authentication(make_client: Factory) -> None:
     anon = make_client()
     assert anon.get("/tenders").status_code == 401
     assert anon.post(f"/tenders/{uuid.uuid4()}/track").status_code == 401
+
+
+def test_links_must_be_web_links_and_dates_without_zone_are_paris_time() -> None:
+    item = notice(
+        "X",
+        notice_url="javascript:alert(document.cookie)",
+        documents_url=" https://marches.example.fr/dce/123 ",
+        deadline_at="2026-12-15T12:00:00",
+    )
+    assert item.notice_url is None  # never rendered as a link
+    assert item.documents_url == "https://marches.example.fr/dce/123"
+    assert item.deadline_at is not None and item.deadline_at.utcoffset() == timedelta(hours=1)
+
+
+def test_every_notice_is_scored_even_beyond_one_batch(
+    make_client: Factory,
+    outbox: Outbox,
+    queue: FakeQueue,
+    scorer: ScoreModel,
+    db: Session,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    from app.services import tenders as svc
+
+    monkeypatch.setattr(svc, "SCORE_BATCH", 2)
+    c = company(make_client, outbox, queue)
+    load(db, queue, outbox, *(notice(f"N{i}") for i in range(5)))
+    items = c.get("/tenders").json()["items"]
+    assert len(items) == 5 and all(t["score"] == 70 for t in items)
+    assert len(scorer.prompts) == 5  # each notice paid once
+
+
+def test_a_notice_being_scored_by_another_job_is_left_to_it(
+    make_client: Factory, outbox: Outbox, queue: FakeQueue, scorer: ScoreModel, db: Session
+) -> None:
+    from sqlalchemy import update
+
+    from app.services.tenders import CLAIM_TIMEOUT, match_tenders
+
+    c = company(make_client, outbox, queue)
+    report = ingest(db, [notice("A"), notice("B")], outbox)
+    match_tenders(db, report.to_match, queue)  # matched; their scoring job is queued
+    a, b = tender_id(db, "A"), tender_id(db, "B")
+    db.execute(  # A: claimed just now by a running job; B: by a job killed long ago
+        update(TenderMatch).where(TenderMatch.tender_id == uuid.UUID(a)).values(scored_at=NOW)
+    )
+    db.execute(
+        update(TenderMatch)
+        .where(TenderMatch.tender_id == uuid.UUID(b))
+        .values(scored_at=NOW - CLAIM_TIMEOUT - timedelta(minutes=1))
+    )
+    db.commit()
+    queue.drain_tenders()
+    assert c.get(f"/tenders/{a}").json()["score"] is None
+    assert c.get(f"/tenders/{b}").json()["score"] == 70

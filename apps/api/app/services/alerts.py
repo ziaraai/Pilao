@@ -32,6 +32,7 @@ logger = logging.getLogger("pilao.alerts")
 PARIS = ZoneInfo("Europe/Paris")
 DIGEST_WINDOW = (time(7, 0), time(12, 0))  # « chaque matin », Paris time
 DEFAULT_THRESHOLD = 60
+EXPIRED_ALERT_DAYS = 30  # an attestation expired longer ago is not announced any more
 
 
 @dataclass
@@ -120,8 +121,8 @@ def send_expiry_alerts(db: Session, mailer: Mailer, today: date) -> int:
     ):
         assert doc.valid_until is not None
         days = (doc.valid_until - today).days
-        if days > 30:
-            continue
+        if days > 30 or days < -EXPIRED_ALERT_DAYS:
+            continue  # too early, or expired long before (no e-mail about old history)
         threshold = "expired" if days < 0 else "7" if days <= 7 else "30"
         label = PROOF_LABELS.get(doc.kind, doc.kind)
         when = french_date(doc.valid_until)

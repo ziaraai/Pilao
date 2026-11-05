@@ -1,11 +1,14 @@
 """Notices: the normalized format every source is converted to, and the API outputs."""
 
+import re
 import uuid
 from datetime import datetime
 from typing import Annotated, Any, Literal
+from zoneinfo import ZoneInfo
 
 from pydantic import BaseModel, Field, StringConstraints, field_validator
 
+PARIS = ZoneInfo("Europe/Paris")
 NoticeType = Literal["contract_notice", "correction", "award", "other"]
 Short = Annotated[str, StringConstraints(strip_whitespace=True, max_length=1000)]
 
@@ -47,6 +50,20 @@ class TenderIn(BaseModel):
     @classmethod
     def _cpv(cls, v: list[str]) -> list[str]:
         return list(dict.fromkeys(c.split("-")[0].strip() for c in v if c.strip()))
+
+    @field_validator("notice_url", "documents_url")
+    @classmethod
+    def _web_link(cls, v: str | None) -> str | None:
+        """Shown as links: only http(s) (a "javascript:" link from a source would run)."""
+        if v is None or not v.strip():
+            return None
+        return v.strip() if re.match(r"^https?://[^\s]+$", v.strip(), re.IGNORECASE) else None
+
+    @field_validator("published_at", "deadline_at")
+    @classmethod
+    def _aware(cls, v: datetime | None) -> datetime | None:
+        """A date without time zone from a French source is Paris time."""
+        return v.replace(tzinfo=PARIS) if v is not None and v.tzinfo is None else v
 
 
 class TenderScoreOut(BaseModel):

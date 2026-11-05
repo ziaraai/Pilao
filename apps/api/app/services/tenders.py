@@ -14,7 +14,7 @@ from dataclasses import dataclass, field
 from datetime import UTC, datetime, timedelta
 from typing import Any
 
-from sqlalchemy import or_, select
+from sqlalchemy import or_, select, update
 from sqlalchemy.orm import Session
 
 from app.ai import llm
@@ -45,7 +45,8 @@ from app.workers.queue import JobQueue
 
 logger = logging.getLogger("pilao.tenders")
 SCORE_PROMPT = "scoring_annonce"
-SCORE_BATCH = 100  # per company and per run: the next run continues
+SCORE_BATCH = 100  # per company and per run: a full batch schedules the next one
+CLAIM_TIMEOUT = timedelta(minutes=15)  # a killed job's claims are taken back after this
 OPEN_WINDOW = timedelta(days=120)  # a notice without deadline is "open" this long
 CORRECTED_FIELDS = (
     "title",
@@ -386,8 +387,25 @@ def _eur(cents: int | None) -> str:
     return "non précisé" if cents is None else f"{round(cents / 100):,}".replace(",", " ")
 
 
-def score_org(db: Session, org_id: uuid.UUID, now: datetime | None = None) -> int:
-    """Score this company's unscored matches; returns how many were scored."""
+def _unscored(now: datetime) -> Any:
+    """Matches waiting for a score; a claim older than CLAIM_TIMEOUT is abandoned."""
+    return (
+        TenderMatch.status == "new",
+        TenderMatch.score.is_(None),
+        TenderMatch.score_error.is_(None),
+        or_(TenderMatch.scored_at.is_(None), TenderMatch.scored_at < now - CLAIM_TIMEOUT),
+    )
+
+
+def score_org(
+    db: Session, org_id: uuid.UUID, queue: JobQueue | None = None, now: datetime | None = None
+) -> int:
+    """Score this company's unscored matches; returns how many were scored.
+
+    Each match is claimed (``scored_at`` set, no score yet) before the model is called, so
+    two jobs running at once never pay twice for the same notice. A full batch schedules the
+    next one.
+    """
     now = now or _now()
     scope_session(db, org_id)
     profile = db.scalar(select(CompanyProfile))
@@ -397,9 +415,7 @@ def score_org(db: Session, org_id: uuid.UUID, now: datetime | None = None) -> in
         select(TenderMatch, Tender)
         .join(Tender, Tender.id == TenderMatch.tender_id)
         .where(
-            TenderMatch.status == "new",
-            TenderMatch.score.is_(None),
-            TenderMatch.score_error.is_(None),
+            *_unscored(now),
             or_(Tender.deadline_at.is_(None), Tender.deadline_at > now),
         )
         .order_by(Tender.published_at.desc().nulls_last())
@@ -417,6 +433,14 @@ def score_org(db: Session, org_id: uuid.UUID, now: datetime | None = None) -> in
     }
     scored = 0
     for match, tender in pending:
+        claimed = db.execute(
+            update(TenderMatch)
+            .where(TenderMatch.id == match.id, *_unscored(now))
+            .values(scored_at=now)
+        )
+        db.commit()
+        if claimed.rowcount != 1:  # type: ignore[attr-defined]
+            continue  # another job is scoring it
         system, user = prompt.render(
             **company,
             title=_tag_safe(tender.title),
@@ -445,9 +469,10 @@ def score_org(db: Session, org_id: uuid.UUID, now: datetime | None = None) -> in
                 max_tokens=400,
             )
         except (llm.LlmNotConfigured, llm.LlmBudgetExceeded):
-            break  # the list still shows the pre-filtered notices, without a score
+            _release(db, match.id)
+            return scored  # the list still shows the pre-filtered notices, without a score
         except llm.LlmProviderError:
-            db.commit()
+            _release(db, match.id)
             raise  # transient: the job is retried, scored matches are kept
         except llm.LlmError as exc:
             match.score_error = str(exc)[:300]
@@ -458,7 +483,15 @@ def score_org(db: Session, org_id: uuid.UUID, now: datetime | None = None) -> in
         match.model, match.prompt_version, match.scored_at = result.model, prompt.version, now
         db.commit()
         scored += 1
+    if len(pending) == SCORE_BATCH and queue is not None:
+        _enqueue_score(queue, org_id)  # more are waiting
     return scored
+
+
+def _release(db: Session, match_id: uuid.UUID) -> None:
+    db.rollback()
+    db.execute(update(TenderMatch).where(TenderMatch.id == match_id).values(scored_at=None))
+    db.commit()
 
 
 # ---------- actions (US-2.3) ----------------------------------------------------------

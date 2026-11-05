@@ -8,6 +8,7 @@ import { api } from "@/lib/api";
 import { formatDateTime } from "@/lib/format";
 import { useAction, useApi } from "@/lib/hooks";
 import { FLAG_LABEL, SECTION_STATUS } from "@/lib/labels";
+import { applyTool, type Tool, TOOLS } from "@/lib/editor";
 import { chapterBody, type Highlight } from "@/lib/markdown";
 import type { Memoir, MemoirSection as Chapter, Revision } from "@/lib/types";
 
@@ -190,61 +191,6 @@ function Legend() {
   );
 }
 
-type Tool = {
-  label: string;
-  title: string;
-  apply: (selected: string) => { text: string; select?: [number, number] };
-};
-
-const lines = (s: string, prefix: (i: number) => string) =>
-  s
-    .split("\n")
-    .map((l, i) => prefix(i) + l)
-    .join("\n");
-
-const TOOLS: Tool[] = [
-  {
-    label: "G",
-    title: "Gras (Ctrl+B)",
-    apply: (s) => ({ text: `**${s || "texte"}**`, select: [2, 2] }),
-  },
-  {
-    label: "I",
-    title: "Italique (Ctrl+I)",
-    apply: (s) => ({ text: `*${s || "texte"}*`, select: [1, 1] }),
-  },
-  {
-    label: "Sous-titre",
-    title: "Sous-titre",
-    apply: (s) => ({ text: `\n### ${s || "Sous-titre"}\n`, select: [5, 1] }),
-  },
-  {
-    label: "• Liste",
-    title: "Liste à puces",
-    apply: (s) => ({ text: lines(s || "élément", () => "- ") }),
-  },
-  {
-    label: "1. Liste",
-    title: "Liste numérotée",
-    apply: (s) => ({ text: lines(s || "étape", (i) => `${i + 1}. `) }),
-  },
-  {
-    label: "Tableau",
-    title: "Tableau",
-    apply: () => ({
-      text: "\n| Colonne 1 | Colonne 2 |\n|---|---|\n| … | … |\n",
-    }),
-  },
-  {
-    label: "[À COMPLÉTER]",
-    title: "Signaler une information à compléter",
-    apply: (s) => ({
-      text: `[À COMPLÉTER : ${s || "information manquante"}]`,
-      select: [16, 1],
-    }),
-  },
-];
-
 /** US-4.4 CA1: a simple editor (toolbar + preview). The title stays the planned one. */
 function ChapterEditor({
   section,
@@ -263,12 +209,13 @@ function ChapterEditor({
   function use(tool: Tool) {
     const el = area.current;
     if (!el) return;
-    const [a, b] = [el.selectionStart, el.selectionEnd];
-    const out = tool.apply(body.slice(a, b));
-    setBody(body.slice(0, a) + out.text + body.slice(b));
-    const [from, to] = out.select
-      ? [a + out.select[0], a + out.text.length - out.select[1]]
-      : [a + out.text.length, a + out.text.length];
+    const { text, from, to } = applyTool(
+      tool,
+      body,
+      el.selectionStart,
+      el.selectionEnd,
+    );
+    setBody(text);
     requestAnimationFrame(() => {
       el.focus();
       el.setSelectionRange(from, to);

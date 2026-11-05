@@ -75,7 +75,7 @@ def rematch_org_job(org_id: str) -> None:
 
 def score_tenders_job(org_id: str) -> None:
     with get_sessionmaker()() as db:
-        score_org(db, uuid.UUID(org_id))
+        score_org(db, uuid.UUID(org_id), get_job_queue())
 
 
 def daily_alerts_job() -> None:
