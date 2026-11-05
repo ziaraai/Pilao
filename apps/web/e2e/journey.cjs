@@ -491,12 +491,36 @@ let current; // the page, for a screenshot when a step fails
     .fill("Technique 52/60");
   await page.getByRole("button", { name: "Enregistrer le résultat" }).click();
   await page.getByRole("status").getByText("Enregistré.").waitFor();
+  // P4-02: time spent with Pilao, against the usual time, and an idea for the team
+  await page.getByLabel("Avec Pilao (heures)").fill("2h30");
+  await page.getByLabel("Habituellement, sans Pilao (heures)").fill("8");
+  await page
+    .locator("form", { has: page.getByLabel("Avec Pilao (heures)") })
+    .getByRole("button", { name: "Enregistrer" })
+    .click();
+  await page.getByText("Temps gagné sur ce dossier : 5 h 30 (69 %)").waitFor();
+  await page.getByRole("button", { name: "Votre avis" }).click();
+  const dialog = page.getByRole("dialog", { name: "Votre avis" });
+  await dialog.getByLabel("C'est…").selectOption("idea");
+  await dialog
+    .getByLabel("Votre message")
+    .fill("Pouvoir dupliquer un ancien dossier.");
+  await dialog.getByRole("button", { name: "Envoyer" }).click();
+  await dialog
+    .getByText("Merci ! L'équipe Pilao lit chaque message.")
+    .waitFor();
+  await dialog.getByRole("button", { name: "Fermer" }).click();
   await page
     .getByRole("link", { name: "Tableau de bord", exact: true })
     .click();
   await page.waitForURL(`${WEB}/tableau-de-bord`);
   await page.reload();
   await page.getByText("Nouvelles annonces (7 jours)").waitFor();
+  await page
+    .locator("div", { has: page.getByText("Temps gagné", { exact: true }) })
+    .getByText("5 h 30", { exact: true })
+    .first()
+    .waitFor();
   const submitted = page.locator("div", {
     has: page.getByRole("heading", { name: /^Déposé \(/ }),
   });
@@ -505,7 +529,9 @@ let current; // the page, for a screenshot when a step fails
     path: `${S}/10-tableau-de-bord.png`,
     fullPage: true,
   });
-  step("result saved; dashboard shows the bid among the submitted ones");
+  step(
+    "result and time saved recorded, idea sent; dashboard shows the bid and 5 h 30 saved",
+  );
 
   // 11. GDPR: full export, then a deletion scheduled and cancelled (ADR-026)
   await page.getByRole("link", { name: "Profil", exact: true }).click();

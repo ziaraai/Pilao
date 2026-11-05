@@ -50,6 +50,7 @@ Le TLS se termine au répartiteur de charge de l'hébergeur ou à un proxy inver
 - [ ] Chaque changement de texte : nouvelle version `TERMS_VERSION`, la même dans `apps/api/app/core/legal.py` et `apps/web/lib/legal.ts` (un test le vérifie).
 - [ ] Sauvegardes quotidiennes chiffrées chez l'hébergeur, avec une restauration testée, et leur durée de conservation écrite dans la politique de confidentialité (Q15).
 - [ ] Laisser `LLM_DENY_DATA_COLLECTION=true` : la politique de confidentialité s'y engage.
+- [ ] Renseigner `FEEDBACK_EMAIL` (boîte de l'équipe) pour lire les avis des testeurs le jour même ; `python -m app.cli feedback-report --csv retours.csv` les liste aussi, avec le temps gagné par entreprise.
 
 ## Vérifier une image
 

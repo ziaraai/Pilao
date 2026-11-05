@@ -58,6 +58,15 @@ export default function Privacy() {
             programmée. Base légale : le contrat. Aucun e-mail publicitaire.
           </li>
           <li>
+            <strong>Recevoir vos avis</strong> : quand vous utilisez « Votre
+            avis », votre message, la page d&apos;où il part et votre e-mail
+            sont transmis à l&apos;équipe Pilao pour améliorer le service. Si
+            vous les renseignez, le temps passé sur un dossier et le temps
+            habituel servent à mesurer le temps gagné. Base légale : intérêt
+            légitime à améliorer le service. Ces éléments sont effacés avec
+            l&apos;entreprise.
+          </li>
+          <li>
             <strong>Préremplir votre entreprise</strong> : à partir du SIRET,
             Pilao interroge l&apos;annuaire public des entreprises (raison
             sociale, adresse, activité).

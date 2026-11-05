@@ -3,6 +3,8 @@
 * ``load-tenders notices.json`` loads notices already in the normalized format
   (``TenderIn``), the same path the BOAMP and TED importers take: upsert, corrections,
   duplicates, then matching for every company (the scoring runs in the worker).
+* ``feedback-report [--days 30] [--csv retours.csv]``: what the testers wrote from the
+  application, and the time saved per company (P4-02). Read-only, every company.
 * ``eval-models --models a,b,c`` runs the phase 0 comparison (docs/11) on ``samples/``:
   every DCE through the real pipeline with each model, then the anonymized memoirs, the
   rating grid and the cost report. Never on the production database.
@@ -12,6 +14,7 @@ import argparse
 import json
 import sys
 from pathlib import Path
+from zoneinfo import ZoneInfo
 
 from sqlalchemy.engine import make_url
 
@@ -21,6 +24,8 @@ from app.db.session import get_sessionmaker
 from app.schemas.tenders import TenderIn
 from app.services.tenders import ingest, match_tenders
 from app.workers.queue import get_job_queue
+
+PARIS = ZoneInfo("Europe/Paris")
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -38,9 +43,14 @@ def main(argv: list[str] | None = None) -> int:
         action="store_true",
         help="accepter une base dont le nom ne finit pas par _eval",
     )
+    fb = commands.add_parser("feedback-report", help="retours des utilisateurs, temps gagné")
+    fb.add_argument("--days", type=int, default=30)
+    fb.add_argument("--csv", type=Path, default=None, help="écrire aussi les avis en CSV")
     args = parser.parse_args(argv)
     if args.command == "eval-models":
         return eval_models(args)
+    if args.command == "feedback-report":
+        return feedback_report(args)
 
     items = [TenderIn.model_validate(x) for x in json.loads(args.path.read_text("utf-8"))]
     with get_sessionmaker()() as db:  # unscoped: notices are global
@@ -52,6 +62,77 @@ def main(argv: list[str] | None = None) -> int:
         f"{report.awards} attribution(s), {report.unchanged} inchangée(s) ; "
         f"{matched} correspondance(s) avec les entreprises."
     )
+    return 0
+
+
+def _duration(minutes: int) -> str:
+    """As the application shows it: 45 min, 6 h, 5 h 30."""
+    if abs(minutes) < 60:
+        return f"{minutes} min"
+    hours, rest = divmod(abs(minutes), 60)
+    sign = "-" if minutes < 0 else ""
+    return f"{sign}{hours} h {rest:02d}" if rest else f"{sign}{hours} h"
+
+
+def feedback_report(args: argparse.Namespace) -> int:
+    import csv
+    from datetime import UTC, datetime, timedelta
+
+    from sqlalchemy import func, select
+
+    from app.db.models import Bid, Feedback, Organization, User
+    from app.services.feedback import KINDS
+
+    since = datetime.now(UTC) - timedelta(days=args.days)
+    with get_sessionmaker()() as db:  # unscoped: the team reads every company's feedback
+        rows = db.execute(
+            select(Feedback, Organization.name, User.email)
+            .join(Organization, Organization.id == Feedback.org_id)
+            .outerjoin(User, User.id == Feedback.user_id)
+            .where(Feedback.created_at >= since)
+            .order_by(Feedback.created_at.desc())
+        ).all()
+        saved = db.execute(
+            select(
+                Organization.name,
+                func.count(),
+                func.sum(Bid.minutes_with_pilao),
+                func.sum(Bid.minutes_usual),
+            )
+            .join(Organization, Organization.id == Bid.org_id)
+            .where(Bid.minutes_with_pilao.is_not(None), Bid.minutes_usual.is_not(None))
+            .group_by(Organization.name)
+            .order_by(Organization.name)
+        ).all()
+    print(f"{len(rows)} avis depuis {args.days} jour{'s' if args.days > 1 else ''}")
+    for item, org, email in rows:
+        when = item.created_at.astimezone(PARIS).strftime("%d/%m %H:%M")
+        print(f"\n[{when}] {KINDS[item.kind]} — {org} — {email or 'compte supprimé'}")
+        print(f"  page : {item.page or '?'}")
+        print("  " + item.message.replace("\n", "\n  "))
+    print("\nTemps gagné (dossiers où les deux durées sont saisies)")
+    for org, count, with_, usual in saved:
+        gain = (usual or 0) - (with_ or 0)
+        pct = f" ({round(100 * gain / usual)} %)" if usual else ""
+        print(f"  {org} : {count} dossier(s), {_duration(gain)} gagnées{pct}")
+    if not saved:
+        print("  (aucun dossier renseigné)")
+    if args.csv:
+        with args.csv.open("w", newline="", encoding="utf-8-sig") as fh:  # opens in Excel
+            out = csv.writer(fh, delimiter=";")
+            out.writerow(["date", "entreprise", "utilisateur", "type", "page", "message"])
+            for item, org, email in rows:
+                out.writerow(
+                    [
+                        item.created_at.astimezone(PARIS).isoformat(timespec="minutes"),
+                        org,
+                        email or "",
+                        KINDS[item.kind],
+                        item.page or "",
+                        item.message,
+                    ]
+                )
+        print(f"\nCSV : {args.csv}")
     return 0
 
 

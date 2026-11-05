@@ -286,3 +286,13 @@ Format : numéro, date, décision, raison, statut. Ajouter une entrée pour chaq
 - **Retrait** : le compte est supprimé, avec ses sessions et ses liens. Le travail reste dans les dossiers, car toutes les références à `users` sont `SET NULL`. Aucune donnée personnelle du collaborateur retiré n'est conservée (ses nom et e-mail ne sont pas recopiés dans le journal).
 - **Sécurité** : le lien d'invitation est transmis dans le corps des requêtes (`/auth/invitations/lookup`, `/auth/invitations/accept`), jamais dans une URL d'API qui finirait dans les journaux d'accès.
 - **Statut** : validé.
+
+## ADR-031 — Retours des testeurs et temps gagné, dans l'application
+- **Date** : 2026-11-05
+- **Décision** : pour la phase de test (P4-02) :
+  - **« Votre avis »** est accessible sur chaque page de l'application : une idée, un problème ou une question, en deux clics. Le message est enregistré avec la page d'où il part et, s'il vient d'un dossier, le lien vers ce dossier (table `feedback`, migration 0019). Il est aussi envoyé aussitôt à la boîte de l'équipe (`FEEDBACK_EMAIL`). Un échec d'envoi n'empêche pas l'enregistrement. Un utilisateur envoie au plus `FEEDBACK_MAX_PER_HOUR` avis par heure (20).
+  - **Le temps gagné** se saisit dans chaque dossier déposé : le temps passé avec Pilao et le temps habituel sans Pilao (`bids.minutes_with_pilao`, `bids.minutes_usual`). On peut l'écrire en heures (« 2,5 », « 2h30 »). Le tableau de bord en fait le total, sur les dossiers où les deux durées sont renseignées.
+  - **Côté équipe**, `python -m app.cli feedback-report [--days 30] [--csv retours.csv]` liste les avis de toutes les entreprises et le temps gagné par entreprise. Le CSV s'ouvre dans Excel.
+- **Raison** : sans mesure du temps gagné, on ne saura pas si Pilao tient sa promesse (des heures par dossier) ni à quel prix le vendre (Q3). Les avis reçus dans l'application, avec la page concernée, sont plus précis que ceux recueillis au téléphone une semaine plus tard. Les entretiens restent à faire.
+- **Données** : les avis et les durées font partie des données de l'entreprise. Ils figurent dans l'export, sont effacés avec elle, et un dossier d'une autre entreprise n'est jamais lié (session filtrée). La politique de confidentialité le dit.
+- **Statut** : validé.

@@ -12,7 +12,7 @@ import {
   Select,
 } from "@/components/ui";
 import { api } from "@/lib/api";
-import { formatDate, formatDateTime } from "@/lib/format";
+import { formatDate, formatDateTime, formatDuration } from "@/lib/format";
 import { useAction, useApi } from "@/lib/hooks";
 import { BID_STATUS, VAULT_KINDS, VAULT_STATUS } from "@/lib/labels";
 import type { Bid, Dashboard } from "@/lib/types";
@@ -39,7 +39,7 @@ export default function DashboardPage() {
         title="Tableau de bord"
         subtitle="Nouvelles annonces, dates limites proches, attestations à renouveler et suivi de vos dossiers."
       />
-      <div className="grid gap-4 md:grid-cols-4">
+      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-5">
         <Stat
           label="Nouvelles annonces (7 jours)"
           value={String(d.new_tenders)}
@@ -58,6 +58,19 @@ export default function DashboardPage() {
           label="Taux de réussite"
           value={rate == null ? "—" : `${Math.round(rate * 100)} %`}
           hint={`${d.results.won} gagné${d.results.won > 1 ? "s" : ""}, ${d.results.lost} perdu${d.results.lost > 1 ? "s" : ""}`}
+        />
+        <Stat
+          label="Temps gagné"
+          value={
+            d.time_saved.bids && d.time_saved.minutes_saved > 0
+              ? formatDuration(d.time_saved.minutes_saved)
+              : "—"
+          }
+          hint={
+            d.time_saved.bids
+              ? `sur ${d.time_saved.bids} dossier${d.time_saved.bids > 1 ? "s" : ""} renseigné${d.time_saved.bids > 1 ? "s" : ""}`
+              : "à renseigner dans chaque dossier déposé"
+          }
         />
       </div>
       <div className="grid gap-6 lg:grid-cols-2">

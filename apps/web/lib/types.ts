@@ -132,6 +132,8 @@ export type Bid = {
   submitted_amount_cents: number | null;
   result_rank: number | null;
   result_notes: string | null;
+  minutes_with_pilao: number | null;
+  minutes_usual: number | null;
   created_at: string;
 };
 export type DceFile = {
@@ -428,6 +430,12 @@ export type Dashboard = {
     lost: number;
     submitted: number;
     success_rate: number | null;
+  };
+  time_saved: {
+    bids: number;
+    minutes_with_pilao: number;
+    minutes_usual: number;
+    minutes_saved: number;
   };
 };
 export type DataRequest = {

@@ -70,7 +70,7 @@ Reste à faire :
 ## Phase 4 — Tests avec 3 à 5 entreprises (4 semaines)
 
 - [ ] P4-01 Onboarding accompagné d'Abdraouf puis des testeurs
-- [ ] P4-02 Collecte des retours (formulaire + entretiens), suivi des temps gagnés
+- [ ] P4-02 Collecte des retours (formulaire + entretiens), suivi des temps gagnés — formulaire « Votre avis » sur chaque page, temps avec et sans Pilao sur chaque dossier, total au tableau de bord, rapport `python -m app.cli feedback-report` faits (ADR-031) ; restent les entretiens avec les testeurs
 - [ ] P4-03 Corrections et ajustements des prompts
 - [ ] P4-04 Pages légales (CGU, confidentialité, DPA), mise en production UE — images de production, garde-fous de démarrage et guide faits (ADR-025, `docs/14-deploiement.md`) ; pages légales rédigées, acceptation enregistrée, rétention et non-entraînement appliqués par le code (ADR-029) ; restent les informations de la société (Q5), l'hébergeur (Q7), la relecture juridique (Q16)
 - [x] Réacceptation des conditions quand `TERMS_VERSION` change (article 12 des CGU) : écran bloquant « Nos conditions ont changé », `POST /auth/accept-terms` (ADR-029)

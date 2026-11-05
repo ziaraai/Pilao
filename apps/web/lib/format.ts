@@ -24,6 +24,33 @@ export function centsToInput(cents: number | null | undefined): string {
     : (cents / 100).toFixed(2).replace(".", ",").replace(/,00$/, "");
 }
 
+/** "2", "2,5", "2.5", "2h", "2h30", "2 h 30" → minutes; null when unreadable. */
+export function parseHours(text: string): number | null {
+  const t = text.trim().toLowerCase().replace(/\s+/g, "");
+  if (t === "") return null;
+  const hm = /^(\d{1,4})h(\d{1,2})?$/.exec(t);
+  if (hm) {
+    const minutes = hm[2] ? Number(hm[2]) : 0;
+    return minutes < 60 ? Number(hm[1]) * 60 + minutes : null;
+  }
+  if (!/^\d{1,4}([.,]\d{1,2})?$/.test(t)) return null;
+  return Math.round(parseFloat(t.replace(",", ".")) * 60);
+}
+
+/** Minutes as the value of an "hours" field: 150 → "2,5". */
+export function minutesToHours(minutes: number | null | undefined): string {
+  if (minutes == null) return "";
+  return String(Math.round((minutes / 60) * 100) / 100).replace(".", ",");
+}
+
+/** 45 → "45 min", 360 → "6 h", 390 → "6 h 30". */
+export function formatDuration(minutes: number): string {
+  if (minutes < 60) return `${minutes} min`;
+  const h = Math.floor(minutes / 60);
+  const m = minutes % 60;
+  return m ? `${h} h ${String(m).padStart(2, "0")}` : `${h} h`;
+}
+
 /** Dates are stored in UTC and shown in Paris time (CLAUDE.md §4). */
 export function formatDateTime(iso: string | null | undefined): string {
   if (!iso) return "—";

@@ -20,6 +20,7 @@ from app.routers import (
     companies,
     dashboard,
     documents,
+    feedback,
     files,
     knowledge,
     members,
@@ -66,6 +67,7 @@ app.include_router(tenders.router)
 app.include_router(dashboard.router)
 app.include_router(organization.router)
 app.include_router(members.router)
+app.include_router(feedback.router)
 
 
 @app.get("/health")

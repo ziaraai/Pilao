@@ -30,6 +30,8 @@ class BidPatch(BaseModel):
     submitted_amount_cents: Annotated[int, Field(ge=0, le=10**13)] | None = None
     result_rank: Annotated[int, Field(ge=1, le=1000)] | None = None
     result_notes: LongText | None = None
+    minutes_with_pilao: Annotated[int, Field(ge=0, le=100_000)] | None = None
+    minutes_usual: Annotated[int, Field(ge=0, le=100_000)] | None = None
 
 
 class BidOut(BaseModel):
@@ -44,6 +46,8 @@ class BidOut(BaseModel):
     submitted_amount_cents: int | None
     result_rank: int | None
     result_notes: str | None
+    minutes_with_pilao: int | None = None
+    minutes_usual: int | None = None
     created_at: datetime
 
 

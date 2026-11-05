@@ -71,6 +71,8 @@ class Settings(BaseSettings):
     email_verify_ttl_hours: int = 48
     invitation_ttl_hours: int = 24 * 7  # link sent to an invited colleague
     max_users_per_org: int = 25  # guard; the real limit will come with the plans (Q3)
+    feedback_email: str = ""  # the team's inbox: every feedback is mailed there at once
+    feedback_max_per_hour: int = 20
     email_verify_max_per_hour: int = 5  # resend cap per account (anti mail-bombing)
     login_max_failures_per_email: int = 5
     login_max_failures_per_ip: int = 30

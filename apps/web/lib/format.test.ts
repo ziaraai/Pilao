@@ -7,6 +7,9 @@ import {
   centsToInput,
   formatCents,
   formatDate,
+  formatDuration,
+  minutesToHours,
+  parseHours,
   fromParisInput,
   parseEuros,
   splitList,
@@ -80,5 +83,27 @@ describe("control widths", () => {
     expect(controlClass("w-24")).not.toContain("w-full");
     expect(controlClass("min-w-64 flex-1")).not.toContain("w-full");
     expect(controlClass("text-xs")).toContain("w-full");
+  });
+});
+
+describe("durations", () => {
+  it("reads hours the way people write them", () => {
+    expect(parseHours("2")).toBe(120);
+    expect(parseHours("2,5")).toBe(150);
+    expect(parseHours("2.5")).toBe(150);
+    expect(parseHours("2h30")).toBe(150);
+    expect(parseHours("2 h 30")).toBe(150);
+    expect(parseHours("8h")).toBe(480);
+    expect(parseHours("")).toBeNull();
+    expect(parseHours("2h75")).toBeNull();
+    expect(parseHours("deux heures")).toBeNull();
+  });
+
+  it("shows minutes as hours", () => {
+    expect(minutesToHours(150)).toBe("2,5");
+    expect(minutesToHours(null)).toBe("");
+    expect(formatDuration(45)).toBe("45 min");
+    expect(formatDuration(360)).toBe("6 h");
+    expect(formatDuration(390)).toBe("6 h 30");
   });
 });

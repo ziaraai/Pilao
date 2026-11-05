@@ -9,6 +9,7 @@ import { DceSection } from "@/components/dossier/dce";
 import { DocumentsSection } from "@/components/dossier/documents";
 import { MemoirSection } from "@/components/dossier/memoir";
 import { ResultSection } from "@/components/dossier/result";
+import { TimeSpent } from "@/components/dossier/time-spent";
 import {
   Alert,
   Button,
@@ -91,6 +92,11 @@ export default function BidPage() {
       {action.error && <Alert tone="danger">{action.error}</Alert>}
       <ResultSection
         key={`${b.id}:${b.status}`}
+        bid={b}
+        onSaved={bid.setData}
+      />
+      <TimeSpent
+        key={`time:${b.id}:${b.status}`}
         bid={b}
         onSaved={bid.setData}
       />

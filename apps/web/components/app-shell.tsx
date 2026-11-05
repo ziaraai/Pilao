@@ -4,6 +4,7 @@ import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { useEffect } from "react";
 
+import { FeedbackButton } from "@/components/feedback";
 import { LegalLinks } from "@/components/legal";
 import { Logo } from "@/components/logo";
 import { Alert, Button, Loading } from "@/components/ui";
@@ -84,6 +85,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
               })}
             </nav>
             <div className="ml-auto flex items-center gap-3 text-sm text-slate-600">
+              <FeedbackButton />
               <span className="hidden sm:inline">{me.data.org.name}</span>
               <Button variant="ghost" onClick={logout}>
                 Déconnexion

@@ -101,6 +101,7 @@ LLM_ZERO_DATA_RETENTION=false      # true : uniquement les fournisseurs qui ne g
 LOGIN_ATTEMPTS_RETENTION_DAYS=30   # puis effacées (tâche horaire)
 INVITATION_TTL_HOURS=168           # lien d'invitation d'un collaborateur (7 jours)
 MAX_USERS_PER_ORG=25               # garde-fou en attendant les formules
+FEEDBACK_EMAIL=equipe@…            # chaque avis « Votre avis » y est transmis aussitôt
 # Intégrations
 BOAMP_BASE_URL=https://boamp-datadila.opendatasoft.com/api/explore/v2.1
 TED_BASE_URL=https://api.ted.europa.eu/v3

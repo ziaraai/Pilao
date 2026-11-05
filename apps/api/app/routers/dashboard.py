@@ -10,6 +10,7 @@ from app.routers.tenders import match_out
 from app.schemas.bids import BidOut
 from app.schemas.tenders import TenderMatchOut
 from app.schemas.vault import ComplianceDocOut
+from app.services import feedback as feedback_svc
 from app.services import vault as vault_svc
 from app.services.documents import today_paris
 
@@ -25,6 +26,13 @@ class ResultsOut(BaseModel):
     success_rate: float | None  # won / (won + lost), None before the first result
 
 
+class TimeSavedOut(BaseModel):
+    bids: int  # bids where both durations are filled in
+    minutes_with_pilao: int
+    minutes_usual: int
+    minutes_saved: int
+
+
 class DashboardOut(BaseModel):
     new_tenders: int  # matched these last 7 days, still open
     best_tenders: list[TenderMatchOut]
@@ -32,6 +40,7 @@ class DashboardOut(BaseModel):
     deadlines_soon: list[BidOut]  # open bids due within 10 days
     documents_to_renew: list[ComplianceDocOut]
     results: ResultsOut
+    time_saved: TimeSavedOut
 
 
 @router.get("/dashboard")
@@ -62,6 +71,7 @@ def dashboard(ctx: CurrentAuth, db: ScopedDb) -> DashboardOut:
     ]
     summary = vault_svc.summary(db, ctx.org, today_paris())
     won, lost = len(by_status["won"]), len(by_status["lost"])
+    saved = feedback_svc.time_saved(db)
     return DashboardOut(
         new_tenders=len(fresh),
         best_tenders=[match_out(m, t) for m, t in fresh[:3]],
@@ -73,5 +83,11 @@ def dashboard(ctx: CurrentAuth, db: ScopedDb) -> DashboardOut:
             lost=lost,
             submitted=len(by_status["submitted"]),
             success_rate=round(won / (won + lost), 2) if won + lost else None,
+        ),
+        time_saved=TimeSavedOut(
+            bids=saved.bids,
+            minutes_with_pilao=saved.minutes_with,
+            minutes_usual=saved.minutes_usual,
+            minutes_saved=saved.minutes_saved,
         ),
     )

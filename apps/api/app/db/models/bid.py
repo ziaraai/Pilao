@@ -43,6 +43,9 @@ class Bid(IdMixin, TimestampMixin, OrgScoped, Base):
     submitted_amount_cents: Mapped[int | None] = mapped_column(BigInteger)
     result_rank: Mapped[int | None] = mapped_column(Integer)
     result_notes: Mapped[str | None] = mapped_column(Text)
+    # Time spent on this bid with Pilao, and what it usually takes without (P4-02)
+    minutes_with_pilao: Mapped[int | None] = mapped_column(Integer)
+    minutes_usual: Mapped[int | None] = mapped_column(Integer)
     owner_user_id: Mapped[uuid.UUID | None] = mapped_column(
         UUID(as_uuid=True), ForeignKey("users.id", ondelete="SET NULL")
     )
