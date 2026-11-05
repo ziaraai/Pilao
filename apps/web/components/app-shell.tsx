@@ -9,7 +9,7 @@ import { Logo } from "@/components/logo";
 import { Alert, Button, Loading } from "@/components/ui";
 import { api } from "@/lib/api";
 import { AuthContext } from "@/lib/auth";
-import { useApi } from "@/lib/hooks";
+import { useAction, useApi } from "@/lib/hooks";
 import { formatDate } from "@/lib/format";
 import type { Deletion, Me, VaultSummary } from "@/lib/types";
 
@@ -93,7 +93,13 @@ export function AppShell({ children }: { children: React.ReactNode }) {
         </header>
         <DeletionBanner />
         <VaultBanner />
-        <main className="mx-auto max-w-6xl px-4 py-8">{children}</main>
+        <main className="mx-auto max-w-6xl px-4 py-8">
+          {me.data.terms_current !== false ? ( // an older API omits it: never block
+            children
+          ) : (
+            <TermsUpdate onAccepted={me.reload} />
+          )}
+        </main>
         <footer className="mx-auto max-w-6xl px-4 pb-8">
           <LegalLinks />
         </footer>
@@ -146,6 +152,58 @@ function DeletionBanner() {
       <Link href="/profil" className="font-semibold underline">
         Annuler ou exporter
       </Link>
+    </div>
+  );
+}
+
+/** The terms changed since this account accepted them (CGU art. 12): accept to go on. */
+function TermsUpdate({ onAccepted }: { onAccepted: () => void }) {
+  const accept = useAction();
+  return (
+    <div className="mx-auto max-w-xl space-y-4 rounded-lg bg-white p-6 shadow-sm ring-1 ring-slate-200">
+      <h1 className="text-xl font-bold text-brand-navy">
+        Nos conditions ont changé
+      </h1>
+      <p className="text-sm text-slate-700">
+        Pour continuer à utiliser Pilao, prenez connaissance des nouvelles{" "}
+        <Link
+          href="/conditions-utilisation"
+          target="_blank"
+          className="font-semibold text-brand-navy underline"
+        >
+          conditions d&apos;utilisation
+        </Link>
+        , de l&apos;
+        <Link
+          href="/accord-de-traitement"
+          target="_blank"
+          className="font-semibold text-brand-navy underline"
+        >
+          accord de traitement des données
+        </Link>{" "}
+        et de la{" "}
+        <Link
+          href="/confidentialite"
+          target="_blank"
+          className="font-semibold text-brand-navy underline"
+        >
+          politique de confidentialité
+        </Link>
+        . Vos données restent accessibles : un administrateur peut aussi les
+        exporter ou les faire supprimer depuis Profil &gt; Vos données.
+      </p>
+      {accept.error && <Alert tone="danger">{accept.error}</Alert>}
+      <Button
+        busy={accept.busy}
+        onClick={async () => {
+          const ok = await accept.run(() =>
+            api<Me>("/auth/accept-terms", { method: "POST" }),
+          );
+          if (ok) onAccepted();
+        }}
+      >
+        J&apos;accepte les nouvelles conditions
+      </Button>
     </div>
   );
 }

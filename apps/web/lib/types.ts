@@ -6,6 +6,7 @@ export type Me = {
   full_name: string | null;
   role: string;
   org: { id: string; name: string; siret: string };
+  terms_current: boolean;
 };
 
 export type CompanyLookup = {

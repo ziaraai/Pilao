@@ -73,7 +73,7 @@ Reste à faire :
 - [ ] P4-02 Collecte des retours (formulaire + entretiens), suivi des temps gagnés
 - [ ] P4-03 Corrections et ajustements des prompts
 - [ ] P4-04 Pages légales (CGU, confidentialité, DPA), mise en production UE — images de production, garde-fous de démarrage et guide faits (ADR-025, `docs/14-deploiement.md`) ; pages légales rédigées, acceptation enregistrée, rétention et non-entraînement appliqués par le code (ADR-029) ; restent les informations de la société (Q5), l'hébergeur (Q7), la relecture juridique (Q16)
-- [ ] Réacceptation des conditions à la connexion quand `TERMS_VERSION` change (promis à l'article 12 des CGU : à faire avant la première modification des textes)
+- [x] Réacceptation des conditions quand `TERMS_VERSION` change (article 12 des CGU) : écran bloquant « Nos conditions ont changé », `POST /auth/accept-terms` (ADR-029)
 - [ ] P4-05 Décision prix et formules
 
 ## V2 (après validation)

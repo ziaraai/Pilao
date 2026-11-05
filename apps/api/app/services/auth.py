@@ -220,6 +220,13 @@ def open_session(db: Session, user: User, ip: str | None, user_agent: str | None
     return token
 
 
+def accept_terms(db: Session, user: User) -> None:
+    if user.terms_version != TERMS_VERSION:
+        user.terms_accepted_at, user.terms_version = _now(), TERMS_VERSION
+        _audit(db, user, "accept_terms", "user", user.id)
+        db.commit()
+
+
 def logout(db: Session, session: UserSession) -> None:
     if session.revoked_at is None:
         session.revoked_at = _now()

@@ -44,6 +44,26 @@ def test_register_requires_and_records_the_acceptance_of_the_terms(
     assert before <= user.terms_accepted_at <= datetime.now(UTC)
 
 
+def test_changed_terms_are_accepted_again_once(
+    make_client: Factory, outbox: Outbox, db: Session
+) -> None:
+    c = signed_in_client(make_client, outbox)
+    assert c.get("/auth/me").json()["terms_current"] is True
+    db.execute(update(User).values(terms_version="2020-01-01"))  # the texts have changed
+    db.commit()
+    assert c.get("/auth/me").json()["terms_current"] is False
+    before = datetime.now(UTC)
+    assert c.post("/auth/accept-terms").json()["terms_current"] is True
+    user = db.scalars(select(User)).one()
+    db.refresh(user)
+    assert user.terms_version == TERMS_VERSION and user.terms_accepted_at >= before  # type: ignore[operator]
+    first = user.terms_accepted_at
+    c.post("/auth/accept-terms")  # already current: the date of acceptance is kept
+    db.refresh(user)
+    assert user.terms_accepted_at == first
+    assert make_client().post("/auth/accept-terms").status_code == 401
+
+
 def test_the_terms_version_is_the_one_the_pages_show() -> None:
     pages = Path(__file__).resolve().parents[3] / "web" / "lib" / "legal.ts"
     if not pages.exists():  # the API image ships without the web app

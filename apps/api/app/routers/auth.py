@@ -7,6 +7,7 @@ from sqlalchemy.orm import Session
 from app.core.config import get_settings
 from app.core.deps import CurrentAuth
 from app.core.email import Mailer, get_mailer
+from app.core.legal import TERMS_VERSION
 from app.db.models import Organization, User
 from app.db.session import get_db
 from app.integrations.recherche_entreprises import CompanyDirectory, get_company_directory
@@ -36,6 +37,7 @@ def _me_from(user: User, org: Organization) -> MeOut:
         full_name=user.full_name,
         role=user.role,
         org=OrgOut(id=org.id, name=org.name, siret=org.siret),
+        terms_current=user.terms_version == TERMS_VERSION,
     )
 
 
@@ -107,4 +109,11 @@ def logout(response: Response, db: Db, ctx: CurrentAuth) -> MessageOut:
 
 @router.get("/me")
 def me(ctx: CurrentAuth) -> MeOut:
+    return _me_from(ctx.user, ctx.org)
+
+
+@router.post("/accept-terms")
+def accept_terms(db: Db, ctx: CurrentAuth) -> MeOut:
+    """The current version of the terms, accepted again after a change (CGU art. 12)."""
+    svc.accept_terms(db, ctx.user)
     return _me_from(ctx.user, ctx.org)

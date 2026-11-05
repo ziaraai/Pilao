@@ -68,6 +68,7 @@ class MeOut(BaseModel):
     full_name: str | None
     role: str
     org: OrgOut
+    terms_current: bool = True  # False: the terms changed since this account accepted them
 
 
 class MessageOut(BaseModel):
