@@ -4,6 +4,7 @@ import uuid
 
 from app.ai.embeddings import get_embedder
 from app.core.email import get_mailer
+from app.core.logging import configure_logging
 from app.db.session import get_sessionmaker
 from app.documents.ocr import get_ocr_engine
 from app.exports.pdf import get_pdf_converter
@@ -19,6 +20,8 @@ from app.services.vault import run_read_document
 from app.storage.antivirus import get_scanner
 from app.storage.objects import get_storage
 from app.workers.queue import get_job_queue
+
+configure_logging()
 
 
 def index_document_job(doc_id: str) -> None:

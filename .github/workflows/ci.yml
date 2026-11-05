@@ -42,3 +42,33 @@ jobs:
       - run: pnpm typecheck
       - run: pnpm test
       - run: pnpm build
+  images:
+    # The production images build, and carry what the application needs at run time.
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: docker/setup-buildx-action@v3
+      - name: API image (api, worker, scheduler)
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: apps/api/Dockerfile
+          tags: pilao-api:ci
+          load: true
+          cache-from: type=gha,scope=api
+          cache-to: type=gha,scope=api,mode=max
+      - name: Web image
+        uses: docker/build-push-action@v6
+        with:
+          context: apps/web
+          build-args: NEXT_PUBLIC_API_URL=https://api.example.invalid
+          tags: pilao-web:ci
+          load: true
+          cache-from: type=gha,scope=web
+          cache-to: type=gha,scope=web,mode=max
+      - name: Smoke test of the API image
+        run: |
+          docker run --rm -e ENVIRONMENT=local pilao-api:ci python -c "from app.ai.prompts import load_prompt; from app.services.dce_analysis import SCHEMA_PATH; assert SCHEMA_PATH.exists(); [load_prompt(p) for p in ('extraction_dce', 'scoring_annonce', 'generation_memoire_chapitre')]"
+          docker run --rm pilao-api:ci tesseract --list-langs | grep -qx fra
+          docker run --rm pilao-api:ci soffice --version
+

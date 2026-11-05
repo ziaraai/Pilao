@@ -1,7 +1,18 @@
 from functools import lru_cache
 from pathlib import Path
 
+from pydantic import Field
 from pydantic_settings import BaseSettings, SettingsConfigDict
+
+
+def _default_prompts_dir() -> str:
+    """The nearest ``prompts`` folder above this file: the repository root in development,
+    ``/app/prompts`` in the image (where PROMPTS_DIR is also set)."""
+    here = Path(__file__).resolve()
+    for parent in here.parents:
+        if (parent / "prompts").is_dir():
+            return str(parent / "prompts")
+    return str(here.parents[2] / "prompts")
 
 
 class Settings(BaseSettings):
@@ -36,7 +47,7 @@ class Settings(BaseSettings):
     # DCE text sent per analysis call (~3.8 chars/token: 300k chars ≈ 80k tokens).
     dce_analysis_max_chars: int = 300_000
     dce_analysis_max_calls: int = 8
-    prompts_dir: str = str(Path(__file__).resolve().parents[4] / "prompts")
+    prompts_dir: str = Field(default_factory=lambda: _default_prompts_dir())
     # Embedding model (LiteLLM name, e.g. "openrouter/..."), fixed after phase 0 (ADR-005).
     # Empty = deterministic local HashEmbedder (development and tests only).
     embedding_model: str = ""
@@ -56,6 +67,23 @@ class Settings(BaseSettings):
     @property
     def cookie_secure(self) -> bool:
         return self.environment == "production"
+
+    def production_problems(self) -> list[str]:
+        """Settings that must never reach production: the API refuses to start with them."""
+        if self.environment != "production":
+            return []
+        problems = []
+        if not self.app_base_url.startswith("https://"):
+            problems.append("APP_BASE_URL doit être en https:// (cookies sécurisés).")
+        if "pilao:pilao@" in self.database_url or "localhost" in self.database_url:
+            problems.append("DATABASE_URL utilise les identifiants ou l'hôte de développement.")
+        if self.s3_bucket == "pilao-local" or not (self.s3_access_key and self.s3_secret_key):
+            problems.append("S3_BUCKET, S3_ACCESS_KEY et S3_SECRET_KEY de production sont requis.")
+        if not self.clamav_host:
+            problems.append("CLAMAV_HOST est requis (antivirus des fichiers déposés).")
+        if not self.embedding_model:
+            problems.append("EMBEDDING_MODEL est requis (recherche dans la base documentaire).")
+        return problems
 
 
 @lru_cache

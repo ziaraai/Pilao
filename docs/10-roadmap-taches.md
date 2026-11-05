@@ -69,7 +69,7 @@ Reste à faire :
 - [ ] P4-01 Onboarding accompagné d'Abdraouf puis des testeurs
 - [ ] P4-02 Collecte des retours (formulaire + entretiens), suivi des temps gagnés
 - [ ] P4-03 Corrections et ajustements des prompts
-- [ ] P4-04 Pages légales (CGU, confidentialité, DPA), mise en production UE
+- [ ] P4-04 Pages légales (CGU, confidentialité, DPA), mise en production UE — images de production, garde-fous de démarrage et guide faits (ADR-025, `docs/14-deploiement.md`) ; restent les pages légales et le choix de l'hébergeur (Q5, Q7)
 - [ ] P4-05 Décision prix et formules
 
 ## V2 (après validation)

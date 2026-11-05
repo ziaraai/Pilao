@@ -198,3 +198,19 @@ Format : numéro, date, décision, raison, statut. Ajouter une entrée pour chaq
 - **Résultat (US-5.4)** : sur un dossier déposé, gagné ou perdu, on saisit le montant proposé, le classement et les notes ou retours de l'acheteur.
 - **Statut** : validé.
 
+
+## ADR-025 — Images de production et garde-fous de démarrage
+- **Date** : 2026-11-05
+- **Deux images** :
+  - `pilao-api` sert à l'API, au worker, au planificateur et aux migrations. Une seule image garantit qu'ils tournent toujours sur le même code.
+  - `pilao-web` est le serveur Next.js autonome (`output: "standalone"`, activé seulement dans l'image ; `pnpm start` reste utilisable en local).
+- **Base Ubuntu 24.04 pour `pilao-api`** : Python 3.12 (la version du projet), LibreOffice 24.2 (celle avec laquelle l'export PDF et son sommaire sont testés), Tesseract en français. L'image pèse environ 2 Go, surtout à cause de LibreOffice. On pourra plus tard une image API sans LibreOffice ni Tesseract, que seuls les workers utilisent.
+- **Construction reproductible** :
+  - `uv sync --frozen` à partir de `uv.lock`, `pnpm install --frozen-lockfile`.
+  - Un certificat de proxy d'entreprise peut être passé en secret de construction : il n'est jamais écrit dans l'image.
+  - apt garde ses sources signées et ne passe en HTTPS qu'avec ce certificat.
+- **Fichiers d'exécution** : `prompts/` et `schemas/` sont copiés dans l'image, et un test vérifie le Dockerfile. Le parcours navigateur joué contre les images a révélé que `schemas/` manquait, et que le chemin par défaut des prompts supposait l'arborescence du dépôt (plantage à l'import).
+- **Aucun téléchargement au démarrage** : LiteLLM utilise sa grille de prix embarquée.
+- **Démarrage en production refusé** tant qu'un réglage de développement reste : adresse web non `https://`, base de données de développement, stockage S3 local ou sans clés, antivirus ou modèle d'embeddings absent. `/ready` contrôle la base et Redis.
+- **Hébergeur** : non choisi (Q7). Les images ne dépendent d'aucun hébergeur, et `infra/docker-compose.prod.yml` sert d'exemple.
+- **Statut** : validé.

@@ -29,6 +29,7 @@ Ce fichier est le point d'entrée. Lis-le en entier au début de chaque session,
 | Protocole de test et d'évaluation IA | `docs/11-tests-evaluation.md` |
 | Décisions d'architecture (ADR) | `docs/12-decisions.md` |
 | Questions ouvertes | `docs/13-questions-ouvertes.md` |
+| Déploiement (images Docker, production) | `docs/14-deploiement.md` |
 | Prompts IA | `prompts/*.md` |
 | Schémas JSON | `schemas/*.json` |
 | Codes CPV du nettoyage | `data/cpv-nettoyage.md` |

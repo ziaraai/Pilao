@@ -1,0 +1,41 @@
+# Example production deployment with the images of apps/api/Dockerfile and apps/web/Dockerfile.
+# PostgreSQL 16 + pgvector, Redis and the S3 storage are managed services in the EU (Q7):
+# their addresses come from infra/production.env (copy production.env.example, never commit it).
+# TLS ends at the provider's load balancer or a reverse proxy in front of api and web.
+#   docker compose -f infra/docker-compose.prod.yml --env-file infra/production.env up -d
+x-api: &api
+  image: ${PILAO_API_IMAGE:-pilao-api:latest}
+  env_file: production.env
+  restart: unless-stopped
+
+services:
+  migrate:  # once per deployment, before the new api and workers start
+    <<: *api
+    command: ["alembic", "upgrade", "head"]
+    restart: "no"
+  api:
+    <<: *api
+    depends_on:
+      migrate: { condition: service_completed_successfully }
+      clamav: { condition: service_started }
+    ports: ["8000:8000"]
+  worker:  # DCE processing, AI analysis, drafting, exports, watch: scale with --scale worker=N
+    <<: *api
+    command: ["sh", "-c", "exec rq worker -u \"$$REDIS_URL\" default"]
+    depends_on:
+      migrate: { condition: service_completed_successfully }
+    healthcheck: { disable: true }
+  scheduler:  # one is enough; a second one would do no harm (idempotent jobs, ADR-024)
+    <<: *api
+    command: ["sh", "-c", "exec rq cron app/workers/cron.py -u \"$$REDIS_URL\""]
+    depends_on:
+      migrate: { condition: service_completed_successfully }
+    healthcheck: { disable: true }
+  web:
+    image: ${PILAO_WEB_IMAGE:-pilao-web:latest}  # built with NEXT_PUBLIC_API_URL of the api
+    restart: unless-stopped
+    ports: ["3000:3000"]
+  clamav:
+    # DCE deposits go up to 250 MB: set "StreamMaxLength 260M" in clamd.conf (default 100 MB).
+    image: clamav/clamav:stable
+    restart: unless-stopped

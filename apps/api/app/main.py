@@ -3,10 +3,17 @@ from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import JSONResponse
+from redis import Redis
+from redis.exceptions import RedisError
+from sqlalchemy import text
+from sqlalchemy.exc import SQLAlchemyError
 
 from app.core.config import get_settings
 from app.core.errors import install_error_handlers
 from app.core.limits import BodySizeLimitMiddleware
+from app.core.logging import configure_logging
+from app.db.session import get_sessionmaker
 from app.routers import (
     auth,
     bids,
@@ -25,10 +32,14 @@ from app.storage.antivirus import get_scanner
 
 @asynccontextmanager
 async def lifespan(_: FastAPI) -> AsyncIterator[None]:
+    problems = get_settings().production_problems()
+    if problems:  # fail closed: never serve with development settings (ADR-025)
+        raise RuntimeError("Configuration de production incomplète : " + " ".join(problems))
     get_scanner()  # production without CLAMAV_HOST: refuse to start (ADR-011), fail closed
     yield
 
 
+configure_logging()
 app = FastAPI(title="Pilao API", lifespan=lifespan)
 install_error_handlers(app)
 app.add_middleware(BodySizeLimitMiddleware)
@@ -57,3 +68,22 @@ app.include_router(dashboard.router)
 def health() -> dict[str, str]:
     get_settings()
     return {"status": "ok"}
+
+
+@app.get("/ready")
+def ready() -> JSONResponse:
+    """For the load balancer: the API answers only when its database and Redis answer."""
+    checks: dict[str, str] = {}
+    try:
+        with get_sessionmaker()() as db:
+            db.execute(text("select 1"))
+        checks["database"] = "ok"
+    except SQLAlchemyError:
+        checks["database"] = "unavailable"
+    try:
+        Redis.from_url(get_settings().redis_url, socket_timeout=2).ping()
+        checks["redis"] = "ok"
+    except RedisError:
+        checks["redis"] = "unavailable"
+    ok = all(v == "ok" for v in checks.values())
+    return JSONResponse({"status": "ok" if ok else "unavailable", **checks}, 200 if ok else 503)

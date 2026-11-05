@@ -151,11 +151,26 @@ def test_production_without_antivirus_refuses_to_start(monkeypatch) -> None:  # 
     from app.storage.antivirus import ScannerUnavailable, get_scanner
 
     get_scanner.cache_clear()
-    monkeypatch.setattr(get_settings(), "environment", "production")
-    monkeypatch.setattr(get_settings(), "clamav_host", None)
+    settings = get_settings()
+    for key, value in {  # a production configuration complete but for the antivirus
+        "environment": "production",
+        "app_base_url": "https://app.pilao.fr",
+        "database_url": "postgresql+psycopg://app:secret@db.internal:5432/pilao",
+        "s3_bucket": "pilao-prod",
+        "s3_access_key": "AK",
+        "s3_secret_key": "SK",
+        "embedding_model": "openrouter/embedding",
+        "clamav_host": None,
+    }.items():
+        monkeypatch.setattr(settings, key, value)
     try:
-        with pytest.raises(ScannerUnavailable), TestClient(app):
+        with pytest.raises(RuntimeError, match="CLAMAV_HOST est requis"), TestClient(app):
             pass
+        assert settings.production_problems() == [
+            "CLAMAV_HOST est requis (antivirus des fichiers déposés)."
+        ]
+        with pytest.raises(ScannerUnavailable):  # and the scanner itself fails closed too
+            get_scanner()
     finally:
         get_scanner.cache_clear()
 
