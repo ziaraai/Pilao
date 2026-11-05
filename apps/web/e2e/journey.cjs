@@ -437,14 +437,18 @@ let current; // the page, for a screenshot when a step fails
   await page.getByRole("link", { name: "Annonces", exact: true }).click();
   await page.waitForURL(`${WEB}/annonces`);
   const media = `Nettoyage des locaux de la médiathèque ${n}`;
+  // Open notices of earlier runs match this company too: look at this run's own.
+  const mediaItem = page.locator("li", {
+    has: page.getByRole("heading", { name: media }),
+  });
   for (let i = 0; i < 30; i++) {
     await page.reload();
     await page.getByRole("heading", { name: media }).waitFor();
-    if ((await page.getByText("82 / 100").count()) > 0) break;
+    if ((await mediaItem.getByText("82 / 100").count()) > 0) break;
     await page.waitForTimeout(1000);
   }
-  await page.getByText("82 / 100").waitFor();
-  await page.getByText("Cœur de métier dans votre département.").waitFor();
+  await mediaItem.getByText("82 / 100").waitFor();
+  await mediaItem.getByText("Cœur de métier dans votre département.").waitFor();
   if ((await page.getByText(`Travaux de voirie ${n}`).count()) > 0)
     throw new Error("an unrelated notice passed the pre-filter");
   if ((await page.getByText(`Nettoyage du lycée ${n}`).count()) > 0)
@@ -462,10 +466,7 @@ let current; // the page, for a screenshot when a step fails
   await page.getByRole("tab", { name: "Écartées" }).click();
   await page.getByText("Écartée : Trop petit").waitFor();
   await page.getByRole("tab", { name: "À traiter" }).click();
-  await page
-    .locator("li", { has: page.getByRole("heading", { name: media }) })
-    .getByRole("button", { name: "Suivre" })
-    .click();
+  await mediaItem.getByRole("button", { name: "Suivre" }).click();
   await page.waitForURL(/\/dossiers\/[0-9a-f-]+$/);
   await page.getByRole("heading", { name: media }).waitFor();
   step(
