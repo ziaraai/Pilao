@@ -31,6 +31,8 @@ def test_hash_embedder_is_deterministic_normalized_and_similarity_aware() -> Non
 def test_litellm_embedder_batches_and_sums_usage(monkeypatch: pytest.MonkeyPatch) -> None:
     import litellm
 
+    monkeypatch.setattr(get_settings(), "usd_eur_rate", 0.9)
+
     calls: list[list[str]] = []
 
     def fake_embedding(model: str, input: list[str], **kw: Any) -> Any:
@@ -45,7 +47,7 @@ def test_litellm_embedder_batches_and_sums_usage(monkeypatch: pytest.MonkeyPatch
     result = LiteLLMEmbedder("some/model", 4, batch_size=2).embed(["a", "bb", "ccc", "dddd", "e"])
     assert [len(c) for c in calls] == [2, 2, 1]
     assert [v[0] for v in result.vectors] == [1.0, 2.0, 3.0, 4.0, 1.0]
-    assert result.input_tokens == 50 and result.cost_eur == pytest.approx(0.003)
+    assert result.input_tokens == 50 and result.cost_eur == pytest.approx(0.0027)  # 0.003 $
     assert result.model == "some/model"
 
 

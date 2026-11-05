@@ -7,11 +7,12 @@ Durée estimée de la V1 : environ 4 mois (≈ 80 jours de développement). Coch
 Objectif : savoir si la génération est assez bonne, avec quel modèle, à quel coût.
 
 - [ ] P0-01 Recevoir d'Abdraouf 3 DCE réels + les mémoires envoyés + son mémoire modèle + ses références → `samples/` (non versionné)
-- [ ] P0-02 Script `scripts/eval/extract.py` : extraction texte + OCR des DCE
-- [ ] P0-03 Script d'analyse du DCE avec `prompts/extraction_dce.md` sur 3 à 4 modèles via OpenRouter
-- [ ] P0-04 Script de génération d'un mémoire complet par modèle
-- [ ] P0-05 Anonymiser les sorties (modèle A, B, C…) et produire une grille de notation pour Abdraouf
-- [ ] P0-06 Mesurer coût et durée par DCE et par mémoire
+- [x] P0-02 Extraction texte + OCR des DCE : le traitement du produit, appelé par `eval-models` (ADR-027)
+- [x] P0-03 Analyse du DCE avec `prompts/extraction_dce.md` sur 1 à 6 modèles (`--models`)
+- [x] P0-04 Génération d'un mémoire complet par modèle (chapitres, matrice, export Word)
+- [x] P0-05 Sorties anonymisées (A, B, C… tirées au hasard par DCE) et grille de notation Excel pour Abdraouf
+- [x] P0-06 Coût (en euros) et durée par DCE et par mémoire, métriques d'extraction contre `attendu.json` (`rapport.md`)
+- [ ] P0-06b **Lancer** la comparaison : attend P0-01 (les DCE) et l'accès à OpenRouter depuis l'environnement (`docs/11`)
 - [ ] P0-07 Décision : modèles par tâche → ADR-005, mise à jour de `.env.example`
 
 ## Phase 1 — Socle, profil, coffre-fort, analyse du DCE (4 semaines)

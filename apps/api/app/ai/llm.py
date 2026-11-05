@@ -120,8 +120,9 @@ def _call_provider(
     )
     content = resp.choices[0].message.content or ""
     usage = getattr(resp, "usage", None)
-    try:
+    try:  # LiteLLM prices are in US dollars; the journal and the budget are in euros
         cost = float(litellm.completion_cost(completion_response=resp) or 0.0)
+        cost *= get_settings().usd_eur_rate
     except Exception:  # noqa: BLE001 - unknown price for this model: log 0 rather than fail
         cost = 0.0
     return (

@@ -48,7 +48,8 @@ def configured(monkeypatch: pytest.MonkeyPatch) -> None:
     import litellm
 
     monkeypatch.setattr(get_settings(), "llm_model_vision", "test/vision-model")
-    monkeypatch.setattr(litellm, "completion_cost", lambda **kw: 0.002)
+    monkeypatch.setattr(get_settings(), "usd_eur_rate", 0.9)
+    monkeypatch.setattr(litellm, "completion_cost", lambda **kw: 0.002)  # US dollars
 
 
 def run(db: Session, org_id: uuid.UUID) -> llm.LlmResult[Answer]:
@@ -74,7 +75,8 @@ def test_valid_answer_is_parsed_and_journaled(
     org_id = make_org(db)
     result = run(db, org_id)
     assert result.data == Answer(kind="a", score=3) and result.model == "test/vision-model"
-    assert (result.input_tokens, result.output_tokens, result.cost_eur) == (100, 20, 0.002)
+    assert (result.input_tokens, result.output_tokens) == (100, 20)
+    assert result.cost_eur == pytest.approx(0.0018)  # converted to euros
     assert calls[0]["model"] == "test/vision-model" and calls[0]["temperature"] == 0
     row = db.scalars(select(AiCall)).one()
     assert (row.task, row.prompt_version, row.success, row.input_tokens) == (

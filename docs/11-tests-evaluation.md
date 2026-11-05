@@ -15,6 +15,64 @@
 5. Relever coût et durée.
 6. Décider (ADR-005) : meilleur rapport qualité / coût par tâche.
 
+## Lancer la comparaison : `eval-models`
+
+L'outil fait passer chaque DCE par **le pipeline du produit lui-même** : traitement du DCE (texte, OCR), analyse, plan, rédaction des chapitres, matrice de conformité, export Word. Il le fait une fois par modèle. Ce qui est mesuré est donc exactement ce que l'entreprise recevra (ADR-027).
+
+**1. Préparer `samples/`** (non versionné) :
+
+```
+samples/entreprise.json        l'entreprise : nom, ville, profil, moyens humains et matériels, certifications, références
+samples/base/*.docx|pdf        sa base documentaire ; les fichiers « modele* » sont pris comme mémoire modèle
+samples/<dce>/dce/*            le DCE tel que reçu (ZIP, PDF, Word, Excel)
+samples/<dce>/attendu.json     la fiche d'analyse attendue (facultative, sert aux métriques)
+```
+
+`entreprise.json` reprend les champs des formulaires du profil :
+
+```json
+{"name": "…", "city": "…",
+ "profile": {"trades": ["nettoyage_locaux"], "departments": ["69"]},
+ "human_resources": [{"qualification": "Agent de propreté", "count": 12}],
+ "equipment": [{"name": "Autolaveuse", "quantity": 2}],
+ "certifications": [{"name": "ISO 14001"}],
+ "references": [{"client_name": "…", "client_type": "public", "title": "…", "year": 2025}]}
+```
+
+`attendu.json` suit le format de l'analyse (`schemas/`), en plus simple : les valeurs sont écrites directement, sans `source`, sauf la page des exigences. Seuls les champs remplis sont notés.
+
+```json
+{"key_info": {"buyer_name": "…", "title": "…", "submission_deadline": "2026-12-15T12:00",
+              "estimated_amount_eur_ht": 120000},
+ "site_visit": {"mandatory": true},
+ "memoir_requirements": {"max_pages": 20, "imposed_outline": ["1. Moyens", "2. Méthodologie"]},
+ "award_criteria": [{"name": "Valeur technique", "weight_pct": 60}, {"name": "Prix", "weight_pct": 40}],
+ "requirements": [{"text": "Nettoyage quotidien des bureaux avant 8h", "source": {"page": 3}}]}
+```
+
+**2. Lancer**, sur une base dédiée (l'outil refuse la production, et toute base dont le nom ne finit pas par `_eval` sauf `--any-database`) :
+
+```bash
+createdb pilao_eval && cd apps/api
+DATABASE_URL=postgresql+psycopg://pilao:pilao@localhost:5432/pilao_eval uv run alembic upgrade head
+DATABASE_URL=…/pilao_eval EMBEDDING_MODEL=… uv run python -m app.cli eval-models \
+  --models openrouter/modele-1,openrouter/modele-2,openrouter/modele-3 --seed 42
+```
+
+- Chaque modèle fait **toutes** les tâches de son passage : analyse, rédaction, matrice.
+- Chaque couple (DCE, modèle) a sa propre organisation : le journal `ai_calls` en donne le coût et la durée exacts.
+- Renseigner `EMBEDDING_MODEL` pour que la recherche dans la base documentaire soit celle de la production ; sinon les embeddings factices servent, à l'identique pour tous les modèles.
+- L'OCR demande Tesseract (voir `CLAUDE.md`).
+
+**3. Résultats** (`samples/resultats/` par défaut) :
+
+- `<dce>/memoire-A.docx`, `<dce>/analyse-A.json`, … sont anonymisés : lettres tirées au hasard pour chaque DCE (`--seed` rend le tirage reproductible). Ils portent le vrai nom de l'entreprise, jamais celui du modèle.
+- `grille-de-notation.xlsx` : une ligne par mémoire, la moyenne se calcule seule. L'onglet « Consignes » reprend les questions et le seuil.
+- `rapport.md` : par modèle, le coût en euros (analyse et rédaction), la durée, les appels en échec, les chapitres rédigés, les `[À COMPLÉTER]` et les métriques d'extraction ci-dessous.
+- `correspondance-a-garder.json` : quelle lettre est quel modèle.
+
+**À envoyer au noteur** : les dossiers des DCE et la grille. **À garder** : `rapport.md` et `correspondance-a-garder.json`, qui révèlent les modèles.
+
 ## Grille de notation du mémoire (sur 10 par critère)
 
 | Critère | Question posée au noteur |

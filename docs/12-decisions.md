@@ -230,3 +230,14 @@ Format : numéro, date, décision, raison, statut. Ajouter une entrée pour chaq
 - **Sauvegardes** : une entreprise effacée subsiste dans les sauvegardes jusqu'à leur expiration. La durée de conservation des sauvegardes est à fixer avec l'hébergeur (Q7) et à écrire dans la politique de confidentialité.
 - **Statut** : validé.
 
+
+## ADR-027 — Évaluation des modèles par le pipeline du produit, coûts en euros
+- **Date** : 2026-11-05
+- **Décision** : la comparaison de la phase 0 (`python -m app.cli eval-models`, `app/evaluation.py`) ne passe pas par des scripts à part (`scripts/eval/` prévus dans la roadmap). Elle appelle les services du produit, avec les mêmes prompts, le même découpage du DCE, la même recherche dans la base documentaire et le même export Word :
+  - les tâches de la file sont exécutées dans le même processus, dans l'ordre ;
+  - les fichiers sont stockés sur le disque local ;
+  - chaque couple (DCE, modèle) a sa propre organisation, dans une base dédiée (`*_eval`, jamais la production).
+- **Raison** : on choisit un modèle pour ce que l'entreprise recevra vraiment. Un script séparé divergerait du produit dès la première modification de prompt. Le journal `ai_calls` donne le coût exact de chaque passage, sans compteur à part.
+- **Anonymat** : les lettres sont tirées au hasard pour chaque DCE. Les fichiers envoyés au noteur (mémoires, analyses, grille) ne contiennent jamais le nom du modèle, et un test le vérifie. La correspondance reste dans `correspondance-a-garder.json`.
+- **Coûts** : LiteLLM donne les prix en dollars, alors que `ai_calls.cost_eur` et le budget mensuel sont en euros. Le coût est donc converti avec `USD_EUR_RATE` (0,86 par défaut). Il faut mettre ce taux à jour de temps en temps : c'est un garde-fou de budget, pas de la comptabilité.
+- **Statut** : validé.

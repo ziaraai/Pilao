@@ -78,6 +78,7 @@ cd apps/api && uv sync && uv run alembic upgrade head && uv run fastapi dev app/
 cd apps/api && uv run rq worker -u $REDIS_URL        # worker (indexation, lecture IA, DCE, rédaction, exports, veille)
 cd apps/api && uv run rq cron app/workers/cron.py -u $REDIS_URL  # tâches planifiées (alertes quotidiennes)
 cd apps/api && uv run python -m app.cli load-tenders annonces.json  # charger des annonces au format normalisé
+cd apps/api && uv run python -m app.cli eval-models --models a,b,c  # phase 0 : comparer des modèles (docs/11, base *_eval)
 sudo apt-get install tesseract-ocr tesseract-ocr-fra libreoffice-writer-nogui fonts-liberation  # OCR et export PDF (worker)
 cd apps/web && pnpm install && pnpm dev               # NEXT_PUBLIC_API_URL=http://localhost:8000 par défaut
 cd apps/web && pnpm test                             # tests unitaires du front ; parcours navigateur : apps/web/e2e/README.md
