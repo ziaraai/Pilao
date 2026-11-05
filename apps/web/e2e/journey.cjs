@@ -397,6 +397,109 @@ let current; // the page, for a screenshot when a step fails
     .waitFor();
   step("knowledge base: indexed and searchable");
 
+  // 9. Watch: notices through the importer path, pre-filtered and scored (P3-01..P3-04)
+  const inDays = (d) => new Date(Date.now() + d * 86400000).toISOString();
+  const notice = (id, title, cpv, dep, amount) => ({
+    source: "boamp",
+    source_id: `E2E-${n}-${id}`,
+    title: `${title} ${n}`,
+    buyer_name: "Ville de Lyon",
+    procedure: "Procédure adaptée",
+    cpv_codes: [cpv],
+    departments: [dep],
+    estimated_amount_eur: amount,
+    published_at: inDays(-1),
+    deadline_at: inDays(15),
+    notice_url: `https://www.boamp.fr/avis/detail/E2E-${n}-${id}`,
+  });
+  fs.writeFileSync(
+    `${S}/annonces.json`,
+    JSON.stringify([
+      notice(
+        1,
+        "Nettoyage des locaux de la médiathèque",
+        "90911200",
+        "69",
+        150000,
+      ),
+      notice(2, "Vitrerie de la piscine municipale", "90911300", "01", 40000),
+      notice(3, "Travaux de voirie", "45233140", "69", 300000),
+      notice(4, "Nettoyage du lycée", "90911200", "75", 90000),
+    ]),
+  );
+  const loaded = execFileSync(
+    PY,
+    ["-m", "app.cli", "load-tenders", `${S}/annonces.json`],
+    { cwd: `${__dirname}/../../api` },
+  ).toString();
+  if (!loaded.includes("4 créée(s)"))
+    throw new Error("load-tenders: " + loaded);
+  await page.getByRole("link", { name: "Annonces", exact: true }).click();
+  await page.waitForURL(`${WEB}/annonces`);
+  const media = `Nettoyage des locaux de la médiathèque ${n}`;
+  for (let i = 0; i < 30; i++) {
+    await page.reload();
+    await page.getByRole("heading", { name: media }).waitFor();
+    if ((await page.getByText("82 / 100").count()) > 0) break;
+    await page.waitForTimeout(1000);
+  }
+  await page.getByText("82 / 100").waitFor();
+  await page.getByText("Cœur de métier dans votre département.").waitFor();
+  if ((await page.getByText(`Travaux de voirie ${n}`).count()) > 0)
+    throw new Error("an unrelated notice passed the pre-filter");
+  if ((await page.getByText(`Nettoyage du lycée ${n}`).count()) > 0)
+    throw new Error("a notice outside the departments passed the pre-filter");
+  await page.screenshot({ path: `${S}/09-annonces.png`, fullPage: true });
+  const vitrerie = page.locator("li", {
+    has: page.getByRole("heading", {
+      name: `Vitrerie de la piscine municipale ${n}`,
+    }),
+  });
+  await vitrerie.getByRole("button", { name: "Écarter" }).click();
+  await vitrerie.getByLabel("Raison").selectOption("Trop petit");
+  await vitrerie.getByRole("button", { name: "Confirmer" }).click();
+  await vitrerie.waitFor({ state: "detached" });
+  await page.getByRole("tab", { name: "Écartées" }).click();
+  await page.getByText("Écartée : Trop petit").waitFor();
+  await page.getByRole("tab", { name: "À traiter" }).click();
+  await page
+    .locator("li", { has: page.getByRole("heading", { name: media }) })
+    .getByRole("button", { name: "Suivre" })
+    .click();
+  await page.waitForURL(/\/dossiers\/[0-9a-f-]+$/);
+  await page.getByRole("heading", { name: media }).waitFor();
+  step(
+    "notices pre-filtered (area, CPV) and scored; one dismissed with a reason, one followed",
+  );
+
+  // 10. Result of a bid (US-5.4) and dashboard (US-5.3)
+  await page
+    .getByLabel("Statut", { exact: true })
+    .filter({ visible: true })
+    .selectOption("submitted");
+  await page.getByLabel("Montant proposé (€ HT)").fill("148 000");
+  await page.getByLabel("Classement").fill("1");
+  await page
+    .getByLabel("Notes obtenues, retours de l'acheteur")
+    .fill("Technique 52/60");
+  await page.getByRole("button", { name: "Enregistrer le résultat" }).click();
+  await page.getByRole("status").getByText("Enregistré.").waitFor();
+  await page
+    .getByRole("link", { name: "Tableau de bord", exact: true })
+    .click();
+  await page.waitForURL(`${WEB}/tableau-de-bord`);
+  await page.reload();
+  await page.getByText("Nouvelles annonces (7 jours)").waitFor();
+  const submitted = page.locator("div", {
+    has: page.getByRole("heading", { name: /^Déposé \(/ }),
+  });
+  await submitted.getByRole("link", { name: media }).first().waitFor();
+  await page.screenshot({
+    path: `${S}/10-tableau-de-bord.png`,
+    fullPage: true,
+  });
+  step("result saved; dashboard shows the bid among the submitted ones");
+
   // 8. Logout
   await page.getByRole("button", { name: "Déconnexion" }).click();
   await page.waitForURL(/\/connexion/);

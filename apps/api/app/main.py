@@ -11,11 +11,13 @@ from app.routers import (
     auth,
     bids,
     companies,
+    dashboard,
     documents,
     files,
     knowledge,
     memoir,
     profile,
+    tenders,
     vault,
 )
 from app.storage.antivirus import get_scanner
@@ -47,6 +49,8 @@ app.include_router(vault.router)
 app.include_router(bids.router)
 app.include_router(memoir.router)
 app.include_router(documents.router)
+app.include_router(tenders.router)
+app.include_router(dashboard.router)
 
 
 @app.get("/health")

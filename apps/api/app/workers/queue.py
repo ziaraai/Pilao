@@ -13,6 +13,7 @@ DCE_JOB_TIMEOUT_SECONDS = 1800  # 300-page DCE with OCR (US-3.2 CA8 targets 5 mi
 ANALYSIS_JOB_TIMEOUT_SECONDS = 1800
 DRAFT_JOB_TIMEOUT_SECONDS = 900
 INDEX_JOB_TIMEOUT_SECONDS = 900
+TENDER_JOB_TIMEOUT_SECONDS = 1800
 
 
 class JobQueue(Protocol):
@@ -23,6 +24,9 @@ class JobQueue(Protocol):
     def enqueue_draft_section(self, section_id: uuid.UUID) -> None: ...
     def enqueue_conformity(self, memoir_id: uuid.UUID) -> None: ...
     def enqueue_export(self, document_id: uuid.UUID) -> None: ...
+    def enqueue_match_tenders(self, tender_ids: list[uuid.UUID]) -> None: ...
+    def enqueue_rematch_org(self, org_id: uuid.UUID) -> None: ...
+    def enqueue_score_tenders(self, org_id: uuid.UUID) -> None: ...
 
 
 class RqJobQueue:
@@ -98,6 +102,38 @@ class RqJobQueue:
             result_ttl=3600,
             failure_ttl=7 * 24 * 3600,
             retry=Retry(max=2, interval=[30, 120]),
+        )
+
+    def enqueue_match_tenders(self, tender_ids: list[uuid.UUID]) -> None:
+        self._q.enqueue(
+            "app.workers.jobs.match_tenders_job",
+            [str(i) for i in tender_ids],
+            job_timeout=TENDER_JOB_TIMEOUT_SECONDS,
+            result_ttl=3600,
+            failure_ttl=7 * 24 * 3600,
+            retry=Retry(max=2, interval=[60, 300]),
+        )
+
+    def enqueue_rematch_org(self, org_id: uuid.UUID) -> None:
+        self._q.enqueue(
+            "app.workers.jobs.rematch_org_job",
+            str(org_id),
+            job_timeout=TENDER_JOB_TIMEOUT_SECONDS,
+            result_ttl=3600,
+            failure_ttl=7 * 24 * 3600,
+            retry=Retry(max=2, interval=[60, 300]),
+        )
+
+    def enqueue_score_tenders(self, org_id: uuid.UUID) -> None:
+        # One scoring job per company at a time: a second request joins the queued one.
+        self._q.enqueue(
+            "app.workers.jobs.score_tenders_job",
+            str(org_id),
+            job_id=f"score-tenders-{org_id}",
+            job_timeout=TENDER_JOB_TIMEOUT_SECONDS,
+            result_ttl=0,
+            failure_ttl=7 * 24 * 3600,
+            retry=Retry(max=2, interval=[60, 300]),
         )
 
 

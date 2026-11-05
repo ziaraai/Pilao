@@ -16,11 +16,13 @@ from app.db.models.profile import (
     Equipment,
     HumanResource,
 )
+from app.db.models.tender import NOTICE_TYPES, Notification, Tender, TenderMatch
 from app.db.models.user import PlatformAdmin, User
 from app.db.models.vault import ComplianceDocument
 
 __all__ = [
     "DOCUMENT_KINDS",
+    "NOTICE_TYPES",
     "AiCall",
     "AuditLog",
     "AuthToken",
@@ -45,9 +47,12 @@ __all__ = [
     "Memoir",
     "MemoirSection",
     "MemoirSectionRevision",
+    "Notification",
     "Organization",
     "PlatformAdmin",
     "Requirement",
+    "Tender",
+    "TenderMatch",
     "User",
     "UserSession",
 ]

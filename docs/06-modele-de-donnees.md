@@ -74,21 +74,30 @@ document_chunks (
 tenders (
   id, source text check (source in ('boamp','ted')), source_id text,
   unique (source, source_id),
-  notice_type text,                     -- avis de marché, rectificatif, attribution
+  notice_type text,                     -- contract_notice | correction | award | other
   title text, description text, buyer_name text, buyer_siret text null,
   procedure text, contract_nature text, -- services / travaux / fournitures
   cpv_codes text[], departments text[], nuts_codes text[],
   estimated_amount_cents bigint null, published_at timestamptz,
   deadline_at timestamptz null, notice_url text, documents_url text null,
-  lots jsonb null, raw jsonb not null, embedding vector(?),
-  duplicate_of uuid null references tenders(id)
+  lots jsonb, raw jsonb not null,
+  duplicate_of uuid null references tenders(id),  -- même marché reçu de l'autre source
+  corrections jsonb                       -- rectificatifs reçus : [{source_id, received_at, changes}]
+)                                         -- index GIN sur cpv_codes et departments
+
+tender_matches (                          -- seules les annonces qui passent le pré-filtre
+  id, org_id, tender_id, unique (org_id, tender_id),
+  reasons jsonb,                          -- pourquoi elle correspond (CPV, mot-clé, département)
+  score smallint null check (0..100), explanation text, relevant_lots jsonb, score_error text,
+  status text check (status in ('new','tracked','dismissed')) default 'new',
+  dismiss_reason text null, bid_id uuid null, model text, prompt_version text,
+  scored_at timestamptz, digested_at timestamptz  -- vue par l'e-mail quotidien
 )
 
-tender_matches (
-  org_id, tender_id, primary key (org_id, tender_id),
-  prefilter_passed bool, score int, explanation text,
-  status text check (status in ('new','tracked','dismissed')) default 'new',
-  dismiss_reason text null, scored_at timestamptz, prompt_version text
+notifications (                           -- ce qui a déjà été envoyé (aucun e-mail en double)
+  id, org_id, kind text,                  -- digest | vault_expiry | correction
+  key text, unique (org_id, kind, key),   -- « 2026-11-05 », « <document>:<fin>:30 »…
+  recipients smallint, created_at
 )
 ```
 

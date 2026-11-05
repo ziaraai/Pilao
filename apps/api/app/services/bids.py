@@ -7,6 +7,7 @@ from sqlalchemy.orm import Session
 from app.db.models import AuditLog, Bid, DceFile, DceVersion, File, User
 from app.schemas.bids import BidIn, BidPatch
 from app.services import files as files_svc
+from app.services.tenders import release_matches
 from app.storage.objects import ObjectStorage
 
 
@@ -48,6 +49,7 @@ def delete_bid(db: Session, user: User, bid: Bid, storage: ObjectStorage) -> Non
         )
     )
     db.add(AuditLog(user_id=user.id, action="delete", entity="bid", entity_id=bid.id))
+    release_matches(db, bid.id)  # its notice goes back to the watch list
     db.delete(bid)  # cascades to dce_versions and dce_files
     db.commit()
     for file_id in file_ids:

@@ -12,7 +12,7 @@ function safeNext(value: string | null): string {
   // Only same-site paths: never redirect to another origin after login.
   return value && value.startsWith("/") && !value.startsWith("//")
     ? value
-    : "/dossiers";
+    : "/tableau-de-bord";
 }
 
 function LoginForm() {

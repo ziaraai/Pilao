@@ -1,3 +1,4 @@
+import logging
 import uuid
 from typing import Any
 
@@ -19,6 +20,9 @@ from app.db.models import (
 from app.domain import completeness
 from app.domain.trades import defaults_for
 from app.schemas.profile import CompanyIn, ProfileIn
+from app.workers.queue import JobQueue
+
+logger = logging.getLogger("pilao.profile")
 
 # Single place that must be extended when a business table joins the completeness score.
 _COUNTED = {
@@ -87,7 +91,11 @@ def refresh_completeness(db: Session, org: Organization) -> completeness.Complet
 
 
 def update_profile(
-    db: Session, org: Organization, user_id: uuid.UUID, data: ProfileIn
+    db: Session,
+    org: Organization,
+    user_id: uuid.UUID,
+    data: ProfileIn,
+    queue: JobQueue | None = None,
 ) -> tuple[CompanyProfile, completeness.Completeness]:
     profile = get_or_create_profile(db, org)
     values = data.model_dump(exclude={"apply_trade_defaults"})
@@ -102,9 +110,12 @@ def update_profile(
         setattr(profile, key, value)
     audit(db, user_id, "update", "company_profile", profile.id)
     result = refresh_completeness(db, org)
-    # US-1.2 CA4: a settings change must re-score open tenders. The scoring job arrives with
-    # phase 3 (P3-03); enqueue it from here when it exists.
     db.commit()
+    if queue is not None:  # US-1.2 CA4: open notices are filtered and scored again
+        try:
+            queue.enqueue_rematch_org(org.id)
+        except Exception:
+            logger.exception("could not enqueue the rematch of %s", org.id)
     return profile, result
 
 

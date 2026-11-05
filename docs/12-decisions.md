@@ -169,3 +169,32 @@ Format : numéro, date, décision, raison, statut. Ajouter une entrée pour chaq
 - **ZIP (CA3)** : mémoire Word et PDF, les six pièces administratives générées au moment de l'export, les attestations utilisables du coffre-fort (confirmées et à jour) et un LISEZ-MOI qui rappelle que le dossier est un brouillon et liste ce qui reste à faire ainsi que les attestations écartées.
 - **Avertissements (CA4)** : avant l'export, l'API calcule les points ouverts : `[À COMPLÉTER]` par chapitre, exigences absentes de la matrice, matrice absente, en cours ou dépassée, chapitres non rédigés, pages en trop. Elle refuse l'export (`export_needs_confirmation`) tant que l'utilisateur ne les a pas acceptés, et les avertissements acceptés sont gardés avec le fichier. Les exports sont construits par le worker, et la page suit leur état.
 - **Statut** : validé.
+
+## ADR-023 — Veille : format d'import commun, pré-filtre, score, actions
+- **Date** : 2026-11-05
+- **Annonces globales** : `tenders` n'a pas d'`org_id`, car ce sont des données publiques partagées (exception déjà prévue au modèle de données). Tout ce qui concerne une entreprise est dans `tender_matches`, rattaché à son `org_id`.
+- **Format commun** : chaque source (BOAMP, TED) sera convertie au même format (`TenderIn`). L'import (`ingest`) ne dépend donc pas de la source.
+  - Déduplication par `(source, source_id)` ; une annonce republiée est mise à jour.
+  - Un rectificatif met à jour l'annonce qu'il modifie, garde la trace de ce qui a changé et prévient par e-mail les entreprises qui la suivent, une seule fois. Il reporte aussi la nouvelle date limite sur leur dossier, sauf si l'utilisateur avait mis sa propre date.
+  - Les avis d'attribution sont stockés pour la V2 et n'entrent jamais dans la veille.
+  - Le même marché reçu de l'autre source (même acheteur, date limite à 36 h près, objets proches) est marqué doublon et n'est proposé qu'une fois.
+  - Les lecteurs BOAMP et TED restent à écrire après un appel réel (P1-INT-01, P3-INT-02). En attendant, `python -m app.cli load-tenders` charge des annonces au format commun par le même chemin.
+- **Pré-filtre (US-2.2 CA1)** : déterministe et gratuit (`app/domain/tender_filter.py`).
+  - Règle : (code CPV ou mot-clé) et département et date limite future et montant dans la fourchette quand il est connu. Un mot-clé exclu écarte l'annonce.
+  - Les codes CPV sont hiérarchiques : 90910000 couvre 90911200. Les mots-clés sont comparés sans accents, en mots entiers, pluriel compris.
+  - Un lieu, un montant ou une date limite inconnus n'écartent pas une annonce : le score en tient compte.
+  - Seules les annonces retenues sont stockées pour l'entreprise, avec les raisons affichées.
+- **Score (CA2)** : `prompts/scoring_annonce.md` passe en 0.2.0, car la variable `departments` y désignait à la fois l'entreprise et l'annonce. Le modèle reçoit le seul profil de l'entreprise concernée, une tâche de score par entreprise et par lot de 100 annonces. Sans modèle configuré ou une fois le budget atteint, les annonces restent listées sans score. Une sortie invalide est notée en erreur sur l'annonce, qui reste visible.
+- **Changement de profil (US-1.2 CA4)** : les annonces ouvertes sont filtrées à nouveau. Une annonce « à traiter » qui ne correspond plus disparaît, une annonce suivie ou écartée reste, et les scores sont recalculés.
+- **Actions (US-2.3)** : « Suivre » crée le dossier à étudier ; l'action est idempotente. Si le dossier est supprimé, l'annonce revient dans la liste. « Écarter » demande une raison (liste courte ou texte libre), et l'annonce peut être remise dans la liste. Tri : score décroissant, puis date limite la plus proche ; filtres : secteur (codes CPV du métier), département, procédure, score minimum, date limite, montant, recherche.
+- **Statut** : validé.
+
+## ADR-024 — Alertes quotidiennes, planification, tableau de bord
+- **Date** : 2026-11-05
+- **Planification** : le planificateur intégré à RQ 3 (`rq cron app/workers/cron.py`) lance chaque heure une tâche qui décide seule de ce qu'elle envoie. Elle est donc sans effet si elle est relancée, si une heure est manquée ou si deux planificateurs tournent. La table `notifications` garde chaque envoi : clé `(entreprise, type, clé)`.
+- **E-mail quotidien (US-2.4)** : un par entreprise et par jour, heure de Paris, entre 7 h et 12 h. Il contient les nouvelles annonces notées au-dessus du seuil du profil (60 par défaut), au plus 20, des meilleures aux moins bonnes. Chaque annonce notée n'est prise en compte qu'une fois (`digested_at`), et les annonces suivies ou écartées n'y figurent pas.
+- **Attestations (US-5.2)** : un e-mail à 30 jours puis à 7 jours de la fin de validité, et un à l'expiration (l'attestation n'est plus jointe aux exports). La clé contient la date de fin : une attestation renouvelée est surveillée à nouveau. Le statut stocké est recalculé chaque jour. Un bandeau sur toutes les pages signale les attestations expirées ou à renouveler.
+- **Tableau de bord (US-5.3)** : nouvelles annonces des 7 derniers jours et les 3 meilleures, dossiers en colonnes par statut (le statut se change depuis la carte), dates limites dans les 10 jours, attestations à renouveler, taux de réussite = gagnés / (gagnés + perdus). C'est la page d'accueil après connexion.
+- **Résultat (US-5.4)** : sur un dossier déposé, gagné ou perdu, on saisit le montant proposé, le classement et les notes ou retours de l'acheteur.
+- **Statut** : validé.
+

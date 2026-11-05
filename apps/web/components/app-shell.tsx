@@ -9,9 +9,11 @@ import { Alert, Button, Loading } from "@/components/ui";
 import { api } from "@/lib/api";
 import { AuthContext } from "@/lib/auth";
 import { useApi } from "@/lib/hooks";
-import type { Me } from "@/lib/types";
+import type { Me, VaultSummary } from "@/lib/types";
 
 const NAV = [
+  { href: "/tableau-de-bord", label: "Tableau de bord" },
+  { href: "/annonces", label: "Annonces" },
   { href: "/dossiers", label: "Dossiers" },
   { href: "/coffre-fort", label: "Coffre-fort" },
   { href: "/documents", label: "Base documentaire" },
@@ -58,7 +60,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
       <div className="min-h-screen bg-slate-50">
         <header className="border-b border-slate-200 bg-white">
           <div className="mx-auto flex max-w-6xl flex-wrap items-center gap-x-6 gap-y-2 px-4 py-3">
-            <Link href="/dossiers" aria-label="Accueil Pilao">
+            <Link href="/tableau-de-bord" aria-label="Accueil Pilao">
               <Logo className="h-8 w-auto" />
             </Link>
             <nav
@@ -87,8 +89,38 @@ export function AppShell({ children }: { children: React.ReactNode }) {
             </div>
           </div>
         </header>
+        <VaultBanner />
         <main className="mx-auto max-w-6xl px-4 py-8">{children}</main>
       </div>
     </AuthContext.Provider>
+  );
+}
+
+/** US-5.2: attestations to renew, on every page until they are replaced. */
+function VaultBanner() {
+  const summary = useApi<VaultSummary>("/vault/summary");
+  const counts = summary.data?.counts;
+  if (!counts) return null;
+  const expiring = counts.expiring ?? 0;
+  const expired = (counts.expired ?? 0) + (counts.mismatch ?? 0);
+  if (!expiring && !expired) return null;
+  const parts = [
+    expired
+      ? `${expired} attestation${expired > 1 ? "s" : ""} expirée${expired > 1 ? "s" : ""} ou au nom d'un autre SIREN (exclue${expired > 1 ? "s" : ""} des exports)`
+      : null,
+    expiring
+      ? `${expiring} attestation${expiring > 1 ? "s" : ""} à renouveler dans les 30 jours`
+      : null,
+  ].filter(Boolean);
+  return (
+    <div
+      role="status"
+      className="border-b border-amber-200 bg-amber-50 px-4 py-2 text-center text-sm text-amber-900"
+    >
+      {parts.join(" · ")}.{" "}
+      <Link href="/coffre-fort" className="font-semibold underline">
+        Voir le coffre-fort
+      </Link>
+    </div>
   );
 }

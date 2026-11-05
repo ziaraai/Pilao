@@ -380,3 +380,52 @@ export type ExportCheck = {
   estimated_pages: number | null;
   max_pages: number | null;
 };
+export type TenderMatch = {
+  tender_id: string;
+  source: "boamp" | "ted";
+  title: string;
+  description: string | null;
+  buyer_name: string | null;
+  procedure: string | null;
+  contract_nature: string | null;
+  cpv_codes: string[];
+  departments: string[];
+  estimated_amount_cents: number | null;
+  published_at: string | null;
+  deadline_at: string | null;
+  notice_url: string | null;
+  documents_url: string | null;
+  lots: { number: string | null; title: string }[];
+  corrections: {
+    source_id: string;
+    received_at: string;
+    changes: Record<string, [string, string]>;
+  }[];
+  status: "new" | "tracked" | "dismissed";
+  score: number | null;
+  explanation: string | null;
+  relevant_lots: string[];
+  reasons: string[];
+  score_error: string | null;
+  dismiss_reason: string | null;
+  bid_id: string | null;
+};
+export type TenderList = {
+  items: TenderMatch[];
+  total: number;
+  departments: string[];
+  procedures: string[];
+};
+export type Dashboard = {
+  new_tenders: number;
+  best_tenders: TenderMatch[];
+  bids_by_status: Record<string, Bid[]>;
+  deadlines_soon: Bid[];
+  documents_to_renew: ComplianceDoc[];
+  results: {
+    won: number;
+    lost: number;
+    submitted: number;
+    success_rate: number | null;
+  };
+};

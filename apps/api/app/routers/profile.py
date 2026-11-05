@@ -1,7 +1,7 @@
 import uuid
 from typing import Annotated, Any
 
-from fastapi import APIRouter, Query, Response, UploadFile
+from fastapi import APIRouter, Depends, Query, Response, UploadFile
 from pydantic import BaseModel
 from sqlalchemy import select
 
@@ -31,6 +31,7 @@ from app.schemas.profile import (
 )
 from app.services import profile as svc
 from app.services import reference_import as xl
+from app.workers.queue import JobQueue, get_job_queue
 
 router = APIRouter(prefix="/profile", tags=["profile"])
 
@@ -52,8 +53,13 @@ def get_profile(ctx: CurrentAuth, db: ScopedDb) -> ProfileOut:
 
 
 @router.put("")
-def put_profile(data: ProfileIn, ctx: CurrentAuth, db: ScopedDb) -> ProfileOut:
-    profile, result = svc.update_profile(db, ctx.org, ctx.user.id, data)
+def put_profile(
+    data: ProfileIn,
+    ctx: CurrentAuth,
+    db: ScopedDb,
+    queue: Annotated[JobQueue, Depends(get_job_queue)],
+) -> ProfileOut:
+    profile, result = svc.update_profile(db, ctx.org, ctx.user.id, data, queue)
     return _profile_out(profile, result)
 
 

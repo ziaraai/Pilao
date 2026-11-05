@@ -56,13 +56,13 @@ Reste à faire :
 
 ## Phase 3 — Veille, score, alertes, tableau de bord (3 semaines)
 
-- [ ] P3-01 Import BOAMP planifié + upsert + rectificatifs (US-2.1)
+- [ ] P3-01 Import BOAMP planifié + upsert + rectificatifs (US-2.1) — upsert, rectificatifs, avis d'attribution, doublons BOAMP/TED et chargeur `python -m app.cli load-tenders` faits (ADR-023) ; reste le lecteur BOAMP et sa planification, en attente de l'accès réseau (P1-INT-01)
 - [ ] P3-02 Import TED filtré France
 - [ ] P3-INT-02 Vérifier la syntaxe de requête TED
-- [ ] P3-03 Pré-filtre déterministe + score IA (US-2.2)
-- [ ] P3-04 Liste des annonces, filtres, actions (US-2.3)
-- [ ] P3-05 E-mail quotidien (US-2.4) + alertes d'expiration (US-5.2)
-- [ ] P3-06 Tableau de bord + résultat des dossiers (US-5.3, 5.4)
+- [x] P3-03 Pré-filtre déterministe + score IA (US-2.2)
+- [x] P3-04 Liste des annonces, filtres, actions (US-2.3)
+- [x] P3-05 E-mail quotidien (US-2.4) + alertes d'expiration (US-5.2)
+- [x] P3-06 Tableau de bord + résultat des dossiers (US-5.3, 5.4)
 
 ## Phase 4 — Tests avec 3 à 5 entreprises (4 semaines)
 

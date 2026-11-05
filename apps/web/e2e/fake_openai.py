@@ -1,4 +1,4 @@
-"""Minimal OpenAI-compatible server: DCE analysis with sourced data, chapters, conformity."""
+"""Minimal OpenAI-compatible server: DCE analysis, chapters, conformity, notice scores."""
 import json, re, sys
 from datetime import UTC, datetime, timedelta
 from http.server import BaseHTTPRequestHandler, HTTPServer
@@ -60,12 +60,20 @@ def matrix(prompt):
     return {"items": items}
 
 
+def score(prompt):
+    core = "médiathèque" in prompt
+    return {"score": 82 if core else 64,
+            "explanation": "Cœur de métier dans votre département." if core
+            else "Prestation voisine de votre activité.", "relevant_lots": []}
+
+
 class H(BaseHTTPRequestHandler):
     def do_POST(self):
         request = json.loads(self.rfile.read(int(self.headers.get("content-length", 0))) or b"{}")
         prompt = request["messages"][1]["content"] if len(request.get("messages", [])) > 1 else ""
         answer = (chapter(prompt) if "Chapitre à rédiger" in prompt
-                  else matrix(prompt) if "<memoir>" in prompt else ANSWER)
+                  else matrix(prompt) if "<memoir>" in prompt
+                  else score(prompt) if "<tender>" in prompt else ANSWER)
         body = {"id": "x", "object": "chat.completion", "created": 0, "model": "fake",
                 "choices": [{"index": 0, "finish_reason": "stop", "message": {"role": "assistant", "content": json.dumps(answer)}}],
                 "usage": {"prompt_tokens": 1000, "completion_tokens": 500, "total_tokens": 1500}}

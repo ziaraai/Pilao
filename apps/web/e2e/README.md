@@ -6,7 +6,9 @@ modèle compatible OpenAI (`fake_openai.py`) pour l'analyse du DCE et la rédact
 confirmation d'e-mail, connexion, profil et import Excel, coffre-fort, dépôt du DCE, analyse avec
 sources cliquables, plan du mémoire, rédaction, matrice de conformité et « compléter ce point »,
 modification d'un chapitre et restauration d'une version, DC1 téléchargé, export du dossier complet
-(ZIP avec le PDF de LibreOffice) après avertissements, base documentaire, déconnexion. Le worker
+(ZIP avec le PDF de LibreOffice) après avertissements, base documentaire, annonces chargées par
+`python -m app.cli load-tenders` puis filtrées, notées, écartée ou suivie, résultat du dossier,
+tableau de bord, déconnexion. Le parcours lance la CLI : exécutez-le avec les variables ci-dessus. Le worker
 a besoin de LibreOffice (`libreoffice-writer-nogui`) pour le PDF.
 
 ```bash
@@ -16,6 +18,7 @@ export NO_PROXY=127.0.0.1,localhost ENVIRONMENT=local REDIS_URL=redis://127.0.0.
   DATABASE_URL=postgresql+psycopg://pilao:pilao@localhost:5432/pilao \
   S3_ENDPOINT=http://127.0.0.1:5555 S3_BUCKET=e2e S3_ACCESS_KEY=k S3_SECRET_KEY=s S3_REGION=us-east-1 \
   LLM_MODEL_EXTRACTION=openai/fake-extraction LLM_MODEL_GENERATION=openai/fake-generation \
+  LLM_MODEL_SCORING=openai/fake-scoring \
   OPENAI_API_BASE=http://127.0.0.1:5577/v1 OPENAI_API_KEY=fake
 redis-server --port 6390 --save "" --daemonize yes
 uv run moto_server -p 5555 &                       # puis créer le bucket « e2e »

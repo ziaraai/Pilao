@@ -174,6 +174,9 @@ class FakeQueue:
         self.pending_sections: list[uuid.UUID] = []
         self.pending_conformity: list[uuid.UUID] = []
         self.pending_exports: list[uuid.UUID] = []
+        self.pending_match: list[list[uuid.UUID]] = []
+        self.pending_rematch: list[uuid.UUID] = []
+        self.pending_score: list[uuid.UUID] = []
         self.ocr = None  # set to an OCR engine to exercise scanned pages
         self.down = False
 
@@ -259,6 +262,40 @@ class FakeQueue:
             document_id = self.pending_exports.pop(0)
             with _new_session(self._conn) as session:
                 run_export(session, document_id, self._storage, converter)
+
+    def enqueue_match_tenders(self, tender_ids: list[uuid.UUID]) -> None:
+        if self.down:
+            raise ConnectionError("redis down")
+        self.pending_match.append(list(tender_ids))
+
+    def enqueue_rematch_org(self, org_id: uuid.UUID) -> None:
+        if self.down:
+            raise ConnectionError("redis down")
+        self.pending_rematch.append(org_id)
+
+    def enqueue_score_tenders(self, org_id: uuid.UUID) -> None:
+        if self.down:
+            raise ConnectionError("redis down")
+        if org_id not in self.pending_score:  # one queued job per company, as with RQ
+            self.pending_score.append(org_id)
+
+    def drain_tenders(self) -> None:
+        """Matching (unscoped), profile re-matching, then scoring, as the worker would."""
+        from app.services.tenders import match_tenders, rematch_org, score_org
+
+        while self.pending_match or self.pending_rematch or self.pending_score:
+            if self.pending_match:
+                ids = self.pending_match.pop(0)
+                with _new_session(self._conn) as session:
+                    match_tenders(session, ids, self)
+            elif self.pending_rematch:
+                org_id = self.pending_rematch.pop(0)
+                with _new_session(self._conn) as session:
+                    rematch_org(session, org_id, self)
+            else:
+                org_id = self.pending_score.pop(0)
+                with _new_session(self._conn) as session:
+                    score_org(session, org_id)
 
     def drain(self) -> None:
         from app.services.knowledge import run_index_document

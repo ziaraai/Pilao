@@ -31,8 +31,9 @@ class Bid(IdMixin, TimestampMixin, OrgScoped, Base):
         ),
     )
 
-    # Tenders arrive with phase 3: the foreign key is added by that migration.
-    tender_id: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True))
+    tender_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("tenders.id", ondelete="SET NULL")
+    )
     title: Mapped[str] = mapped_column(Text, nullable=False)
     buyer_name: Mapped[str | None] = mapped_column(Text)
     reference: Mapped[str | None] = mapped_column(Text)  # the buyer's consultation reference
