@@ -18,7 +18,7 @@ from app.db.models import (
 )
 from app.domain import completeness
 from app.domain.trades import defaults_for
-from app.schemas.profile import ProfileIn
+from app.schemas.profile import CompanyIn, ProfileIn
 
 # Single place that must be extended when a business table joins the completeness score.
 _COUNTED = {
@@ -113,3 +113,16 @@ def ensure_files_belong_to_org(db: Session, *file_ids: uuid.UUID | None) -> None
     for file_id in file_ids:
         if file_id is not None and db.get(File, file_id) is None:
             raise ApiError(422, "unknown_file", "Fichier introuvable.")
+
+
+def update_company(db: Session, org: Organization, user_id: uuid.UUID, data: CompanyIn) -> None:
+    if data.logo_file_id is not None:
+        logo = db.get(File, data.logo_file_id)
+        if logo is None:
+            raise ApiError(422, "unknown_file", "Fichier introuvable.")
+        if logo.mime not in ("image/png", "image/jpeg"):
+            raise ApiError(422, "logo_not_image", "Le logo doit être une image PNG ou JPEG.")
+    for key, value in data.model_dump().items():
+        setattr(org, key, value)
+    db.add(AuditLog(user_id=user_id, action="update", entity="organization", entity_id=org.id))
+    db.commit()

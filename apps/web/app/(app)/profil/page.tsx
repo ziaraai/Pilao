@@ -1,5 +1,6 @@
 "use client";
 
+import { CompanyIdentity } from "@/components/profile/company-identity";
 import { References } from "@/components/profile/references";
 import { SimpleList } from "@/components/profile/simple-list";
 import { WatchSettings } from "@/components/profile/watch-settings";
@@ -57,6 +58,7 @@ export default function ProfilePage() {
           rien n&apos;est inventé.
         </p>
       </Card>
+      <CompanyIdentity />
       <WatchSettings
         profile={profile.data}
         trades={trades.data}

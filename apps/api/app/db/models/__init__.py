@@ -3,10 +3,11 @@ from app.db.models.analysis import DceAnalysis, Requirement
 from app.db.models.audit_log import AuditLog
 from app.db.models.auth import AuthToken, LoginAttempt, UserSession
 from app.db.models.bid import Bid, DceFile, DcePage, DceVersion
+from app.db.models.document import DOCUMENT_KINDS, GeneratedDocument
 from app.db.models.file import File
 from app.db.models.job import Job
 from app.db.models.knowledge import DocumentChunk, KnowledgeDocument
-from app.db.models.memoir import ConformityItem, Memoir, MemoirSection
+from app.db.models.memoir import ConformityItem, Memoir, MemoirSection, MemoirSectionRevision
 from app.db.models.organization import Organization
 from app.db.models.profile import (
     Certification,
@@ -19,6 +20,7 @@ from app.db.models.user import PlatformAdmin, User
 from app.db.models.vault import ComplianceDocument
 
 __all__ = [
+    "DOCUMENT_KINDS",
     "AiCall",
     "AuditLog",
     "AuthToken",
@@ -35,12 +37,14 @@ __all__ = [
     "DocumentChunk",
     "Equipment",
     "File",
+    "GeneratedDocument",
     "HumanResource",
     "Job",
     "KnowledgeDocument",
     "LoginAttempt",
     "Memoir",
     "MemoirSection",
+    "MemoirSectionRevision",
     "Organization",
     "PlatformAdmin",
     "Requirement",

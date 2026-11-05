@@ -1,4 +1,5 @@
 import hashlib
+import io
 import logging
 import re
 import unicodedata
@@ -154,4 +155,46 @@ def delete_file(db: Session, user: User | None, record: File, storage: ObjectSto
     try:
         storage.delete(key)
     except Exception:
+        logger.exception("could not delete object %s (orphan to sweep)", key)
+
+
+def store_generated(
+    db: Session,
+    org: Organization,
+    user_id: uuid.UUID | None,
+    data: bytes,
+    filename: str,
+    mime: str,
+    extension: str,
+    storage: ObjectStorage,
+) -> File:
+    """Store a document Pilao produced (no antivirus: it is our own output). The caller
+    commits, and calls ``discard_object`` if that commit fails."""
+    s = get_settings()
+    _check_quota(db, len(data), s.org_storage_quota_bytes)
+    record = File(
+        id=uuid.uuid4(),
+        storage_key=f"{org.id}/{uuid.uuid4()}",
+        filename=clean_filename(filename, extension),
+        mime=mime,
+        size_bytes=len(data),
+        sha256=hashlib.sha256(data).hexdigest(),
+        uploaded_by=user_id,
+    )
+    storage.put(record.storage_key, io.BytesIO(data), mime)
+    db.execute(select(Organization.id).where(Organization.id == org.id).with_for_update())
+    try:
+        _check_quota(db, len(data), s.org_storage_quota_bytes)
+    except ApiError:
+        discard_object(storage, record.storage_key)
+        raise
+    db.add(record)
+    db.flush()
+    return record
+
+
+def discard_object(storage: ObjectStorage, key: str) -> None:
+    try:
+        storage.delete(key)
+    except Exception:  # the orphan is left to the sweep job
         logger.exception("could not delete object %s (orphan to sweep)", key)

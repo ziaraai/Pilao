@@ -49,7 +49,7 @@ class Memoir(IdMixin, TimestampMixin, OrgScoped, Base):
     reference_scores: Mapped[list[dict[str, Any]]] = mapped_column(
         JSONB, nullable=False, default=list
     )
-    # none | pending | ready | error — the conformity matrix runs once every chapter is drafted
+    # none | pending | ready | error | stale (text edited since) — runs once all are drafted
     conformity_status: Mapped[str] = mapped_column(
         Text, nullable=False, default="none", server_default="none"
     )
@@ -84,6 +84,39 @@ class MemoirSection(IdMixin, TimestampMixin, OrgScoped, Base):
     generated_by_model: Mapped[str | None] = mapped_column(Text)
     prompt_version: Mapped[str | None] = mapped_column(Text)
     edited_by_user: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
+    # Number of the current revision (0 = never drafted); an edit must start from it
+    revision: Mapped[int] = mapped_column(Integer, nullable=False, default=0, server_default="0")
+
+
+class MemoirSectionRevision(IdMixin, TimestampMixin, OrgScoped, Base):
+    """US-4.4 CA4: every text a chapter has had (drafted, edited, restored) is kept."""
+
+    __tablename__ = "memoir_section_revisions"
+    __table_args__ = (
+        CheckConstraint("origin in ('generated','edited','restored')", name="origin"),
+        UniqueConstraint(
+            "section_id", "revision", name="uq_memoir_section_revisions_section_id_revision"
+        ),
+    )
+
+    section_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True),
+        ForeignKey("memoir_sections.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    )
+    revision: Mapped[int] = mapped_column(Integer, nullable=False)
+    origin: Mapped[str] = mapped_column(Text, nullable=False)
+    content_md: Mapped[str] = mapped_column(Text, nullable=False)
+    flags: Mapped[list[dict[str, Any]]] = mapped_column(JSONB, nullable=False, default=list)
+    sources: Mapped[list[dict[str, Any]]] = mapped_column(JSONB, nullable=False, default=list)
+    covered_refs: Mapped[list[str]] = mapped_column(ARRAY(Text), nullable=False, default=list)
+    instruction: Mapped[str | None] = mapped_column(Text)
+    model: Mapped[str | None] = mapped_column(Text)
+    prompt_version: Mapped[str | None] = mapped_column(Text)
+    created_by: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("users.id", ondelete="SET NULL")
+    )
 
 
 class ConformityItem(IdMixin, TimestampMixin, OrgScoped, Base):

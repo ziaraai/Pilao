@@ -59,6 +59,7 @@ export const FLAG_LABEL: Record<string, string> = {
   to_complete: "À compléter",
   commitment: "Engagement à valider",
   number: "Chiffre à vérifier",
+  name: "Nom à vérifier",
   length: "Longueur",
 };
 

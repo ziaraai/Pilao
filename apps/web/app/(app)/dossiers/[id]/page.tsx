@@ -6,6 +6,7 @@ import { useState } from "react";
 
 import { AnalysisSection } from "@/components/dossier/analysis";
 import { DceSection } from "@/components/dossier/dce";
+import { DocumentsSection } from "@/components/dossier/documents";
 import { MemoirSection } from "@/components/dossier/memoir";
 import {
   Alert,
@@ -104,6 +105,10 @@ export default function BidPage() {
         }}
       />
       <MemoirSection key={`memoir-${analysisKey}-${memoirKey}`} bidId={id} />
+      <DocumentsSection
+        key={`documents-${analysisKey}-${memoirKey}`}
+        bidId={id}
+      />
     </div>
   );
 }

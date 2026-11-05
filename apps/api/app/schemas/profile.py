@@ -7,6 +7,7 @@ from pydantic import (
     AfterValidator,
     BaseModel,
     ConfigDict,
+    EmailStr,
     Field,
     StringConstraints,
     field_validator,
@@ -197,3 +198,48 @@ class ImportReportOut(BaseModel):
     created: int
     errors: list[ImportErrorOut]
     ignored_columns: list[str] = Field(default_factory=list)
+
+
+Short = Annotated[str, StringConstraints(strip_whitespace=True, max_length=200)]
+
+
+class CompanyIn(BaseModel):
+    """Identity and layout of the company (DC1/DC2, exports). The SIRET never changes."""
+
+    name: Text
+    legal_form: Short | None = None
+    address_line: Short | None = None
+    postal_code: Annotated[str, StringConstraints(pattern=r"^\d{5}$")] | None = None
+    city: Short | None = None
+    phone: Annotated[str, StringConstraints(pattern=r"^\+?[\d .()-]{6,25}$")] | None = None
+    contact_email: EmailStr | None = None
+    signatory_name: Short | None = None
+    signatory_role: Short | None = None
+    logo_file_id: uuid.UUID | None = None
+    brand_color: Annotated[str, StringConstraints(pattern=r"^#[0-9a-fA-F]{6}$")] | None = None
+
+    @field_validator("*", mode="before")
+    @classmethod
+    def _blank_is_none(cls, v: object) -> object:
+        return None if isinstance(v, str) and not v.strip() else v
+
+
+class CompanyOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    siret: str
+    siren: str
+    naf_code: str | None
+    headcount_range: str | None
+    vat_number: str  # computed from the SIREN
+    name: str
+    legal_form: str | None
+    address_line: str | None
+    postal_code: str | None
+    city: str | None
+    phone: str | None
+    contact_email: str | None
+    signatory_name: str | None
+    signatory_role: str | None
+    logo_file_id: uuid.UUID | None
+    brand_color: str | None

@@ -114,3 +114,48 @@ export function parseMarkdown(markdown: string): Block[] {
   flush();
   return blocks;
 }
+
+/** A passage to check (US-4.4 CA3): a number or a name absent from the data, a commitment. */
+export type Highlight = {
+  term: string;
+  kind: "number" | "name" | "commitment";
+};
+export type Marked =
+  Inline | { t: "check"; v: string; kind: Highlight["kind"] };
+
+const escape = (s: string) => s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+
+/** Split plain-text tokens around the terms to check, longest term first. */
+export function highlight(parts: Inline[], terms: Highlight[]): Marked[] {
+  const usable = terms.filter((h) => h.term.trim().length > 0);
+  if (!usable.length) return parts;
+  const kindOf = new Map(usable.map((h) => [h.term, h.kind]));
+  const pattern = new RegExp(
+    `(?<![\\p{L}\\d])(${[...kindOf.keys()]
+      .sort((a, b) => b.length - a.length)
+      .map(escape)
+      .join("|")})(?![\\p{L}\\d])`,
+    "gu",
+  );
+  const out: Marked[] = [];
+  for (const part of parts) {
+    if (part.t !== "text") {
+      out.push(part);
+      continue;
+    }
+    let last = 0;
+    for (const m of part.v.matchAll(pattern)) {
+      if (m.index > last)
+        out.push({ t: "text", v: part.v.slice(last, m.index) });
+      out.push({ t: "check", v: m[0], kind: kindOf.get(m[0]) ?? "name" });
+      last = m.index + m[0].length;
+    }
+    if (last < part.v.length) out.push({ t: "text", v: part.v.slice(last) });
+  }
+  return out;
+}
+
+/** The chapter as the user edits it: without its title line, which comes from the plan. */
+export function chapterBody(markdown: string): string {
+  return markdown.replace(/^\s*#{1,6}\s[^\n]*\n?/, "").trim();
+}

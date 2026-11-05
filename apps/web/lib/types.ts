@@ -243,8 +243,9 @@ export type Analysis = {
 };
 
 export type ChapterFlag = {
-  type: "to_complete" | "commitment" | "number" | "length";
+  type: "to_complete" | "commitment" | "number" | "name" | "length";
   text: string;
+  term?: string | null; // the passage to highlight
 };
 export type ChapterSource = {
   chunk_id: string;
@@ -267,6 +268,26 @@ export type MemoirSection = {
   sources: ChapterSource[];
   covered_refs: string[];
   edited_by_user: boolean;
+  revision: number;
+};
+export type Revision = {
+  id: string;
+  revision: number;
+  origin: "generated" | "edited" | "restored";
+  created_at: string;
+  author: string | null;
+  instruction: string | null;
+  model: string | null;
+  words: number;
+  content_md: string;
+};
+export type MemoirVersion = {
+  id: string;
+  version: number;
+  status: Memoir["status"];
+  created_at: string;
+  chapters: number;
+  drafted: number;
 };
 export type Memoir = {
   id: string;
@@ -277,7 +298,7 @@ export type Memoir = {
   word_budget: number;
   sections: MemoirSection[];
   unassigned_requirements: string[];
-  conformity_status: "none" | "pending" | "ready" | "error";
+  conformity_status: "none" | "pending" | "ready" | "error" | "stale";
   conformity_error: string | null;
   drafted_words: number;
   estimated_pages: number | null;
@@ -312,4 +333,41 @@ export type Conformity = {
   error: string | null;
   counts: Record<ConformityItem["status"], number>;
   items: ConformityItem[];
+};
+export type Company = {
+  siret: string;
+  siren: string;
+  naf_code: string | null;
+  headcount_range: string | null;
+  vat_number: string;
+  name: string;
+  legal_form: string | null;
+  address_line: string | null;
+  postal_code: string | null;
+  city: string | null;
+  phone: string | null;
+  contact_email: string | null;
+  signatory_name: string | null;
+  signatory_role: string | null;
+  logo_file_id: string | null;
+  brand_color: string | null;
+};
+export type GeneratedDocument = {
+  id: string;
+  kind: string;
+  status: "pending" | "ready" | "error";
+  error: string | null;
+  file_id: string | null;
+  filename: string | null;
+  size_bytes: number | null;
+  to_complete: string[];
+  warnings: string[];
+  memoir_id: string | null;
+  created_at: string;
+};
+export type DocumentKind = {
+  kind: string;
+  label: string;
+  description: string;
+  latest: GeneratedDocument | null;
 };

@@ -1,15 +1,41 @@
 import { Fragment } from "react";
 
-import { type Inline, parseMarkdown } from "@/lib/markdown";
+import {
+  type Highlight,
+  type Inline,
+  type Marked,
+  highlight,
+  parseMarkdown,
+} from "@/lib/markdown";
 
-function Text({ parts }: { parts: Inline[] }) {
+const CHECK_CLASS: Record<Highlight["kind"], string> = {
+  number: "rounded bg-sky-100 px-0.5 text-sky-950 ring-1 ring-sky-300",
+  name: "rounded bg-violet-100 px-0.5 text-violet-950 ring-1 ring-violet-300",
+  commitment: "bg-orange-50 underline decoration-orange-400 decoration-2",
+};
+const CHECK_TITLE: Record<Highlight["kind"], string> = {
+  number: "Chiffre absent de vos données : à vérifier",
+  name: "Nom absent de vos données : à vérifier",
+  commitment: "Engagement : à valider",
+};
+
+function Text({ parts, terms }: { parts: Inline[]; terms: Highlight[] }) {
+  const marked: Marked[] = highlight(parts, terms);
   return (
     <>
-      {parts.map((p, i) =>
+      {marked.map((p, i) =>
         p.t === "strong" ? (
           <strong key={i}>{p.v}</strong>
         ) : p.t === "em" ? (
           <em key={i}>{p.v}</em>
+        ) : p.t === "check" ? (
+          <mark
+            key={i}
+            title={CHECK_TITLE[p.kind]}
+            className={CHECK_CLASS[p.kind]}
+          >
+            {p.v}
+          </mark>
         ) : p.t === "todo" ? (
           <mark
             key={i}
@@ -26,7 +52,13 @@ function Text({ parts }: { parts: Inline[] }) {
 }
 
 /** A chapter as the buyer will read it. Titles start at h3: the page owns h1 and h2. */
-export function Markdown({ source }: { source: string }) {
+export function Markdown({
+  source,
+  highlights = [],
+}: {
+  source: string;
+  highlights?: Highlight[];
+}) {
   return (
     <div className="space-y-3 text-sm leading-relaxed text-slate-800">
       {parseMarkdown(source).map((b, i) => {
@@ -38,7 +70,7 @@ export function Markdown({ source }: { source: string }) {
               : "text-sm font-semibold text-slate-900";
           return (
             <Tag key={i} className={size}>
-              <Text parts={b.text} />
+              <Text parts={b.text} terms={highlights} />
             </Tag>
           );
         }
@@ -51,7 +83,7 @@ export function Markdown({ source }: { source: string }) {
             >
               {b.items.map((item, j) => (
                 <li key={j}>
-                  <Text parts={item} />
+                  <Text parts={item} terms={highlights} />
                 </li>
               ))}
             </Tag>
@@ -68,7 +100,7 @@ export function Markdown({ source }: { source: string }) {
                         key={j}
                         className="border border-slate-200 bg-slate-50 px-2 py-1 font-semibold"
                       >
-                        <Text parts={cell} />
+                        <Text parts={cell} terms={highlights} />
                       </th>
                     ))}
                   </tr>
@@ -81,7 +113,7 @@ export function Markdown({ source }: { source: string }) {
                           key={k}
                           className="border border-slate-200 px-2 py-1"
                         >
-                          <Text parts={cell} />
+                          <Text parts={cell} terms={highlights} />
                         </td>
                       ))}
                     </tr>
@@ -93,7 +125,7 @@ export function Markdown({ source }: { source: string }) {
         }
         return (
           <p key={i}>
-            <Text parts={b.text} />
+            <Text parts={b.text} terms={highlights} />
           </p>
         );
       })}

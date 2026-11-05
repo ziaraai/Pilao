@@ -9,10 +9,13 @@ from app.core.deps import CurrentAuth, ScopedDb
 from app.core.errors import ApiError
 from app.db.base import Base
 from app.db.models import Certification, CompanyReference, Equipment, HumanResource
+from app.domain.company import vat_number
 from app.domain.trades import TRADES
 from app.schemas.profile import (
     CertificationIn,
     CertificationOut,
+    CompanyIn,
+    CompanyOut,
     CompletenessOut,
     EquipmentIn,
     EquipmentOut,
@@ -52,6 +55,25 @@ def get_profile(ctx: CurrentAuth, db: ScopedDb) -> ProfileOut:
 def put_profile(data: ProfileIn, ctx: CurrentAuth, db: ScopedDb) -> ProfileOut:
     profile, result = svc.update_profile(db, ctx.org, ctx.user.id, data)
     return _profile_out(profile, result)
+
+
+def _company_out(org: Any) -> CompanyOut:
+    return CompanyOut.model_validate(
+        {**{k: getattr(org, k) for k in CompanyOut.model_fields if k != "vat_number"}}
+        | {"vat_number": vat_number(org.siren)}
+    )
+
+
+@router.get("/company")
+def get_company(ctx: CurrentAuth) -> CompanyOut:
+    return _company_out(ctx.org)
+
+
+@router.put("/company")
+def put_company(data: CompanyIn, ctx: CurrentAuth, db: ScopedDb) -> CompanyOut:
+    """Identity and layout used by DC1/DC2 and the Word export (logo, colour)."""
+    svc.update_company(db, ctx.org, ctx.user.id, data)
+    return _company_out(ctx.org)
 
 
 @router.get("/completeness")

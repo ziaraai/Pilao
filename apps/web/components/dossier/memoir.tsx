@@ -2,8 +2,8 @@
 
 import { useState } from "react";
 
+import { ChapterView } from "@/components/dossier/chapter";
 import { SourceLink, SourceViewer } from "@/components/dossier/source";
-import { Markdown } from "@/components/markdown";
 import {
   Alert,
   Badge,
@@ -14,18 +14,17 @@ import {
   Input,
   Loading,
   Select,
-  Textarea,
 } from "@/components/ui";
 import { api } from "@/lib/api";
-import { formatCents } from "@/lib/format";
+import { formatCents, formatDate } from "@/lib/format";
 import { useAction, useApi } from "@/lib/hooks";
-import { CONFORMITY_STATUS, FLAG_LABEL, SECTION_STATUS } from "@/lib/labels";
+import { CONFORMITY_STATUS } from "@/lib/labels";
 import type {
   Analysis,
   Conformity,
   ConformityItem,
   Memoir,
-  MemoirSection as Chapter,
+  MemoirVersion,
 } from "@/lib/types";
 
 const SOURCE_LABEL: Record<Memoir["outline_source"], string> = {
@@ -49,7 +48,12 @@ const working = (m: Memoir) =>
   m.status === "generating" || m.conformity_status === "pending";
 
 export function MemoirSection({ bidId }: { bidId: string }) {
-  const memoir = useApi<Memoir>(`/bids/${bidId}/memoir`, working);
+  const [selected, setSelected] = useState<string | null>(null); // null: the latest version
+  const memoir = useApi<Memoir>(
+    selected ? `/memoirs/${selected}` : `/bids/${bidId}/memoir`,
+    working,
+  );
+  const versions = useApi<MemoirVersion[]>(`/bids/${bidId}/memoirs`);
   const analysis = useApi<Analysis>(`/bids/${bidId}/analysis`);
   const create = useAction();
 
@@ -62,7 +66,11 @@ export function MemoirSection({ bidId }: { bidId: string }) {
     const m = await create.run(() =>
       api<Memoir>(`/bids/${bidId}/memoir`, { method: "POST" }),
     );
-    if (m) memoir.setData(m);
+    if (m) {
+      setSelected(null);
+      memoir.setData(m);
+      versions.reload();
+    }
   }
 
   const ready = analysis.data?.status === "ready";
@@ -93,21 +101,53 @@ export function MemoirSection({ bidId }: { bidId: string }) {
       </Card>
     );
   }
+  const latest = versions.data?.[0]?.id;
   return (
-    <OutlineEditor
-      key={`${memoir.data.id}:${memoir.data.sections.map((s) => s.id).join(",")}`}
-      memoir={memoir.data}
-      allRefs={
-        analysis.data?.requirements.map((r) => ({
-          ref: r.ref,
-          text: r.text,
-        })) ?? []
-      }
-      onChange={update}
-      onRefresh={memoir.reload}
-      onNewVersion={prepare}
-      busyNewVersion={create.busy}
-    />
+    <div className="space-y-4">
+      {(versions.data?.length ?? 0) > 1 && (
+        <div className="flex flex-wrap items-end gap-3">
+          <Field label="Version du mémoire" htmlFor="memoir-version">
+            <Select
+              id="memoir-version"
+              value={memoir.data.id}
+              className="w-auto"
+              onChange={(e) =>
+                setSelected(e.target.value === latest ? null : e.target.value)
+              }
+            >
+              {versions.data?.map((v) => (
+                <option key={v.id} value={v.id}>
+                  Version {v.version} — {formatDate(v.created_at)}
+                  {v.drafted
+                    ? ` — ${v.drafted}/${v.chapters} chapitres rédigés`
+                    : " — plan"}
+                  {v.id === latest ? " (la plus récente)" : ""}
+                </option>
+              ))}
+            </Select>
+          </Field>
+          {memoir.data.id !== latest && (
+            <p className="pb-2 text-sm text-amber-800">
+              Vous consultez une version antérieure du mémoire.
+            </p>
+          )}
+        </div>
+      )}
+      <OutlineEditor
+        key={`${memoir.data.id}:${memoir.data.sections.map((s) => s.id).join(",")}`}
+        memoir={memoir.data}
+        allRefs={
+          analysis.data?.requirements.map((r) => ({
+            ref: r.ref,
+            text: r.text,
+          })) ?? []
+        }
+        onChange={update}
+        onRefresh={memoir.reload}
+        onNewVersion={prepare}
+        busyNewVersion={create.busy}
+      />
+    </div>
   );
 }
 
@@ -527,153 +567,6 @@ function Drafting({
   );
 }
 
-function ChapterView({
-  section,
-  textOf,
-  onChange,
-}: {
-  section: Chapter;
-  textOf: Record<string, string>;
-  onChange: (m: Memoir) => void;
-}) {
-  const [instruction, setInstruction] = useState("");
-  const regenerate = useAction();
-  const status = SECTION_STATUS[section.status] ?? SECTION_STATUS.pending;
-  const busy = section.status === "pending" || section.status === "generating";
-  const flags = Object.entries(
-    section.flags.reduce<Record<string, string[]>>((by, f) => {
-      (by[f.type] ??= []).push(f.text);
-      return by;
-    }, {}),
-  );
-  return (
-    <article
-      id={`chapter-${section.id}`}
-      aria-busy={busy}
-      className="scroll-mt-4 space-y-3 rounded-md p-4 ring-1 ring-slate-200"
-    >
-      <div className="flex flex-wrap items-center gap-2">
-        <Badge tone={status.tone}>{status.label}</Badge>
-        {section.criterion_ref && (
-          <span className="text-xs text-slate-500">
-            Critère : {section.criterion_ref}
-          </span>
-        )}
-        <span className="text-xs text-slate-500">
-          Budget : {section.word_budget} mots
-        </span>
-      </div>
-      {section.error && (
-        <Alert tone={section.status === "error" ? "danger" : "info"}>
-          {section.error}
-        </Alert>
-      )}
-      {section.content_md ? (
-        <Markdown source={section.content_md} />
-      ) : (
-        <h3 className="text-base font-semibold text-brand-navy">
-          {section.title}
-        </h3>
-      )}
-      {flags.length > 0 && (
-        <div className="rounded-md bg-amber-50 p-3 ring-1 ring-amber-200">
-          <h4 className="text-sm font-semibold text-amber-900">
-            À vérifier avant dépôt
-          </h4>
-          <dl className="mt-1 space-y-1 text-sm text-amber-950">
-            {flags.map(([type, items]) => (
-              <div key={type}>
-                <dt className="font-medium">{FLAG_LABEL[type] ?? type}</dt>
-                {items.map((text, i) => (
-                  <dd key={i} className="ml-4 list-item list-disc">
-                    {text}
-                  </dd>
-                ))}
-              </div>
-            ))}
-          </dl>
-        </div>
-      )}
-      {section.requirement_refs.length > 0 && (
-        <p className="flex flex-wrap items-center gap-1.5 text-xs text-slate-600">
-          Exigences du chapitre :
-          {section.requirement_refs.map((ref) => (
-            <span
-              key={ref}
-              title={textOf[ref]}
-              className={`rounded-full px-2 py-0.5 font-mono ${
-                section.covered_refs.includes(ref)
-                  ? "bg-emerald-50 text-emerald-800"
-                  : "bg-slate-100 text-slate-700"
-              }`}
-            >
-              {ref}
-              {section.covered_refs.includes(ref) ? " ✓" : ""}
-            </span>
-          ))}
-        </p>
-      )}
-      {section.sources.length > 0 && (
-        <div className="text-xs text-slate-600">
-          <p className="font-medium">Sources de votre base documentaire :</p>
-          <ul className="ml-4 list-disc">
-            {section.sources.map((src) => (
-              <li key={src.chunk_id}>
-                {src.document}
-                {src.page ? `, p. ${src.page}` : ""}
-                {src.used_for ? ` — ${src.used_for}` : ""}
-              </li>
-            ))}
-          </ul>
-        </div>
-      )}
-      {!busy && (
-        <details className="text-sm">
-          <summary className="cursor-pointer font-medium text-brand-navy">
-            Régénérer ce chapitre
-          </summary>
-          <div className="mt-2 space-y-2">
-            <Field
-              label="Consigne (facultatif)"
-              htmlFor={`instruction-${section.id}`}
-            >
-              <Textarea
-                id={`instruction-${section.id}`}
-                rows={2}
-                maxLength={2000}
-                value={instruction}
-                placeholder="Ex. : plus concis, insister sur la sécurité des agents…"
-                onChange={(e) => setInstruction(e.target.value)}
-              />
-            </Field>
-            <Button
-              variant="secondary"
-              busy={regenerate.busy}
-              onClick={async () => {
-                const m = await regenerate.run(() =>
-                  api<Memoir>(`/memoir-sections/${section.id}/regenerate`, {
-                    method: "POST",
-                    json: { instruction: instruction || null },
-                  }),
-                );
-                if (m) {
-                  setInstruction("");
-                  onChange(m);
-                }
-              }}
-            >
-              Régénérer
-            </Button>
-            {regenerate.error && (
-              <Alert tone="danger">{regenerate.error}</Alert>
-            )}
-          </div>
-        </details>
-      )}
-    </article>
-  );
-}
-
 function ConformityCard({
   memoir,
   onChange,
@@ -740,7 +633,13 @@ function ConformityCard({
           <Alert tone="danger">{rerun.error || matrix.error}</Alert>
         )}
         {c?.error && <Alert tone="warning">{c.error}</Alert>}
-        {c && c.status !== "ready" && c.items.length > 0 && (
+        {memoir.conformity_status === "stale" && (
+          <Alert tone="warning">
+            Le mémoire a été modifié depuis la vérification : relancez-la pour
+            mettre la matrice à jour.
+          </Alert>
+        )}
+        {c && !["ready", "stale"].includes(c.status) && c.items.length > 0 && (
           <p className="text-xs text-slate-500">
             Résultats de la dernière vérification, avant les dernières
             modifications du mémoire.

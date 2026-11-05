@@ -24,3 +24,8 @@ class Organization(IdMixin, TimestampMixin, Base):
     headcount_range: Mapped[str | None] = mapped_column(Text)
     logo_file_id: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True))
     brand_color: Mapped[str | None] = mapped_column(String(9))
+    # Used to pre-fill DC1/DC2 (US-4.5): entered once by the company, never guessed
+    phone: Mapped[str | None] = mapped_column(Text)
+    contact_email: Mapped[str | None] = mapped_column(Text)
+    signatory_name: Mapped[str | None] = mapped_column(Text)
+    signatory_role: Mapped[str | None] = mapped_column(Text)

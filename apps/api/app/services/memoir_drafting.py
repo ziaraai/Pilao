@@ -38,6 +38,7 @@ from app.domain.trades import TRADES
 from app.schemas.drafting import ChapterOut, MatrixOut
 from app.services.jobs import set_job_status
 from app.services.knowledge import search_chunks
+from app.services.memoir_editing import add_revision
 from app.workers.queue import DRAFT_JOB_TIMEOUT_SECONDS, JobQueue
 
 logger = logging.getLogger("pilao.memoir")
@@ -315,6 +316,8 @@ def run_draft_section(
             json.dumps(company, ensure_ascii=False),
             json.dumps(references, ensure_ascii=False),
             str(title_value),
+            bid.buyer_name or "",
+            section.title,
             section.instruction or "",
         ]
     )
@@ -337,8 +340,9 @@ def run_draft_section(
         for s in out.sources
         if s.excerpt_id in excerpts  # an unknown excerpt id is dropped, never shown
     ]
-    fresh.flags = [{"type": f.type, "text": f.text} for f in flags]
+    fresh.flags = [{"type": f.type, "text": f.text, "term": f.term} for f in flags]
     fresh.generated_by_model, fresh.prompt_version = result.model, prompt.version
+    add_revision(db, fresh, "generated", None, instruction=fresh.instruction)
     fresh.status, fresh.error, fresh.edited_by_user, fresh.instruction = "ready", None, False, None
     set_job_status(db, JOB_SECTION, section_id, "done")
     db.commit()
@@ -428,6 +432,7 @@ def run_conformity(db: Session, memoir_id: uuid.UUID) -> None:
     ).all()
     by_ref = {r.ref: r for r in requirements}
     texts = {str(s.id): _squash(s.content_md or "") for s in sections}
+    checked = {s.id: s.revision for s in sections}
     items: dict[str, dict[str, Any]] = {}
     error: str | None = None
     if requirements:
@@ -518,6 +523,16 @@ def run_conformity(db: Session, memoir_id: uuid.UUID) -> None:
             )
         )
     memoir = db.get_one(Memoir, memoir_id, populate_existing=True)
-    memoir.conformity_status, memoir.conformity_error = "ready", error
+    now = {
+        section_id: revision
+        for section_id, revision in db.execute(
+            select(MemoirSection.id, MemoirSection.revision).where(
+                MemoirSection.memoir_id == memoir_id
+            )
+        )
+    }
+    # A chapter edited while the matrix was computed: the result is already outdated.
+    memoir.conformity_status = "ready" if now == checked else "stale"
+    memoir.conformity_error = error
     set_job_status(db, JOB_CONFORMITY, memoir_id, "done")
     db.commit()

@@ -28,6 +28,36 @@ class RegenerateIn(BaseModel):
     add_requirement_refs: list[str] = Field(default_factory=list, max_length=50)
 
 
+class SectionEditIn(BaseModel):
+    body_md: str = Field(max_length=60_000)  # the chapter without its title (kept from the plan)
+    base_revision: int = Field(ge=0)  # the revision the user started from
+
+
+class RestoreIn(BaseModel):
+    base_revision: int = Field(ge=0)
+
+
+class RevisionOut(BaseModel):
+    id: uuid.UUID
+    revision: int
+    origin: Literal["generated", "edited", "restored"]
+    created_at: datetime
+    author: str | None  # None: drafted by Pilao
+    instruction: str | None
+    model: str | None
+    words: int
+    content_md: str
+
+
+class MemoirVersionOut(BaseModel):
+    id: uuid.UUID
+    version: int
+    status: Literal["draft", "generating", "ready", "exported"]
+    created_at: datetime
+    chapters: int
+    drafted: int
+
+
 class SectionOut(BaseModel):
     id: uuid.UUID
     position: int
@@ -43,6 +73,7 @@ class SectionOut(BaseModel):
     sources: list[dict[str, Any]]
     covered_refs: list[str]
     edited_by_user: bool
+    revision: int
 
 
 class ReferenceChoiceOut(BaseModel):
@@ -66,7 +97,7 @@ class MemoirOut(BaseModel):
     sections: list[SectionOut]
     references: list[ReferenceChoiceOut]
     unassigned_requirements: list[str]
-    conformity_status: Literal["none", "pending", "ready", "error"]
+    conformity_status: Literal["none", "pending", "ready", "error", "stale"]
     conformity_error: str | None
     drafted_words: int
     estimated_pages: int | None  # None until a chapter is drafted (US-4.2 CA5)
@@ -96,7 +127,7 @@ class ConformityItemOut(BaseModel):
 
 
 class ConformityOut(BaseModel):
-    status: Literal["none", "pending", "ready", "error"]
+    status: Literal["none", "pending", "ready", "error", "stale"]
     error: str | None
     counts: dict[str, int]
     items: list[ConformityItemOut]  # missing first, then partial, then covered (US-4.3 CA2)

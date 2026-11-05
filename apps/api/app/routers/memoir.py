@@ -15,7 +15,9 @@ from app.db.models import (
     DceFile,
     Memoir,
     MemoirSection,
+    MemoirSectionRevision,
     Requirement,
+    User,
 )
 from app.domain.memoir_checks import count_words
 from app.domain.memoir_plan import WORDS_PER_PAGE
@@ -23,15 +25,20 @@ from app.schemas.memoir import (
     ConformityItemOut,
     ConformityOut,
     MemoirOut,
+    MemoirVersionOut,
     OutlineIn,
     ReferenceChoiceOut,
     ReferencesIn,
     RegenerateIn,
+    RestoreIn,
+    RevisionOut,
+    SectionEditIn,
     SectionOut,
     SourceRef,
 )
 from app.services import memoir as svc
 from app.services import memoir_drafting as drafting
+from app.services import memoir_editing as editing
 from app.workers.queue import JobQueue, get_job_queue
 
 router = APIRouter(tags=["memoir"])
@@ -135,6 +142,33 @@ def latest(bid_id: uuid.UUID, db: ScopedDb) -> MemoirOut:
     return memoir_out(db, memoir)
 
 
+@router.get("/bids/{bid_id}/memoirs")
+def versions(bid_id: uuid.UUID, db: ScopedDb) -> list[MemoirVersionOut]:
+    """US-4.4 CA4: every version of the memoir of this bid, newest first."""
+    bid = _bid(db, bid_id)
+    memoirs = db.scalars(
+        select(Memoir).where(Memoir.bid_id == bid.id).order_by(Memoir.version.desc())
+    ).all()
+    statuses: dict[uuid.UUID, list[str]] = {}
+    for memoir_id, status in db.execute(
+        select(MemoirSection.memoir_id, MemoirSection.status).where(
+            MemoirSection.memoir_id.in_([m.id for m in memoirs])
+        )
+    ):
+        statuses.setdefault(memoir_id, []).append(status)
+    return [
+        MemoirVersionOut(
+            id=m.id,
+            version=m.version,
+            status=m.status,
+            created_at=m.created_at,
+            chapters=len(statuses.get(m.id, [])),
+            drafted=sum(s == "ready" for s in statuses.get(m.id, [])),
+        )
+        for m in memoirs
+    ]
+
+
 @router.get("/memoirs/{memoir_id}")
 def read(memoir_id: uuid.UUID, db: ScopedDb) -> MemoirOut:
     return memoir_out(db, _memoir(db, memoir_id))
@@ -172,11 +206,67 @@ def regenerate(
     section_id: uuid.UUID, data: RegenerateIn, ctx: CurrentAuth, db: ScopedDb, queue: Queue
 ) -> MemoirOut:
     """US-4.4 CA2: new version of one chapter, with a free instruction."""
+    section = _section(db, section_id)
+    drafting.regenerate_section(
+        db, ctx.user, section, data.instruction, data.add_requirement_refs, queue
+    )
+    return memoir_out(db, db.get_one(Memoir, section.memoir_id))
+
+
+def _section(db: ScopedDb, section_id: uuid.UUID) -> MemoirSection:
     section = db.get(MemoirSection, section_id)
     if section is None:
         raise ApiError(404, "not_found", "Chapitre introuvable.")
-    drafting.regenerate_section(
-        db, ctx.user, section, data.instruction, data.add_requirement_refs, queue
+    return section
+
+
+@router.put("/memoir-sections/{section_id}")
+def edit_section(
+    section_id: uuid.UUID, data: SectionEditIn, ctx: CurrentAuth, db: ScopedDb
+) -> MemoirOut:
+    """US-4.4 CA1: the user's text replaces the chapter (a new revision, the old one is kept)."""
+    section = editing.edit_section(
+        db, ctx.user, _section(db, section_id), data.body_md, data.base_revision
+    )
+    return memoir_out(db, db.get_one(Memoir, section.memoir_id))
+
+
+@router.get("/memoir-sections/{section_id}/revisions")
+def revisions(section_id: uuid.UUID, db: ScopedDb) -> list[RevisionOut]:
+    section = _section(db, section_id)
+    rows = db.execute(
+        select(MemoirSectionRevision, User.full_name, User.email)
+        .outerjoin(User, User.id == MemoirSectionRevision.created_by)
+        .where(MemoirSectionRevision.section_id == section.id)
+        .order_by(MemoirSectionRevision.revision.desc())
+        .limit(100)
+    ).all()
+    return [
+        RevisionOut(
+            id=r.id,
+            revision=r.revision,
+            origin=r.origin,
+            created_at=r.created_at,
+            author=(name or email) if r.created_by else None,
+            instruction=r.instruction,
+            model=r.model,
+            words=count_words(r.content_md),
+            content_md=r.content_md,
+        )
+        for r, name, email in rows
+    ]
+
+
+@router.post("/memoir-sections/{section_id}/revisions/{revision_id}/restore")
+def restore(
+    section_id: uuid.UUID,
+    revision_id: uuid.UUID,
+    data: RestoreIn,
+    ctx: CurrentAuth,
+    db: ScopedDb,
+) -> MemoirOut:
+    section = editing.restore_revision(
+        db, ctx.user, _section(db, section_id), revision_id, data.base_revision
     )
     return memoir_out(db, db.get_one(Memoir, section.memoir_id))
 
