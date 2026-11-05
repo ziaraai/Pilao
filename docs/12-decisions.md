@@ -214,3 +214,19 @@ Format : numéro, date, décision, raison, statut. Ajouter une entrée pour chaq
 - **Démarrage en production refusé** tant qu'un réglage de développement reste : adresse web non `https://`, base de données de développement, stockage S3 local ou sans clés, antivirus ou modèle d'embeddings absent. `/ready` contrôle la base et Redis.
 - **Hébergeur** : non choisi (Q7). Les images ne dépendent d'aucun hébergeur, et `infra/docker-compose.prod.yml` sert d'exemple.
 - **Statut** : validé.
+
+## ADR-026 — Droits RGPD : export complet et suppression d'une entreprise
+- **Date** : 2026-11-05
+- **Export (accès, portabilité)** :
+  - Demandé par un administrateur, préparé par le worker : une archive ZIP avec `donnees.json` (toutes les lignes de l'entreprise, table par table), les annonces suivies, chaque fichier sous sa forme d'origine et un LISEZ-MOI.
+  - Le contenu est déduit du modèle : toute table qui porte `org_id`. Une nouvelle table est donc exportée sans y penser.
+  - Sont exclus les secrets et ce qui se recalcule : mots de passe et jetons hachés, sessions, index vectoriels.
+  - Seul le dernier export est gardé, et il n'est jamais refusé pour manque d'espace.
+- **Suppression (effacement, résiliation)** :
+  - Programmée à 30 jours (`DELETION_GRACE_DAYS`, durée proposée en `docs/09`), confirmée en recopiant le nom de l'entreprise, annulable jusque-là.
+  - Chaque utilisateur est prévenu par e-mail, et un bandeau s'affiche sur toutes les pages.
+  - La purge passe chaque heure, avec la tâche des alertes. Elle efface d'abord les objets du stockage S3 : en cas d'échec, rien n'est supprimé et elle recommence à l'heure suivante. Puis elle efface la ligne de l'entreprise, dont toutes les tables dépendent en cascade, index vectoriel compris.
+  - Il reste un reçu sans donnée personnelle (`purge_logs` : identifiant, dates, nombre de lignes et d'objets) et un dernier e-mail de confirmation. Les annonces publiques ne sont pas touchées.
+- **Sauvegardes** : une entreprise effacée subsiste dans les sauvegardes jusqu'à leur expiration. La durée de conservation des sauvegardes est à fixer avec l'hébergeur (Q7) et à écrire dans la politique de confidentialité.
+- **Statut** : validé.
+

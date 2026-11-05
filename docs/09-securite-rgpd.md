@@ -31,7 +31,7 @@ Les mémoires techniques et les prix sont des secrets d'affaires pour nos client
 - Données personnelles traitées : comptes utilisateurs, dirigeants (issus des registres publics), CV et noms dans les moyens humains, éventuellement des photos.
 - Base légale : exécution du contrat (abonnement).
 - Pilao est **sous-traitant** pour les données que les clients déposent : contrat de sous-traitance (DPA) à faire signer.
-- Droits : export et suppression complète des données de l'org sur demande et à la résiliation (job de purge, y compris S3 et index vectoriel).
+- Droits : export et suppression complète des données de l'org sur demande et à la résiliation (job de purge, y compris S3 et index vectoriel). **Fait** (ADR-026) : Profil > Vos données, export ZIP et suppression programmée à 30 jours, purge horaire avec reçu `purge_logs`.
 - Durées de conservation à définir (proposition : 30 jours après résiliation, puis purge).
 - Documents à rédiger avant ouverture aux clients : mentions légales, CGU/CGV, politique de confidentialité, DPA.
 
