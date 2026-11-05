@@ -3,6 +3,7 @@
 import { useState } from "react";
 
 import { ChapterView } from "@/components/dossier/chapter";
+import { ExportCard } from "@/components/dossier/export";
 import { SourceLink, SourceViewer } from "@/components/dossier/source";
 import {
   Alert,
@@ -518,6 +519,7 @@ function OutlineEditor({
             onChange={onChange}
             onRefresh={onRefresh}
           />
+          <ExportCard memoir={memoir} />
         </SourceViewer>
       )}
     </div>

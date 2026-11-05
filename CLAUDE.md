@@ -75,7 +75,7 @@ docker compose -f infra/docker-compose.yml up -d   # postgres+pgvector, redis, m
 cp .env.example apps/api/.env                       # contient ENVIRONMENT=local (sinon règles de production)
 cd apps/api && uv sync && uv run alembic upgrade head && uv run fastapi dev app/main.py
 cd apps/api && uv run rq worker -u $REDIS_URL        # worker (indexation, lecture IA, traitement du DCE)
-sudo apt-get install tesseract-ocr tesseract-ocr-fra  # OCR des pièces scannées (worker)
+sudo apt-get install tesseract-ocr tesseract-ocr-fra libreoffice-writer-nogui fonts-liberation  # OCR et export PDF (worker)
 cd apps/web && pnpm install && pnpm dev               # NEXT_PUBLIC_API_URL=http://localhost:8000 par défaut
 cd apps/web && pnpm test                             # tests unitaires du front ; parcours navigateur : apps/web/e2e/README.md
 cd apps/api && uv run pytest

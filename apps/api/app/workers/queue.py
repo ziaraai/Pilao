@@ -22,6 +22,7 @@ class JobQueue(Protocol):
     def enqueue_analyze_dce(self, analysis_id: uuid.UUID) -> None: ...
     def enqueue_draft_section(self, section_id: uuid.UUID) -> None: ...
     def enqueue_conformity(self, memoir_id: uuid.UUID) -> None: ...
+    def enqueue_export(self, document_id: uuid.UUID) -> None: ...
 
 
 class RqJobQueue:
@@ -87,6 +88,16 @@ class RqJobQueue:
             result_ttl=3600,
             failure_ttl=7 * 24 * 3600,
             retry=Retry(max=2, interval=[60, 300]),
+        )
+
+    def enqueue_export(self, document_id: uuid.UUID) -> None:
+        self._q.enqueue(
+            "app.workers.jobs.export_job",
+            str(document_id),
+            job_timeout=DRAFT_JOB_TIMEOUT_SECONDS,
+            result_ttl=3600,
+            failure_ttl=7 * 24 * 3600,
+            retry=Retry(max=2, interval=[30, 120]),
         )
 
 

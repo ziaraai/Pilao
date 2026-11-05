@@ -98,6 +98,9 @@ AI_MONTHLY_BUDGET_EUR_PER_ORG=50   # garde-fou
 BOAMP_BASE_URL=https://boamp-datadila.opendatasoft.com/api/explore/v2.1
 TED_BASE_URL=https://api.ted.europa.eu/v3
 RECHERCHE_ENTREPRISES_BASE_URL=https://recherche-entreprises.api.gouv.fr
+# Export PDF (worker) : LibreOffice headless
+SOFFICE_PATH=soffice
+PDF_TIMEOUT_SECONDS=180
 # E-mail (plus tard)
 SMTP_URL=...
 ```

@@ -371,3 +371,12 @@ export type DocumentKind = {
   description: string;
   latest: GeneratedDocument | null;
 };
+export type ExportCheck = {
+  warnings: string[];
+  to_complete: { section_id: string; title: string; items: string[] }[];
+  missing_requirements: { ref: string; text: string }[];
+  not_drafted: string[];
+  conformity_status: string;
+  estimated_pages: number | null;
+  max_pages: number | null;
+};

@@ -173,6 +173,7 @@ class FakeQueue:
         self.pending_analyses: list[uuid.UUID] = []
         self.pending_sections: list[uuid.UUID] = []
         self.pending_conformity: list[uuid.UUID] = []
+        self.pending_exports: list[uuid.UUID] = []
         self.ocr = None  # set to an OCR engine to exercise scanned pages
         self.down = False
 
@@ -245,6 +246,19 @@ class FakeQueue:
                 memoir_id = self.pending_conformity.pop(0)
                 with _new_session(self._conn) as session:
                     run_conformity(session, memoir_id)
+
+    def enqueue_export(self, document_id: uuid.UUID) -> None:
+        if self.down:
+            raise ConnectionError("redis down")
+        self.pending_exports.append(document_id)
+
+    def drain_exports(self, converter) -> None:  # type: ignore[no-untyped-def]
+        from app.services.exports import run_export
+
+        while self.pending_exports:
+            document_id = self.pending_exports.pop(0)
+            with _new_session(self._conn) as session:
+                run_export(session, document_id, self._storage, converter)
 
     def drain(self) -> None:
         from app.services.knowledge import run_index_document

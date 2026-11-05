@@ -24,6 +24,9 @@ class Settings(BaseSettings):
     signed_url_ttl_seconds: int = 300
     clamav_host: str | None = None  # unset = no antivirus (refused in production)
     clamav_port: int = 3310
+    # LibreOffice for the PDF export (worker image); empty = PDF export unavailable
+    soffice_path: str = "soffice"
+    pdf_timeout_seconds: int = 180
     # LLM models per task (LiteLLM names), fixed after phase 0 (ADR-005). Empty = not configured.
     llm_model_extraction: str = ""
     llm_model_generation: str = ""

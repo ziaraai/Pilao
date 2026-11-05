@@ -1,5 +1,23 @@
 const { chromium } = require("playwright");
 const fs = require("fs");
+const { execFileSync } = require("child_process");
+// The API's virtualenv reads Word files and archives for the checks below.
+const PY = `${__dirname}/../../api/.venv/bin/python`;
+const docxText = (path) =>
+  execFileSync(PY, [
+    "-c",
+    "import sys, docx; d = docx.Document(sys.argv[1]); print('\\n'.join([p.text for p in d.paragraphs] + [c.text for t in d.tables for r in t.rows for c in r.cells]))",
+    path,
+  ]).toString();
+const zipNames = (path) =>
+  execFileSync(PY, [
+    "-c",
+    "import sys, zipfile; print('\\n'.join(zipfile.ZipFile(sys.argv[1]).namelist()))",
+    path,
+  ])
+    .toString()
+    .trim()
+    .split("\n");
 const S = process.argv[2];
 const WEB = "http://localhost:3000";
 
@@ -85,7 +103,7 @@ let current; // the page, for a screenshot when a step fails
     .check();
   await page.getByLabel("Départements").fill("69, 01");
   await page.getByLabel("Montant maximum (€ HT)").fill("500 000");
-  await page.getByRole("button", { name: "Enregistrer" }).click();
+  await page.getByRole("button", { name: "Enregistrer", exact: true }).click();
   await page.getByText("Paramètres enregistrés.").waitFor();
   const cpv = await page
     .getByRole("textbox", { name: "Codes CPV" })
@@ -93,7 +111,7 @@ let current; // the page, for a screenshot when a step fails
   if (!cpv.includes("90919200"))
     throw new Error("trade defaults not applied: " + cpv);
   await page.getByLabel("Montant minimum (€ HT)").fill("douze");
-  await page.getByRole("button", { name: "Enregistrer" }).click();
+  await page.getByRole("button", { name: "Enregistrer", exact: true }).click();
   await page.getByText("Montant illisible").waitFor();
   await page.getByLabel("Montant minimum (€ HT)").fill("");
   step("watch settings saved, CPV pre-selected, bad amount refused");
@@ -117,6 +135,14 @@ let current; // the page, for a screenshot when a step fails
     .getByRole("heading", { name: /Profil complet à/ })
     .textContent();
   step(`staff added, Excel import reported (1 ok, 1 error) — ${pct}`);
+
+  // 4b. Company identity for DC1/DC2 and the Word layout (P2-06)
+  await page.getByLabel("Téléphone").fill("04 78 00 00 00");
+  await page.getByLabel("Signataire (nom et prénom)").fill("Abdraouf Exemple");
+  await page.getByLabel("Qualité du signataire").fill("Gérant");
+  await page.getByRole("button", { name: "Enregistrer l'identité" }).click();
+  await page.getByRole("status").getByText("Enregistré.").waitFor();
+  step("company identity saved (phone, signatory)");
   await page.screenshot({ path: `${S}/01-profil.png`, fullPage: true });
 
   // 5. Vault: upload, AI reading not configured -> manual confirmation
@@ -245,6 +271,104 @@ let current; // the page, for a screenshot when a step fails
   await matrixCard.screenshot({ path: `${S}/06-conformite.png` });
   step(
     "memoir drafted per chapter, missing requirement listed first, « compléter ce point » covers it",
+  );
+
+  // 6d. Editing a chapter, highlighted passages, history (P2-05)
+  const moyens = page.locator("article", {
+    has: page.getByRole("heading", { name: "1. Moyens", exact: true }),
+  });
+  await moyens.getByRole("button", { name: "Modifier" }).click();
+  await moyens
+    .getByLabel("Texte du chapitre 1. Moyens")
+    .fill(
+      "Nous affectons 12 agents au site.\n\n[À COMPLÉTER : nom du chef d'équipe]",
+    );
+  await moyens
+    .getByRole("button", { name: "Enregistrer", exact: true })
+    .click();
+  await moyens.getByText("Modifié par vous").waitFor();
+  await moyens
+    .locator("mark", { hasText: "[À COMPLÉTER : nom du chef d'équipe]" })
+    .waitFor();
+  await matrixCard
+    .getByText("Le mémoire a été modifié depuis la vérification", {
+      exact: false,
+    })
+    .waitFor();
+  await moyens.getByText("Historique (3 versions)").click();
+  await moyens.getByText("Modifiée par", { exact: false }).waitFor();
+  await page.screenshot({ path: `${S}/07-edition.png`, fullPage: true });
+  await moyens
+    .locator("li", { hasText: "Version 2" })
+    .getByRole("button", { name: "Restaurer cette version" })
+    .click();
+  await moyens.getByText("Modifié par vous").waitFor({ state: "detached" });
+  await moyens
+    .getByText("Exigence CCTP-3 : nous la traitons dans ce chapitre.")
+    .waitFor();
+  step(
+    "chapter edited (marker highlighted, matrix flagged outdated), earlier version restored",
+  );
+
+  // 6e. Pre-filled DC1 (P2-06)
+  const docsCard = page.locator("section", {
+    has: page.getByRole("heading", { name: "Documents pré-remplis" }),
+  });
+  const dc1Row = docsCard.locator("li", {
+    hasText: "DC1 — Lettre de candidature",
+  });
+  await dc1Row.getByRole("button", { name: "Générer" }).click();
+  const [dc1Download] = await Promise.all([
+    page.waitForEvent("download"),
+    dc1Row.getByRole("button", { name: /Télécharger/ }).click(),
+  ]);
+  await dc1Download.saveAs(`${S}/dc1.docx`);
+  const dc1 = docxText(`${S}/dc1.docx`);
+  if (
+    !dc1.includes("Abdraouf Exemple, Gérant") ||
+    !dc1.includes("Téléphone : 04 78 00 00 00") ||
+    !dc1.includes("Acheteur : Ville de Lyon")
+  )
+    throw new Error("DC1 not pre-filled: " + dc1.slice(0, 400));
+  step("DC1 generated and downloaded, pre-filled from profile and DCE");
+
+  // 6f. Export of the complete folder, warnings first (P2-07)
+  const exportCard = page.locator("section", {
+    has: page.getByRole("heading", { name: "Export", exact: true }),
+  });
+  await exportCard
+    .getByRole("button", { name: "Dossier complet (.zip)" })
+    .click();
+  await exportCard
+    .getByRole("alertdialog")
+    .getByText("La matrice de conformité date d'avant", { exact: false })
+    .waitFor();
+  await exportCard.getByRole("button", { name: "Exporter quand même" }).click();
+  const zipButton = exportCard.getByRole("button", { name: /^Télécharger/ });
+  await zipButton.waitFor({ timeout: 120000 });
+  await exportCard.screenshot({ path: `${S}/08-export.png` });
+  const [zipDownload] = await Promise.all([
+    page.waitForEvent("download"),
+    zipButton.click(),
+  ]);
+  await zipDownload.saveAs(`${S}/dossier.zip`);
+  const names = zipNames(`${S}/dossier.zip`);
+  for (const expected of [
+    "01 - Mémoire technique.docx",
+    "01 - Mémoire technique.pdf",
+    "02 - Pièces administratives/DC2 — Déclaration du candidat.docx",
+    "LISEZ-MOI.txt",
+  ])
+    if (!names.includes(expected))
+      throw new Error(`${expected} missing from the ZIP: ${names.join(", ")}`);
+  if (
+    !names.some((n) =>
+      n.startsWith("03 - Attestations/Attestation de vigilance URSSAF"),
+    )
+  )
+    throw new Error("valid URSSAF attestation missing from the ZIP");
+  step(
+    `complete folder exported after warnings: ${names.length} files (Word, PDF, forms, attestation)`,
   );
   await page
     .locator("h1 + p")

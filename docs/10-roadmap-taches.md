@@ -50,9 +50,9 @@ Reste à faire :
 - [x] P2-02 Sélection des références
 - [x] P2-03 Rédaction par chapitre en parallèle + sources + flags (US-4.2)
 - [x] P2-04 Matrice de conformité (US-4.3)
-- [ ] P2-05 Éditeur + régénération d'un chapitre + versions (US-4.4)
-- [ ] P2-06 DC1/DC2, listes de moyens et de références, trame de planning (US-4.5)
-- [ ] P2-07 Export Word avec mise en page de l'entreprise, PDF, ZIP (US-4.6)
+- [x] P2-05 Éditeur + régénération d'un chapitre + versions (US-4.4)
+- [x] P2-06 DC1/DC2, listes de moyens et de références, trame de planning (US-4.5)
+- [x] P2-07 Export Word avec mise en page de l'entreprise, PDF, ZIP (US-4.6)
 
 ## Phase 3 — Veille, score, alertes, tableau de bord (3 semaines)
 

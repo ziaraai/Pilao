@@ -18,8 +18,10 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - uses: astral-sh/setup-uv@v5
-      - name: OCR engine (Tesseract, French)
-        run: sudo apt-get update -qq && sudo apt-get install -y -qq tesseract-ocr tesseract-ocr-fra
+      - name: OCR engine (Tesseract, French) and LibreOffice (PDF export)
+        run: >
+          sudo apt-get update -qq && sudo apt-get install -y -qq --no-install-recommends
+          tesseract-ocr tesseract-ocr-fra libreoffice-writer-nogui fonts-liberation
       - run: uv sync
       - run: uv run ruff check .
       - run: uv run black --check .

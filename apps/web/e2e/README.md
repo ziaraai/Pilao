@@ -5,7 +5,9 @@ le **vrai** worker RQ, PostgreSQL + pgvector, Redis, un S3 simulé (`moto_server
 modèle compatible OpenAI (`fake_openai.py`) pour l'analyse du DCE et la rédaction : inscription,
 confirmation d'e-mail, connexion, profil et import Excel, coffre-fort, dépôt du DCE, analyse avec
 sources cliquables, plan du mémoire, rédaction, matrice de conformité et « compléter ce point »,
-base documentaire, déconnexion.
+modification d'un chapitre et restauration d'une version, DC1 téléchargé, export du dossier complet
+(ZIP avec le PDF de LibreOffice) après avertissements, base documentaire, déconnexion. Le worker
+a besoin de LibreOffice (`libreoffice-writer-nogui`) pour le PDF.
 
 ```bash
 W=$(mktemp -d)                                     # dossier de travail (journaux, captures)

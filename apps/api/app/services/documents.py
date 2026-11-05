@@ -78,7 +78,7 @@ def load_logo(db: Session, org: Organization, storage: ObjectStorage) -> bytes |
 
 
 def form_data(
-    db: Session, org: Organization, user: User, bid: Bid, storage: ObjectStorage
+    db: Session, org: Organization, user_email: str | None, bid: Bid, storage: ObjectStorage
 ) -> dc_forms.FormData:
     """Everything a document may say: the company's own data and the analysed DCE."""
     analysis = latest_analysis(db, bid)
@@ -114,7 +114,7 @@ def form_data(
             address=address,
             naf_code=org.naf_code,
             phone=org.phone,
-            email=org.contact_email or user.email,
+            email=org.contact_email or user_email,
             signatory_name=org.signatory_name,
             signatory_role=org.signatory_role,
             headcount_range=org.headcount_range,
@@ -220,7 +220,7 @@ def generate_form(
     if kind not in dc_forms.FORMS:
         raise ApiError(404, "unknown_document", "Document inconnu.")
     label, build = dc_forms.FORMS[kind]
-    builder = build(form_data(db, org, user, bid, storage))
+    builder = build(form_data(db, org, user.email, bid, storage))
     doc = GeneratedDocument(
         id=uuid.uuid4(),
         org_id=org.id,

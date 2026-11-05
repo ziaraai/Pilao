@@ -124,8 +124,10 @@ class DocBuilder:
                 run.font.highlight_color = WD_COLOR_INDEX.YELLOW
             else:
                 run = paragraph.add_run(r.text)
-                run.bold = bold or r.kind == "strong"
-                run.italic = r.kind == "em"
+                if bold or r.kind == "strong":  # otherwise inherit (a heading is bold)
+                    run.bold = True
+                if r.kind == "em":
+                    run.italic = True
         return paragraph
 
     def title(self, text: str, subtitle: str | None = None) -> None:

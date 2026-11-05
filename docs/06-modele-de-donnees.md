@@ -10,7 +10,10 @@ organizations (
   name text not null, legal_form text, naf_code text,
   address_line text, postal_code text, city text, department char(3),
   headcount_range text, logo_file_id uuid null,
-  brand_color text null, created_at, updated_at
+  brand_color text null,                       -- couleur des titres des documents Word
+  phone text, contact_email text,              -- pré-remplissage DC1/DC2 (saisis une fois)
+  signatory_name text, signatory_role text,    -- personne habilitée à engager l'entreprise
+  created_at, updated_at
 )
 
 users (
@@ -135,8 +138,16 @@ memoir_sections (
   id, org_id, memoir_id, position int, title text,
   content_md text, criterion_ref text null,     -- sous-critère de notation couvert
   sources jsonb,                                -- [{chunk_id, reference_id, ...}]
-  flags jsonb,                                  -- [{type:'to_complete'|'number'|'commitment', text}]
-  generated_by_model text, prompt_version text, edited_by_user bool default false
+  flags jsonb,                                  -- [{type:'to_complete'|'number'|'name'|'commitment'|'length', text, term}]
+  generated_by_model text, prompt_version text, edited_by_user bool default false,
+  revision int default 0                        -- version courante ; une modification part de celle-ci
+)
+
+memoir_section_revisions (                      -- US-4.4 CA4 : tout texte qu'a eu un chapitre
+  id, org_id, section_id, revision int, unique (section_id, revision),
+  origin text check (origin in ('generated','edited','restored')),
+  content_md text, flags jsonb, sources jsonb, covered_refs text[],
+  instruction text null, model text null, prompt_version text null, created_by uuid null, created_at
 )
 
 conformity_items (
@@ -145,8 +156,12 @@ conformity_items (
 )
 
 generated_documents (
-  id, org_id, bid_id, kind text,  -- dc1, dc2, dume_data, staff_list, equipment_list, references_list, planning, memoir_docx, memoir_pdf, bundle_zip
-  file_id uuid, created_at
+  id, org_id, bid_id, memoir_id uuid null,
+  kind text,  -- dc1, dc2, staff_list, equipment_list, references_list, planning, memoir_docx, memoir_pdf, bundle_zip
+  status text check (status in ('pending','ready','error')), error text,
+  file_id uuid null, to_complete jsonb,  -- les [À COMPLÉTER] du document
+  warnings jsonb,                        -- avertissements acceptés avant l'export (US-4.6 CA4)
+  meta jsonb, created_by uuid, created_at  -- les 3 derniers de chaque type sont gardés par dossier
 )
 ```
 
