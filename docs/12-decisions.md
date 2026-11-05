@@ -272,3 +272,17 @@ Format : numéro, date, décision, raison, statut. Ajouter une entrée pour chaq
 - **Ce que les textes ne promettent pas** : un journal des accès du support (pas encore construit), ni un chiffrement au repos qui dépend de l'hébergeur.
 - **Relecture** : ces textes sont un projet sérieux, rédigé à partir du fonctionnement réel du produit, mais ils doivent être relus par un juriste avant l'ouverture aux clients (Q16). La réacceptation quand la version change est à construire avant la première modification (roadmap).
 - **Statut** : validé (textes à relire).
+
+## ADR-030 — Collaborateurs : invitation par lien, sans nouvelle table
+- **Date** : 2026-11-05
+- **Décision** : un administrateur invite un collaborateur par e-mail (US-1.5). Le compte est créé tout de suite, sans mot de passe, avec son rôle. Un lien à usage unique (`auth_tokens`, sorte `invitation`, `INVITATION_TTL_HOURS` = 7 jours) permet à l'invité de choisir son nom et son mot de passe et d'accepter les conditions (date et version enregistrées, ADR-029). Le lien prouve l'adresse e-mail, et une session s'ouvre aussitôt.
+- **Pourquoi pas une table d'invitations** : les liens à usage unique existent déjà, avec leur expiration, leur verrou contre la double utilisation et leur purge horaire (ADR-029). Un compte en attente se reconnaît à l'absence de mot de passe. On ne peut pas s'y connecter, et le renvoi d'un lien de confirmation l'ignore : il le laisserait sans mot de passe.
+- **Règles** :
+  - seuls les administrateurs gèrent les collaborateurs, mais tout le monde voit la liste ;
+  - l'entreprise garde toujours un administrateur : on ne peut pas rétrograder le dernier, et personne ne retire son propre accès ;
+  - le renvoi d'invitation est plafonné par heure ;
+  - une adresse n'a qu'un compte dans tout Pilao. C'est l'index unique (insensible à la casse) qui le garantit : la session de l'administrateur, filtrée sur son entreprise, ne lit jamais les comptes d'une autre ;
+  - garde-fou `MAX_USERS_PER_ORG` (25), en attendant les formules (Q3).
+- **Retrait** : le compte est supprimé, avec ses sessions et ses liens. Le travail reste dans les dossiers, car toutes les références à `users` sont `SET NULL`. Aucune donnée personnelle du collaborateur retiré n'est conservée (ses nom et e-mail ne sont pas recopiés dans le journal).
+- **Sécurité** : le lien d'invitation est transmis dans le corps des requêtes (`/auth/invitations/lookup`, `/auth/invitations/accept`), jamais dans une URL d'API qui finirait dans les journaux d'accès.
+- **Statut** : validé.

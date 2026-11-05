@@ -42,6 +42,10 @@ Je dépose mon mémoire modèle, mes anciens mémoires et mes documents qualité
 
 **US-1.5 Utilisateurs**
 L'administrateur invite des collaborateurs par e-mail.
+- CA1 : l'invité reçoit un lien valable 7 jours ; il choisit son nom et son mot de passe, accepte les conditions, et arrive dans l'espace de l'entreprise.
+- CA2 : l'administrateur voit chaque utilisateur et son statut (actif, invitation envoyée, invitation expirée), renvoie une invitation, change un rôle, retire un accès.
+- CA3 : l'entreprise garde toujours au moins un administrateur ; personne ne retire son propre accès.
+- CA4 : retirer un collaborateur ferme ses sessions ; son travail reste dans les dossiers.
 
 ---
 

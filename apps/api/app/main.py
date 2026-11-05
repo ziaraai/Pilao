@@ -22,6 +22,7 @@ from app.routers import (
     documents,
     files,
     knowledge,
+    members,
     memoir,
     organization,
     profile,
@@ -64,6 +65,7 @@ app.include_router(documents.router)
 app.include_router(tenders.router)
 app.include_router(dashboard.router)
 app.include_router(organization.router)
+app.include_router(members.router)
 
 
 @app.get("/health")

@@ -11,7 +11,9 @@ from app.db.models import Organization, User
 from app.db.session import get_db
 from app.integrations.recherche_entreprises import CompanyDirectory, get_company_directory
 from app.schemas.auth import LoginIn, MeOut, MessageOut, OrgOut, RegisterIn, ResendIn, VerifyEmailIn
+from app.schemas.members import AcceptInvitationIn, InvitationLookupIn, InvitationOut
 from app.services import auth as svc
+from app.services import members
 
 router = APIRouter(prefix="/auth", tags=["auth"])
 Db = Annotated[Session, Depends(get_db)]
@@ -64,6 +66,11 @@ def resend(data: ResendIn, db: Db, mailer: MailerDep) -> MessageOut:
 def login(data: LoginIn, request: Request, response: Response, db: Db) -> MeOut:
     ip = _client_ip(request)
     token, user = svc.login(db, data.email, data.password, ip, request.headers.get("user-agent"))
+    _set_session_cookie(response, token)
+    return _me_from(user, db.get_one(Organization, user.org_id))
+
+
+def _set_session_cookie(response: Response, token: str) -> None:
     s = get_settings()
     response.set_cookie(
         s.session_cookie_name,
@@ -74,6 +81,20 @@ def login(data: LoginIn, request: Request, response: Response, db: Db) -> MeOut:
         samesite="lax",
         path="/",
     )
+
+
+@router.post("/invitations/lookup")
+def invitation(data: InvitationLookupIn, db: Db) -> InvitationOut:
+    """The token goes in the body, never in a URL that access logs would keep."""
+    return members.lookup(db, data.token)
+
+
+@router.post("/invitations/accept")
+def accept_invitation(
+    data: AcceptInvitationIn, request: Request, response: Response, db: Db
+) -> MeOut:
+    token, user = members.accept(db, data, _client_ip(request), request.headers.get("user-agent"))
+    _set_session_cookie(response, token)
     return _me_from(user, db.get_one(Organization, user.org_id))
 
 

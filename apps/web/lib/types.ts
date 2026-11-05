@@ -441,3 +441,21 @@ export type DataRequest = {
   created_at: string;
 };
 export type Deletion = { due_at: string | null; requested_at: string | null };
+
+export type Member = {
+  id: string;
+  email: string;
+  full_name: string | null;
+  role: "org_admin" | "org_member";
+  status: "active" | "invited" | "invitation_expired";
+  invited_at: string | null;
+  last_login_at: string | null;
+  is_me: boolean;
+};
+
+export type Invitation = {
+  email: string;
+  full_name: string | null;
+  org_name: string;
+  role: string;
+};

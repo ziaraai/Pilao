@@ -124,3 +124,14 @@ export function label(
 ): string {
   return key ? (map[key] ?? key) : "—";
 }
+
+export const ROLES: Record<string, string> = {
+  org_admin: "Administrateur",
+  org_member: "Collaborateur",
+};
+
+export const MEMBER_STATUS: Record<string, { label: string; tone: Tone }> = {
+  active: { label: "Actif", tone: "ok" },
+  invited: { label: "Invitation envoyée", tone: "info" },
+  invitation_expired: { label: "Invitation expirée", tone: "warning" },
+};

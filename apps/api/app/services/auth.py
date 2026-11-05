@@ -144,8 +144,8 @@ def verify_email(db: Session, token: str) -> None:
 def resend_verification(db: Session, email: str, mailer: Mailer) -> None:
     """Always succeeds from the caller's point of view (no account enumeration)."""
     user = db.scalar(select(User).where(User.email == email))
-    if user is None or user.email_verified_at is not None:
-        return
+    if user is None or user.email_verified_at is not None or user.password_hash is None:
+        return  # an invited colleague has no password yet: the invitation link is the way in
     s = get_settings()
     recent = db.scalar(
         select(func.count())
@@ -198,6 +198,11 @@ def login(
         raise ApiError(403, "email_not_verified", "Veuillez d'abord confirmer votre e-mail.")
     if user.password_hash and needs_rehash(user.password_hash):
         user.password_hash = hash_password(password)
+    return open_session(db, user, ip, user_agent), user
+
+
+def open_session(db: Session, user: User, ip: str | None, user_agent: str | None) -> str:
+    """A new session for ``user`` (login, accepted invitation); commits. Returns its token."""
     token = new_token()
     session = UserSession(
         org_id=user.org_id,
@@ -212,7 +217,7 @@ def login(
     db.flush()
     _audit(db, user, "login", "session", session.id)
     db.commit()
-    return token, user
+    return token
 
 
 def logout(db: Session, session: UserSession) -> None:

@@ -99,6 +99,8 @@ LLM_REASONING_TOKENS=8000          # marge pour le raisonnement caché des modè
 LLM_DENY_DATA_COLLECTION=true      # OpenRouter : écarte les fournisseurs qui conservent les requêtes
 LLM_ZERO_DATA_RETENTION=false      # true : uniquement les fournisseurs qui ne gardent rien (plus strict)
 LOGIN_ATTEMPTS_RETENTION_DAYS=30   # puis effacées (tâche horaire)
+INVITATION_TTL_HOURS=168           # lien d'invitation d'un collaborateur (7 jours)
+MAX_USERS_PER_ORG=25               # garde-fou en attendant les formules
 # Intégrations
 BOAMP_BASE_URL=https://boamp-datadila.opendatasoft.com/api/explore/v2.1
 TED_BASE_URL=https://api.ted.europa.eu/v3

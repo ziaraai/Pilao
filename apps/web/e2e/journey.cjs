@@ -552,6 +552,50 @@ let current; // the page, for a screenshot when a step fails
     `GDPR export downloaded (${exported.length} entries), deletion scheduled then cancelled`,
   );
 
+  // 13. A colleague invited by e-mail joins the company, then is removed (US-1.5)
+  const colleague = `collegue${n}@example.fr`;
+  await page.goto(`${WEB}/profil`);
+  await page.getByLabel("E-mail du collaborateur").fill(colleague);
+  await page.getByLabel("Nom (facultatif)").fill("Sophie Collègue");
+  await page.getByRole("button", { name: "Inviter", exact: true }).click();
+  await page.getByText(`Invitation envoyée à ${colleague}.`).waitFor();
+  await page
+    .getByRole("listitem", { name: colleague })
+    .getByText("Invitation envoyée")
+    .waitFor();
+  await page.waitForTimeout(500);
+  const invites = [
+    ...fs
+      .readFileSync(`${S}/api.log`, "utf8")
+      .matchAll(/(http:\/\/localhost:3000\/invitation\?token=\S+)/g),
+  ];
+  const other = await browser.newContext({ locale: "fr-FR" });
+  const second = await other.newPage();
+  await second.goto(invites[invites.length - 1][1]);
+  await second
+    .getByRole("heading", { name: "Rejoindre Nettoyage E2E" })
+    .waitFor();
+  await second.getByLabel("Mot de passe").fill("correct-horse-battery");
+  await second.getByLabel("J'accepte les", { exact: false }).check();
+  await second.getByRole("button", { name: "Créer mon accès" }).click();
+  await second.waitForURL(`${WEB}/tableau-de-bord`);
+  await second.goto(`${WEB}/profil`);
+  await second
+    .getByText(
+      "Seul un administrateur peut inviter ou retirer des collaborateurs.",
+    )
+    .waitFor();
+  await page.reload();
+  const row = page.getByRole("listitem", { name: colleague });
+  await row.getByText("Actif").waitFor();
+  page.once("dialog", (d) => d.accept());
+  await row.getByRole("button", { name: "Retirer" }).click();
+  await page.getByText(`Accès de ${colleague} retiré.`).waitFor();
+  await second.reload();
+  await second.waitForURL(/\/connexion/);
+  await other.close();
+  step("colleague invited, joined with the link, then removed (session ended)");
+
   // 12. Legal pages, from the footer of the application (ADR-029)
   for (const [link, title] of [
     ["Mentions légales", "Mentions légales"],
