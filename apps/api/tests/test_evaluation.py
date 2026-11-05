@@ -1,6 +1,7 @@
 """Phase 0 harness (docs/11, P0-02 to P0-06): two "models" on a synthetic DCE, end to end."""
 
 import json
+import shutil
 import zipfile
 from pathlib import Path
 from typing import Any
@@ -8,7 +9,7 @@ from typing import Any
 import pytest
 from docx import Document
 from openpyxl import load_workbook
-from sqlalchemy import Connection, func, select
+from sqlalchemy import Connection, select
 
 from app import cli
 from app.ai import llm
@@ -134,7 +135,7 @@ def test_two_models_are_compared_blind_on_the_real_pipeline(
     # what goes to the rater: the memoirs and the analyses, without the model's name
     for model in (GOOD, BROKEN):
         text = docx_text(out / "lyon" / f"memoire-{letter[model]}.docx")
-        assert "Propreté Rhône" in text and "[lyon" not in text  # the company's real name
+        assert "Propreté Rhône" in text and "[lyon" not in text
         analysis = json.loads(
             (out / "lyon" / f"analyse-{letter[model]}.json").read_text(encoding="utf-8")
         )
@@ -168,14 +169,15 @@ def test_two_models_are_compared_blind_on_the_real_pipeline(
     assert good.metrics["exigences_rappel_pct"] == 67  # 2 of the 3 expected
     assert good.metrics["sources_pct"] == 100
 
-    # one organization per run, so the AI journal gives each run's own cost
+    # one organization per run, so the AI journal gives each run's own cost; it carries the
+    # company's real name, the one the model writes (never a label of the evaluation)
     with _new_session(conn) as db:
-        orgs = db.scalar(
-            select(func.count())
-            .select_from(Organization)
-            .where(Organization.name.like("Propreté Rhône [lyon %"))
-        )
-    assert orgs == 2
+        names = db.scalars(
+            select(Organization.name).where(Organization.id.in_([good.org_id, broken.org_id]))
+        ).all()
+    assert names == ["Propreté Rhône", "Propreté Rhône"]
+    assert fake.chapter_prompts
+    assert all('"name": "Propreté Rhône",' in p for p in fake.chapter_prompts)
 
     grid = load_workbook(out / "grille-de-notation.xlsx")
     rows = list(grid["Notation"].iter_rows(values_only=True))
@@ -204,8 +206,20 @@ def test_the_run_is_refused_without_models_or_dce(conn: Connection, tmp_path: Pa
     assert not (tmp_path / "out").exists()  # refused before anything was written
 
 
+def test_the_same_evaluation_can_run_twice_on_the_same_base(
+    conn: Connection, tmp_path: Path
+) -> None:
+    root = samples(tmp_path / "samples")
+    shutil.rmtree(root / "lyon")  # the DCE without any file: fast, the company is created
+    for attempt in ("1", "2"):
+        [run] = run_evaluation(root, ["m"], tmp_path / attempt, lambda: _new_session(conn), seed=3)
+        assert run.error == "passage interrompu : Déposez au moins un fichier."  # no clash
+
+
 def test_metrics_compare_values_amounts_dates_and_pages() -> None:
     assert similar("Ville de Lyon", "Ville de Lyon (69)") and not similar("Lyon", "Paris")
+    # the imposed outline copied word for word from a PDF without accents
+    assert similar("1. Moyens humains affectés au marché", "Moyens humains affectes au marche", 0.6)
     expected = {
         "key_info": {
             "estimated_amount_eur_ht": 100_000,

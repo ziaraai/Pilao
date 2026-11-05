@@ -26,7 +26,9 @@ def make_org(db: Session) -> uuid.UUID:
     return org.id
 
 
-def fake_completion(replies: list[str], calls: list[Any] | None = None) -> Any:
+def fake_completion(
+    replies: list[str], calls: list[Any] | None = None, billed: dict[str, Any] | None = None
+) -> Any:
     answers = iter(replies)
 
     def completion(**kw: Any) -> Any:
@@ -35,9 +37,15 @@ def fake_completion(replies: list[str], calls: list[Any] | None = None) -> Any:
         text = next(answers)
         if text == "BOOM":
             raise RuntimeError("503 overloaded")
+        finish = "stop"
+        if text.startswith("CUT:"):  # the answer stopped at the length limit
+            text, finish = text[4:], "length"
         return SimpleNamespace(
-            choices=[SimpleNamespace(message=SimpleNamespace(content=text))],
-            usage=SimpleNamespace(prompt_tokens=100, completion_tokens=20),
+            choices=[SimpleNamespace(message=SimpleNamespace(content=text), finish_reason=finish)],
+            usage=SimpleNamespace(
+                prompt_tokens=100, completion_tokens=20, **(billed or {}).get("usage", {})
+            ),
+            _hidden_params=(billed or {}).get("hidden", {}),
         )
 
     return completion
@@ -85,6 +93,61 @@ def test_valid_answer_is_parsed_and_journaled(
         True,
         100,
     )
+
+
+@pytest.mark.parametrize(
+    "billed",
+    [{"hidden": {"response_cost": 0.01}}, {"usage": {"cost": 0.01}}],
+    ids=["litellm-hidden-params", "openrouter-usage"],
+)
+def test_the_billed_cost_wins_over_the_price_list(
+    db: Session, configured: None, monkeypatch: pytest.MonkeyPatch, billed: dict[str, Any]
+) -> None:
+    import litellm
+
+    def unknown_price(**kw: Any) -> float:
+        return 0.0  # what LiteLLM's price list says for a model it does not know
+
+    monkeypatch.setattr(litellm, "completion_cost", unknown_price)
+    reply = ['{"kind": "a", "score": 3}']
+    monkeypatch.setattr(litellm, "completion", fake_completion(reply, billed=billed))
+    result = run(db, make_org(db))
+    assert result.cost_eur == pytest.approx(0.009)  # 0.01 $ billed, in euros
+    assert float(db.scalars(select(AiCall.cost_eur)).one()) == pytest.approx(0.009)
+
+
+def test_a_truncated_answer_is_retried_once_with_twice_the_room(
+    db: Session, configured: None, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    import litellm
+
+    monkeypatch.setattr(get_settings(), "llm_reasoning_tokens", 3000)
+    calls: list[Any] = []
+    replies = ['CUT:{"kind": "a", "sco', '{"kind": "a", "score": 3}']
+    monkeypatch.setattr(litellm, "completion", fake_completion(replies, calls))
+    org_id = make_org(db)
+    result = llm.complete(
+        db,
+        org_id=org_id,
+        task="compliance_reading",
+        messages=[{"role": "user", "content": "x"}],
+        response_model=Answer,
+        max_tokens=1000,
+    )
+    assert result.data.score == 3
+    # the answer's own room, plus room for the model's hidden reasoning; then doubled
+    assert [c["max_tokens"] for c in calls] == [1000 + 3000, 2000 + 3000]
+    assert calls[1]["messages"] == calls[0]["messages"]  # no "fix your JSON": it was cut
+    rows = db.scalars(select(AiCall).order_by(AiCall.created_at)).all()
+    assert [(r.success, r.error) for r in rows] == [
+        (False, "réponse tronquée : limite de longueur atteinte"),
+        (True, None),
+    ]
+    assert result.cost_eur == pytest.approx(2 * 0.0018)  # both calls were billed
+
+    monkeypatch.setattr(litellm, "completion", fake_completion(["CUT:{", "CUT:{"]))
+    with pytest.raises(llm.LlmInvalidOutput):
+        run(db, org_id)
 
 
 def test_markdown_fenced_json_is_accepted(

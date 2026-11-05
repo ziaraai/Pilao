@@ -55,6 +55,14 @@ class LlmInvalidOutput(LlmError):
     pass
 
 
+class LlmTruncated(Exception):  # internal signal: never leaves this module
+    """The answer hit the length limit: billed, but unusable as is."""
+
+    def __init__(self, content: str, t_in: int, t_out: int, cost: float) -> None:
+        super().__init__("answer truncated at the length limit")
+        self.content, self.t_in, self.t_out, self.c = content, t_in, t_out, cost
+
+
 @dataclass(frozen=True)
 class LlmResult[T: BaseModel]:
     data: T
@@ -92,6 +100,9 @@ def ensure_budget(db: Session, org_id: uuid.UUID) -> None:
         raise LlmBudgetExceeded("Budget IA mensuel de l'organisation atteint.")
 
 
+DEFAULT_ANSWER_TOKENS = 4000  # retry budget of a truncated call that had no explicit limit
+
+
 def parse_json_object(text: str) -> dict[str, Any]:
     """Accept raw JSON or JSON wrapped in a Markdown code fence."""
     text = text.strip()
@@ -109,6 +120,8 @@ def _call_provider(
 ) -> tuple[str, int, int, float]:
     import litellm  # imported lazily: heavy, and unnecessary when no model is configured
 
+    if max_tokens:  # the caller sizes the answer; recent models also reason before it
+        max_tokens += get_settings().llm_reasoning_tokens
     resp = litellm.completion(
         model=model,
         messages=messages,
@@ -120,17 +133,31 @@ def _call_provider(
     )
     content = resp.choices[0].message.content or ""
     usage = getattr(resp, "usage", None)
-    try:  # LiteLLM prices are in US dollars; the journal and the budget are in euros
-        cost = float(litellm.completion_cost(completion_response=resp) or 0.0)
-        cost *= get_settings().usd_eur_rate
+    # US dollars, converted: the journal and the budget are in euros
+    cost = provider_cost_usd(litellm, resp) * get_settings().usd_eur_rate
+    t_in = int(getattr(usage, "prompt_tokens", 0) or 0)
+    t_out = int(getattr(usage, "completion_tokens", 0) or 0)
+    if getattr(resp.choices[0], "finish_reason", None) == "length":
+        raise LlmTruncated(content, t_in, t_out, cost)
+    return content, t_in, t_out, cost
+
+
+def provider_cost_usd(litellm: Any, resp: Any) -> float:
+    """What the call was billed, in US dollars.
+
+    The provider's own figure first (OpenRouter returns it with every answer): LiteLLM's
+    price list does not know every model and then says 0, which would hide the cost from
+    the journal and the monthly budget. The price list is only the fallback.
+    """
+    reported = (getattr(resp, "_hidden_params", None) or {}).get("response_cost")
+    if not reported:
+        reported = getattr(getattr(resp, "usage", None), "cost", None)
+    if reported:
+        return float(reported)
+    try:
+        return float(litellm.completion_cost(completion_response=resp) or 0.0)
     except Exception:  # noqa: BLE001 - unknown price for this model: log 0 rather than fail
-        cost = 0.0
-    return (
-        content,
-        int(getattr(usage, "prompt_tokens", 0) or 0),
-        int(getattr(usage, "completion_tokens", 0) or 0),
-        cost,
-    )
+        return 0.0
 
 
 def complete[T: BaseModel](
@@ -155,6 +182,24 @@ def complete[T: BaseModel](
         began = time.monotonic()
         try:
             content, t_in, t_out, c = _call_provider(model, conversation, max_tokens)
+        except LlmTruncated as cut:  # asking to fix the JSON would be cut the same way
+            in_tokens, out_tokens, cost = in_tokens + cut.t_in, out_tokens + cut.t_out, cost + cut.c
+            last_error = "réponse tronquée : limite de longueur atteinte"
+            _journal(
+                db,
+                org_id,
+                bid_id,
+                task,
+                model,
+                prompt_version,
+                cut.t_in,
+                cut.t_out,
+                cut.c,
+                began,
+                last_error,
+            )
+            max_tokens = 2 * (max_tokens or DEFAULT_ANSWER_TOKENS)
+            continue
         except Exception as exc:
             _journal(
                 db, org_id, bid_id, task, model, prompt_version, 0, 0, 0.0, began, str(exc)[:500]

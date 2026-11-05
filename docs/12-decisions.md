@@ -241,3 +241,18 @@ Format : numéro, date, décision, raison, statut. Ajouter une entrée pour chaq
 - **Anonymat** : les lettres sont tirées au hasard pour chaque DCE. Les fichiers envoyés au noteur (mémoires, analyses, grille) ne contiennent jamais le nom du modèle, et un test le vérifie. La correspondance reste dans `correspondance-a-garder.json`.
 - **Coûts** : LiteLLM donne les prix en dollars, alors que `ai_calls.cost_eur` et le budget mensuel sont en euros. Le coût est donc converti avec `USD_EUR_RATE` (0,86 par défaut). Il faut mettre ce taux à jour de temps en temps : c'est un garde-fou de budget, pas de la comptabilité.
 - **Statut** : validé.
+
+## ADR-028 — Leçons du premier essai réel (OpenRouter)
+- **Date** : 2026-11-05
+- **Contexte** : premier passage de bout en bout avec un vrai modèle, via OpenRouter, sur un DCE fictif (`eval-models`). Coût : 0,04 €. L'analyse était juste du premier coup (12 exigences sur 12, pages justes). Cinq défauts sont apparus, invisibles avec les faux modèles des tests.
+- **Coût réel** : la grille de prix de LiteLLM ne connaît pas tous les modèles et donnait 0 $. Le journal `ai_calls` et le budget mensuel auraient été aveugles. On prend désormais le coût facturé que renvoie le fournisseur, et la grille ne sert qu'à défaut.
+- **Raisonnement caché** : les modèles récents raisonnent avant de répondre, et ce raisonnement est facturé et compte dans la limite de longueur (1 810 jetons sur 4 050 pour un chapitre). Chaque appel reçoit donc une marge en plus de la taille prévue de la réponse (`LLM_REASONING_TOKENS`, 8 000). C'est un plafond : seuls les jetons utilisés sont payés.
+- **Réponse tronquée** : demander au modèle de « corriger son JSON » le faisait couper au même endroit, et l'appel était payé deux fois pour rien. Une réponse coupée (`finish_reason = length`) est désormais relancée une fois, avec une limite doublée. L'échec est journalisé (« réponse tronquée »). La règle « une nouvelle tentative, puis erreur explicite » est inchangée.
+- **Relances du fournisseur** : LiteLLM a besoin de `tenacity` pour relancer un appel en cas de panne passagère. Sans ce paquet, l'erreur réelle était masquée et rien n'était relancé. Il est maintenant une dépendance déclarée.
+- **Contexte de chaque chapitre** (prompt `generation_memoire_chapitre` 0.3.0) : un chapitre ne voyait que ses propres exigences. Celui sur le personnel demandait donc en `[À COMPLÉTER]` les horaires que le CCTP donne ailleurs. Chaque chapitre reçoit maintenant :
+  - les données du site (surfaces, horaires, fréquences : jusqu'à 25, avec leur source) ;
+  - la durée et le montant estimé du marché ;
+  - la consigne de ne jamais demander ce qui y figure.
+  Les `[À COMPLÉTER]` sont passés de 73 à 45. Ceux qui restent portent sur des données de l'entreprise réellement absentes (dates de formation, validité de certification…).
+- **Évaluation** : les organisations d'évaluation portent le vrai nom de l'entreprise, sans étiquette que le modèle pourrait recopier. Leur SIRET ne dépend plus de `--seed`, pour qu'on puisse relancer la même évaluation. La comparaison des textes ignore les accents, qu'un PDF ou l'OCR peut perdre.
+- **Statut** : validé.

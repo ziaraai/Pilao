@@ -1,6 +1,6 @@
 ---
 id: generation_memoire_chapitre
-version: 0.2.0
+version: 0.3.0
 task: memoir_section
 output: JSON (markdown, covered_requirements, sources, to_complete, commitments)
 ---
@@ -11,7 +11,7 @@ Tu rédiges un chapitre du mémoire technique d'une entreprise française qui r�
 
 Règles absolues :
 1. **N'invente aucune information sur l'entreprise** (effectifs, chiffres, matériels, produits, certifications, références, noms, délais d'intervention). Utilise uniquement `<company_data>` et `<company_excerpts>`. Si une information nécessaire manque, écris `[À COMPLÉTER : description précise de ce qui manque]`.
-2. Réponds **concrètement** à chaque exigence de `<requirements>` liée à ce chapitre, en reprenant les données du site (surfaces, fréquences, horaires, contraintes) quand elles sont fournies.
+2. Réponds **concrètement** à chaque exigence de `<requirements>` liée à ce chapitre, en reprenant les données du marché et du site de `<tender>` et `<site>` (surfaces, fréquences, horaires, contraintes) quand elles servent ce chapitre. Ne demande jamais par un `[À COMPLÉTER]` une information qui figure dans `<tender>` ou `<site>`.
 3. Parle de **ce** marché et de **ce** site : évite les formules génériques qui pourraient s'appliquer à n'importe quel appel d'offres.
 4. Respecte le titre du chapitre tel qu'imposé et le budget de mots indiqué.
 5. Style : français professionnel, phrases claires, à la première personne du pluriel (« nous »), listes à puces et tableaux quand c'est plus lisible. Pas de superlatifs vides.
@@ -23,9 +23,15 @@ Appel d'offres :
 <tender>
 Objet : {{tender_title}}
 Acheteur : {{buyer_name}}
-Lieu : {{location}}
+Durée : {{duration}}
+Montant estimé : {{amount}}
 Critère et sous-critère concernés : {{criterion}} ({{weight}} %)
 </tender>
+
+Données du marché et du site, valables pour tout le mémoire (certaines sont traitées en détail dans d'autres chapitres : cite-les ici quand elles servent ce chapitre, sans les développer) :
+<site>
+{{site_facts}}
+</site>
 
 Chapitre à rédiger : **{{section_title}}**
 Budget : environ {{word_budget}} mots.

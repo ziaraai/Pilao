@@ -46,6 +46,8 @@ plan (RC imposé > modèle org > plan secteur)
   └─► pour chaque chapitre (en parallèle, max N simultanés) :
         1. exigences du CCTP liées au chapitre (par catégorie + similarité)
         2. sous-critère de notation lié
+        2b. contexte commun à tous les chapitres : durée, montant estimé, données du site
+            (exigences « surface », « horaires », « fréquence » des autres chapitres, avec source)
         3. recherche RAG dans la base de l'entreprise (top-k chunks, filtre org_id)
         4. données structurées utiles (moyens, certifications, références choisies)
         5. rédaction (prompt chapitre) → Markdown + sources + flags
@@ -56,6 +58,8 @@ plan (RC imposé > modèle org > plan secteur)
 - **Sélection des références** : similarité entre l'objet de l'AO et les références (embedding) + bonus même type de client, même département, montant proche ; garder 3 à 5.
 - **Longueur** : estimer les pages (≈ 500 mots par page) ; répartir le budget de pages selon le poids des sous-critères.
 - **Régénération d'un chapitre** : même prompt + consigne utilisateur + version précédente.
+- **Longueur de réponse** : la limite de chaque appel est la taille prévue de la réponse plus une marge pour le raisonnement caché des modèles (`LLM_REASONING_TOKENS`). Une réponse coupée est relancée une fois avec une limite doublée (ADR-028).
+- **Coût** : celui facturé par le fournisseur (OpenRouter le renvoie), converti en euros (`USD_EUR_RATE`) ; la grille de LiteLLM ne sert qu'à défaut.
 
 ## 4. Garde-fous
 

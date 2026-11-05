@@ -24,6 +24,7 @@ dependencies = [
   "litellm>=1.108.0",
   "tzdata>=2026.6",
   "pytesseract>=0.3.13",
+  "tenacity>=9",
 ]
 
 [dependency-groups]

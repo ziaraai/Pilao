@@ -24,6 +24,8 @@ import json
 import logging
 import random
 import re
+import secrets
+import unicodedata
 import uuid
 from collections.abc import Callable, Iterator
 from contextlib import contextmanager
@@ -192,11 +194,15 @@ class InlineQueue:
 
 # ---------- metrics against the expected sheet (docs/11) -------------------------------
 
-_WORD = re.compile(r"[a-zà-ÿ0-9]+")
+_WORD = re.compile(r"[a-z0-9]+")
 
 
 def _words(text: str) -> set[str]:
-    return {w for w in _WORD.findall(text.lower()) if len(w) > 2}
+    """Accents ignored: OCR and some PDFs lose them, the expected sheet keeps them."""
+    plain = "".join(
+        ch for ch in unicodedata.normalize("NFKD", text.lower()) if not unicodedata.combining(ch)
+    )
+    return {w for w in _WORD.findall(plain) if len(w) > 2}
 
 
 def similar(a: str, b: str, threshold: float = 0.4) -> bool:
@@ -295,9 +301,13 @@ def models(model: str) -> Iterator[None]:
         s.llm_model_extraction, s.llm_model_generation, s.llm_model_scoring = saved
 
 
-def _siret(seed: int) -> str:
-    """A valid (Luhn) SIRET for an evaluation organization."""
-    base = f"9{seed:012d}"[-13:]
+def _siret() -> str:
+    """A valid (Luhn) SIRET for an evaluation organization, new at every run.
+
+    Never drawn from ``--seed``: running the same evaluation twice on the same base would
+    otherwise create the same SIRET, which is unique.
+    """
+    base = f"9{secrets.randbelow(10**12):012d}"
     for digit in range(10):
         candidate = base + str(digit)
         total = 0
@@ -328,12 +338,12 @@ def check_company(data: dict[str, Any]) -> None:
         raise ValueError(f"entreprise.json invalide : {exc}") from exc
 
 
-def _company(db: Session, data: dict[str, Any], label: str, seed: int) -> tuple[Organization, User]:
-    siret = _siret(seed)
+def _company(db: Session, data: dict[str, Any]) -> tuple[Organization, User]:
+    siret = _siret()
     org = Organization(
         siren=siret[:9],
         siret=siret,
-        name=f"{data.get('name') or 'Entreprise évaluée'} [{label}]",
+        name=data.get("name") or "Entreprise évaluée",  # as in the memoir: no label
         legal_form=data.get("legal_form"),
         address_line=data.get("address_line"),
         postal_code=data.get("postal_code"),
@@ -407,13 +417,12 @@ def evaluate_one(
     model: str,
     letter: str,
     out: Path,
-    seed: int,
 ) -> Run:
     """One DCE with one model, every queued job included (they read the model settings)."""
     run = Run(dce=sample.name, model=model, letter=letter)
     try:
         with models(model):
-            _run_pipeline(sessions, queue, sample, company, knowledge, letter, out, seed, run)
+            _run_pipeline(sessions, queue, sample, company, knowledge, letter, out, run)
     except Exception as exc:  # a broken DCE stops this run only: the others go on
         logger.exception("evaluation of %s with %s failed", sample.name, model)
         queue.jobs.clear()
@@ -432,11 +441,10 @@ def _run_pipeline(
     knowledge: list[Path],
     letter: str,
     out: Path,
-    seed: int,
     run: Run,
 ) -> None:
     with sessions() as db:
-        org, user = _company(db, company, f"{sample.name} {letter}", seed)
+        org, user = _company(db, company)
         org_id, user_id = org.id, user.id
         run.org_id = org_id
         for path in knowledge:
@@ -511,7 +519,6 @@ def _run_pipeline(
             target = out / sample.name
             target.mkdir(parents=True, exist_ok=True)
             data = memoir_data(db, org, memoir, bid, queue.storage)
-            data.company = company.get("name") or data.company.split(" [")[0]
             (target / f"memoire-{letter}.docx").write_bytes(build_memoir(data).to_bytes())
     target = out / sample.name
     target.mkdir(parents=True, exist_ok=True)
@@ -651,13 +658,11 @@ def run_evaluation(
     started = datetime.now(UTC)
     runs: list[Run] = []
     mapping: dict[str, dict[str, str]] = {}
-    counter = 0
     for sample in dces:
         letters = [chr(ord("A") + i) for i in range(len(model_names))]
         rng.shuffle(letters)
         mapping[sample.name] = {}
         for model, letter in zip(model_names, letters, strict=True):
-            counter += 1
             logger.info("évaluation de %s avec %s (%s)", sample.name, model, letter)
             runs.append(
                 evaluate_one(
@@ -669,7 +674,6 @@ def run_evaluation(
                     model,
                     letter,
                     out,
-                    seed=rng.randrange(10**9) + counter,
                 )
             )
             mapping[sample.name][letter] = model

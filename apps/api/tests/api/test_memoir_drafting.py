@@ -195,6 +195,14 @@ def test_every_chapter_is_drafted_in_its_own_job_then_the_matrix_runs(
     )
     assert "Nos agents utilisent des produits écolabellisés." in prompt
     assert "Nettoyage de la médiathèque" in prompt
+    # the site's hours and frequencies reach every chapter, once: here they are its own
+    site = prompt.split("<site>")[1].split("</site>")[0]
+    assert "avant 8h" not in site and "(aucune donnée de site)" in site
+    means = next(p for p in model.chapter_prompts if "**1. Moyens**" in p)
+    site = means.split("<site>")[1].split("</site>")[0]
+    assert "- Nettoyage quotidien des bureaux avant 8h (source : DCE/CCTP.pdf p. 1)" in site
+    assert "- Vitrerie intérieure trimestrielle (source : DCE/CCTP.pdf p. 2)" in site
+    assert "[CCTP-1]" not in means  # context only: never counted as covered by this chapter
     calls = db.scalars(select(AiCall).where(AiCall.task == "memoir_generation")).all()
     assert len(calls) == 3 and all(a.model == "test/generation" for a in calls)  # 2 + matrix
 

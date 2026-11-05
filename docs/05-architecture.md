@@ -95,6 +95,7 @@ LLM_MODEL_VISION=...
 EMBEDDING_MODEL=...
 AI_MONTHLY_BUDGET_EUR_PER_ORG=50   # garde-fou
 USD_EUR_RATE=0.86                  # prix des fournisseurs en dollars → coûts et budget en euros
+LLM_REASONING_TOKENS=8000          # marge pour le raisonnement caché des modèles, en plus de la réponse
 # Intégrations
 BOAMP_BASE_URL=https://boamp-datadila.opendatasoft.com/api/explore/v2.1
 TED_BASE_URL=https://api.ted.europa.eu/v3

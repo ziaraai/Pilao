@@ -68,8 +68,11 @@ def eval_models(args: argparse.Namespace) -> int:
             file=sys.stderr,
         )
         return 2
+    from app.core.logging import configure_logging
     from app.documents.ocr import get_ocr_engine
     from app.evaluation import run_evaluation
+
+    configure_logging()  # one line per run: the evaluation takes minutes per model
 
     names = [m.strip() for m in args.models.split(",") if m.strip()]
     runs = run_evaluation(

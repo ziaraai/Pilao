@@ -46,6 +46,8 @@ class Settings(BaseSettings):
     llm_model_scoring: str = ""
     llm_model_vision: str = ""
     ai_monthly_budget_eur_per_org: float = 50.0
+    # Added to each call's answer limit: recent models reason (billed, hidden) before answering
+    llm_reasoning_tokens: int = 8000
     # Providers bill in US dollars (LiteLLM prices are in USD): costs are stored in euros
     usd_eur_rate: float = 0.86
     # DCE text sent per analysis call (~3.8 chars/token: 300k chars ≈ 80k tokens).

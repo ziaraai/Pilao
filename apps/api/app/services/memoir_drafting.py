@@ -130,6 +130,41 @@ def _requirements(
     return [(r, path) for r, path in rows]
 
 
+SITE_CATEGORIES = ("surface", "schedule", "frequency")
+MAX_SITE_FACTS = 25
+
+
+def _cited(r: Requirement, path: str | None) -> str:
+    return f"{_tag_safe(r.text)} (source : {path or 'DCE'}{f' p. {r.page}' if r.page else ''})"
+
+
+def _site_facts(db: Session, memoir: Memoir, own_refs: list[str]) -> str:
+    """The site's surfaces, hours and frequencies, for every chapter (never contradicted).
+
+    Without them, a chapter on staff asked for the opening hours that the CCTP gives in a
+    requirement attached to another chapter (real-model test, phase 0).
+    """
+    rows = db.execute(
+        select(Requirement, DceFile.path)
+        .outerjoin(DceFile, DceFile.id == Requirement.source_file_id)
+        .where(
+            Requirement.dce_analysis_id == memoir.dce_analysis_id,
+            Requirement.category.in_(SITE_CATEGORIES),
+            Requirement.ref.not_in(own_refs or [""]),
+        )
+        .order_by(Requirement.position)
+        .limit(MAX_SITE_FACTS)
+    ).all()
+    return "\n".join(f"- {_cited(r, path)}" for r, path in rows) or "(aucune donnée de site)"
+
+
+def _amount(value: Any) -> str:
+    try:
+        return f"{float(value):,.0f} € HT".replace(",", "\u202f")
+    except (TypeError, ValueError):
+        return "non précisé"
+
+
 # ---------- starting -------------------------------------------------------------------------
 
 
@@ -237,10 +272,7 @@ def run_draft_section(
     key_info = data.get("key_info") or {}
     requirements = _requirements(db, memoir, section.requirement_refs)
     req_block = (
-        "\n".join(
-            f"- [{r.ref}] {_tag_safe(r.text)} (source : {path or 'DCE'}{f' p. {r.page}' if r.page else ''})"
-            for r, path in requirements
-        )
+        "\n".join(f"- [{r.ref}] {_cited(r, path)}" for r, path in requirements)
         or "(aucune exigence rattachée à ce chapitre)"
     )
     query = " ".join([section.title, *(r.text for r, _ in requirements)])
@@ -270,7 +302,9 @@ def run_draft_section(
     system, user = prompt.render(
         tender_title=_tag_safe(str(title_value)),
         buyer_name=_tag_safe(bid.buyer_name or "non précisé"),
-        location="non précisé",
+        duration=_tag_safe(str((key_info.get("duration") or {}).get("value") or "non précisée")),
+        amount=_amount((key_info.get("estimated_amount_eur_ht") or {}).get("value")),
+        site_facts=_site_facts(db, memoir, section.requirement_refs),
         criterion=section.criterion_ref or "non précisé",
         weight=str(section.criterion_weight) if section.criterion_weight is not None else "?",
         section_title=section.title,
