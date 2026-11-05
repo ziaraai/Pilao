@@ -48,6 +48,10 @@ class Settings(BaseSettings):
     ai_monthly_budget_eur_per_org: float = 50.0
     # Added to each call's answer limit: recent models reason (billed, hidden) before answering
     llm_reasoning_tokens: int = 8000
+    # Through OpenRouter: never a provider that stores or trains on requests (privacy policy);
+    # zero data retention only, optionally (some models then become unavailable)
+    llm_deny_data_collection: bool = True
+    llm_zero_data_retention: bool = False
     # Providers bill in US dollars (LiteLLM prices are in USD): costs are stored in euros
     usd_eur_rate: float = 0.86
     # DCE text sent per analysis call (~3.8 chars/token: 300k chars ≈ 80k tokens).
@@ -69,6 +73,7 @@ class Settings(BaseSettings):
     login_max_failures_per_email: int = 5
     login_max_failures_per_ip: int = 30
     login_window_minutes: int = 15
+    login_attempts_retention_days: int = 30  # then purged (privacy policy)
 
     @property
     def cookie_secure(self) -> bool:

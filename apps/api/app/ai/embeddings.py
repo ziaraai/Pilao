@@ -8,6 +8,7 @@ from dataclasses import dataclass
 from functools import lru_cache
 from typing import Protocol
 
+from app.ai.routing import provider_routing
 from app.core.config import get_settings
 
 
@@ -75,7 +76,11 @@ class LiteLLMEmbedder:
         for i in range(0, len(texts), self._batch):
             try:
                 resp = litellm.embedding(
-                    model=self._model, input=texts[i : i + self._batch], timeout=60, num_retries=2
+                    model=self._model,
+                    input=texts[i : i + self._batch],
+                    timeout=60,
+                    num_retries=2,
+                    **provider_routing(self._model),
                 )
             except Exception as exc:
                 raise EmbeddingError(f"embedding provider error: {exc}") from exc

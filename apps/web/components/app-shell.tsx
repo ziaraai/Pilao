@@ -4,6 +4,7 @@ import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { useEffect } from "react";
 
+import { LegalLinks } from "@/components/legal";
 import { Logo } from "@/components/logo";
 import { Alert, Button, Loading } from "@/components/ui";
 import { api } from "@/lib/api";
@@ -93,6 +94,9 @@ export function AppShell({ children }: { children: React.ReactNode }) {
         <DeletionBanner />
         <VaultBanner />
         <main className="mx-auto max-w-6xl px-4 py-8">{children}</main>
+        <footer className="mx-auto max-w-6xl px-4 pb-8">
+          <LegalLinks />
+        </footer>
       </div>
     </AuthContext.Provider>
   );

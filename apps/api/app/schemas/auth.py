@@ -30,6 +30,7 @@ class RegisterIn(BaseModel):
     full_name: str = Field(min_length=1, max_length=200)
     siret: str
     org_name: str = Field(min_length=1, max_length=300)
+    accept_terms: bool = False  # CGU, privacy policy and processing agreement
 
     @field_validator("siret")
     @classmethod

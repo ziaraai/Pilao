@@ -12,7 +12,7 @@ Les mémoires techniques et les prix sont des secrets d'affaires pour nos client
 ## Hébergement et fournisseurs
 
 - Base, fichiers et serveurs dans l'Union européenne.
-- Fournisseurs d'IA : engagement de non-utilisation des données pour l'entraînement. Phase de test via OpenRouter ; en production, préférer un accès direct ou une région UE (voir ADR-003).
+- Fournisseurs d'IA : engagement de non-utilisation des données pour l'entraînement. Phase de test via OpenRouter ; en production, préférer un accès direct ou une région UE (voir ADR-003). **Appliqué par le code** (ADR-029) : chaque appel via OpenRouter porte `provider.data_collection = deny`, qui écarte tout fournisseur qui conserve les requêtes ou s'en sert pour entraîner ses modèles ; `LLM_ZERO_DATA_RETENTION` réduit aux fournisseurs qui ne gardent rien.
 - Registre des sous-traitants tenu à jour (hébergeur, IA, e-mail, paiement).
 
 ## Mesures techniques
@@ -32,8 +32,8 @@ Les mémoires techniques et les prix sont des secrets d'affaires pour nos client
 - Base légale : exécution du contrat (abonnement).
 - Pilao est **sous-traitant** pour les données que les clients déposent : contrat de sous-traitance (DPA) à faire signer.
 - Droits : export et suppression complète des données de l'org sur demande et à la résiliation (job de purge, y compris S3 et index vectoriel). **Fait** (ADR-026) : Profil > Vos données, export ZIP et suppression programmée à 30 jours, purge horaire avec reçu `purge_logs`.
-- Durées de conservation à définir (proposition : 30 jours après résiliation, puis purge).
-- Documents à rédiger avant ouverture aux clients : mentions légales, CGU/CGV, politique de confidentialité, DPA.
+- Durées de conservation : effacement 30 jours après la demande ou la résiliation (ADR-026) ; tentatives de connexion 30 jours, sessions effacées dès leur fin, liens de confirmation dès leur utilisation ou expiration (purge horaire, ADR-029) ; sauvegardes : à fixer (Q15).
+- Documents : mentions légales, CGU, politique de confidentialité et accord de traitement (DPA, article 28) **rédigés** (`/mentions-legales`, `/conditions-utilisation`, `/confidentialite`, `/accord-de-traitement`, ADR-029) ; à compléter (`apps/web/lib/legal.ts`) et à faire relire par un juriste avant l'ouverture (Q16). L'acceptation est enregistrée à l'inscription (date et version).
 
 ## Responsabilité
 

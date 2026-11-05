@@ -1,5 +1,6 @@
 import Link from "next/link";
 
+import { LegalLinks } from "@/components/legal";
 import { Logo } from "@/components/logo";
 
 export default function AuthLayout({ children }: LayoutProps<"/">) {
@@ -11,6 +12,7 @@ export default function AuthLayout({ children }: LayoutProps<"/">) {
       <div className="w-full max-w-md rounded-lg bg-white p-6 shadow-sm ring-1 ring-slate-200">
         {children}
       </div>
+      <LegalLinks className="mt-8" />
     </main>
   );
 }

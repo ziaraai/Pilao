@@ -256,3 +256,19 @@ Format : numéro, date, décision, raison, statut. Ajouter une entrée pour chaq
   Les `[À COMPLÉTER]` sont passés de 73 à 45. Ceux qui restent portent sur des données de l'entreprise réellement absentes (dates de formation, validité de certification…).
 - **Évaluation** : les organisations d'évaluation portent le vrai nom de l'entreprise, sans étiquette que le modèle pourrait recopier. Leur SIRET ne dépend plus de `--seed`, pour qu'on puisse relancer la même évaluation. La comparaison des textes ignore les accents, qu'un PDF ou l'OCR peut perdre.
 - **Statut** : validé.
+
+## ADR-029 — Pages légales vraies : textes, preuve d'acceptation, rétention et IA appliquées par le code
+- **Date** : 2026-11-05
+- **Décision** : les quatre pages (mentions légales, politique de confidentialité, conditions d'utilisation, accord de traitement des données selon l'article 28 du RGPD) sont des pages publiques de l'application, avec un lien dans le pied de chaque page. Chaque engagement qu'elles prennent correspond à quelque chose que le code applique :
+  - **Non-entraînement** : chaque appel via OpenRouter, texte comme embeddings, porte `provider.data_collection = deny`. OpenRouter n'envoie alors la requête qu'à des fournisseurs qui ne la conservent pas et ne s'en servent pas pour entraîner leurs modèles. Il refuse une valeur inconnue : l'option est vérifiée, pas seulement souhaitée (essai réel du 5 novembre 2026). `LLM_ZERO_DATA_RETENTION` est plus strict, mais rend certains modèles indisponibles.
+  - **Rétention** : la tâche horaire efface :
+    - les tentatives de connexion de plus de 30 jours (`LOGIN_ATTEMPTS_RETENTION_DAYS`) ;
+    - les sessions expirées ou terminées ;
+    - les liens à usage unique utilisés ou expirés.
+
+    Le plafond de renvoi du lien de confirmation n'est pas affaibli : il compte les liens de la dernière heure d'un compte non confirmé, qui ne sont ni utilisés ni expirés.
+  - **Preuve d'acceptation** : l'inscription exige la case à cocher (`accept_terms`, refus `terms_required`) et enregistre `users.terms_accepted_at` et `terms_version` (migration 0018). La version est la même côté API (`app/core/legal.py`) et côté pages (`lib/legal.ts`), et un test le vérifie.
+- **Faits non décidés** : la société éditrice (Q5), l'hébergeur (Q7), les e-mails (Q11), les sauvegardes (Q15), les prix (Q3), le plafond de responsabilité et le tribunal sont centralisés dans `apps/web/lib/legal.ts`. Tant qu'ils manquent, les pages affichent `[À COMPLÉTER : …]` en surligné, comme les mémoires, et `missingFacts()` en donne la liste.
+- **Ce que les textes ne promettent pas** : un journal des accès du support (pas encore construit), ni un chiffrement au repos qui dépend de l'hébergeur.
+- **Relecture** : ces textes sont un projet sérieux, rédigé à partir du fonctionnement réel du produit, mais ils doivent être relus par un juriste avant l'ouverture aux clients (Q16). La réacceptation quand la version change est à construire avant la première modification (roadmap).
+- **Statut** : validé (textes à relire).

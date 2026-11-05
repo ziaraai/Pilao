@@ -150,6 +150,25 @@ def test_a_truncated_answer_is_retried_once_with_twice_the_room(
         run(db, org_id)
 
 
+def test_openrouter_calls_never_reach_a_provider_that_keeps_data(
+    db: Session, configured: None, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    import litellm
+
+    calls: list[Any] = []
+    reply = ['{"kind": "a", "score": 3}'] * 3
+    monkeypatch.setattr(litellm, "completion", fake_completion(reply, calls))
+    org_id = make_org(db)
+    run(db, org_id)  # test/vision-model: not through OpenRouter, nothing to add
+    monkeypatch.setattr(get_settings(), "llm_model_vision", "openrouter/vendor/model")
+    run(db, org_id)
+    monkeypatch.setattr(get_settings(), "llm_zero_data_retention", True)
+    run(db, org_id)
+    assert "extra_body" not in calls[0]
+    assert calls[1]["extra_body"] == {"provider": {"data_collection": "deny"}}
+    assert calls[2]["extra_body"] == {"provider": {"data_collection": "deny", "zdr": True}}
+
+
 def test_markdown_fenced_json_is_accepted(
     db: Session, configured: None, monkeypatch: pytest.MonkeyPatch
 ) -> None:

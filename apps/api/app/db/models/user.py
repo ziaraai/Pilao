@@ -17,6 +17,8 @@ class User(IdMixin, TimestampMixin, OrgScoped, Base):
     password_hash: Mapped[str | None] = mapped_column(Text)
     email_verified_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     last_login_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    terms_accepted_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    terms_version: Mapped[str | None] = mapped_column(Text)
 
 
 class PlatformAdmin(IdMixin, TimestampMixin, Base):

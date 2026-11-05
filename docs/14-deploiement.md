@@ -39,7 +39,17 @@ Le TLS se termine au répartiteur de charge de l'hébergeur ou à un proxy inver
 - `GET /health` indique que le processus répond ; `GET /ready` indique que la base et Redis répondent (503 sinon), pour le répartiteur de charge.
 - Les journaux de l'application sortent sur la sortie standard (`LOG_LEVEL`, `INFO` par défaut).
 - LiteLLM utilise sa grille de prix embarquée (`LITELLM_LOCAL_MODEL_COST_MAP=True`) : aucun téléchargement au démarrage.
+- Les appels via OpenRouter écartent les fournisseurs d'IA qui conservent les requêtes (`LLM_DENY_DATA_COLLECTION`) ; `LLM_ZERO_DATA_RETENTION=true` n'accepte que ceux qui ne gardent rien du tout.
+- Chaque heure, la tâche planifiée efface les tentatives de connexion de plus de 30 jours, les sessions terminées et les liens utilisés ou expirés.
 - En production, les e-mails restent bloqués tant qu'aucun fournisseur n'est branché (question Q11) : l'inscription est refusée et les alertes ne partent pas.
+
+## Avant d'ouvrir aux clients
+
+- [ ] Compléter `apps/web/lib/legal.ts` (éditeur, hébergeur, e-mails, sauvegardes, prix, plafond de responsabilité, tribunal). Les pages légales affichent `[À COMPLÉTER : …]` pour tout ce qui manque, et `missingFacts()` en donne la liste.
+- [ ] Faire relire les quatre pages par un juriste (mentions, confidentialité, CGU, accord de traitement), et y écrire les garanties du transfert vers OpenRouter (États-Unis) (Q16).
+- [ ] Chaque changement de texte : nouvelle version `TERMS_VERSION`, la même dans `apps/api/app/core/legal.py` et `apps/web/lib/legal.ts` (un test le vérifie).
+- [ ] Sauvegardes quotidiennes chiffrées chez l'hébergeur, avec une restauration testée, et leur durée de conservation écrite dans la politique de confidentialité (Q15).
+- [ ] Laisser `LLM_DENY_DATA_COLLECTION=true` : la politique de confidentialité s'y engage.
 
 ## Vérifier une image
 

@@ -8,7 +8,7 @@ never e-mails twice.
 """
 
 import logging
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from datetime import UTC, date, datetime, time
 from zoneinfo import ZoneInfo
 
@@ -26,6 +26,7 @@ from app.db.models import (
 )
 from app.exports.dc_forms import PROOF_LABELS, french_date
 from app.services.org_data import purge_due
+from app.services.retention import RetentionReport, purge_expired
 from app.services.tenders import notify
 from app.services.vault import refresh_stored_statuses
 from app.storage.objects import ObjectStorage
@@ -43,6 +44,7 @@ class AlertReport:
     expiry_alerts: int = 0
     statuses_refreshed: int = 0
     organizations_erased: int = 0
+    retention: RetentionReport = field(default_factory=RetentionReport)
 
 
 def _paris(now: datetime) -> datetime:
@@ -164,12 +166,13 @@ def run_daily(
     storage: ObjectStorage | None = None,
 ) -> AlertReport:
     """Hourly entry point (unscoped session). Also erases the organizations whose deletion
-    date has come (ADR-026)."""
+    date has come (ADR-026) and the security data past its retention (ADR-029)."""
     now = now or datetime.now(UTC)
     today = _paris(now).date()
     report = AlertReport()
     if storage is not None:
         report.organizations_erased = purge_due(db, storage, mailer, now)
+    report.retention = purge_expired(db, now)
     report.statuses_refreshed = refresh_stored_statuses(db, today)
     db.commit()
     report.expiry_alerts = send_expiry_alerts(db, mailer, today)

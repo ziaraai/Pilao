@@ -1,11 +1,14 @@
 from collections.abc import Callable
 from datetime import UTC, datetime, timedelta
+from pathlib import Path
 
+import pytest
 from fastapi.testclient import TestClient
-from sqlalchemy import update
+from sqlalchemy import select, update
 from sqlalchemy.orm import Session
 
-from app.db.models import AuthToken
+from app.core.legal import TERMS_VERSION
+from app.db.models import AuthToken, User
 from tests.api.helpers import PASSWORD, register_payload, signed_in_client
 from tests.conftest import Outbox
 
@@ -21,6 +24,31 @@ def test_register_creates_unverified_account_and_sends_email(
     assert len(outbox.sent) == 1 and outbox.sent[0].to == "user1@example.fr"
     res = c.post("/auth/login", json={"email": "user1@example.fr", "password": PASSWORD})
     assert res.status_code == 403 and res.json()["error"]["code"] == "email_not_verified"
+
+
+def test_register_requires_and_records_the_acceptance_of_the_terms(
+    make_client: Factory, outbox: Outbox, db: Session
+) -> None:
+    c = make_client()
+    for refused in (
+        {**register_payload(), "accept_terms": False},
+        {k: v for k, v in register_payload().items() if k != "accept_terms"},
+    ):
+        res = c.post("/auth/register", json=refused)
+        assert res.status_code == 422 and res.json()["error"]["code"] == "terms_required"
+    assert not outbox.sent  # nothing created, no e-mail
+    before = datetime.now(UTC)
+    assert c.post("/auth/register", json=register_payload()).status_code == 201
+    user = db.scalars(select(User).where(User.email == "user1@example.fr")).one()
+    assert user.terms_version == TERMS_VERSION and user.terms_accepted_at is not None
+    assert before <= user.terms_accepted_at <= datetime.now(UTC)
+
+
+def test_the_terms_version_is_the_one_the_pages_show() -> None:
+    pages = Path(__file__).resolve().parents[3] / "web" / "lib" / "legal.ts"
+    if not pages.exists():  # the API image ships without the web app
+        pytest.skip("apps/web absent")
+    assert f'TERMS_VERSION = "{TERMS_VERSION}"' in pages.read_text(encoding="utf-8")
 
 
 def test_register_validation(make_client: Factory) -> None:

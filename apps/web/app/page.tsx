@@ -1,5 +1,6 @@
 import Link from "next/link";
 
+import { LegalLinks } from "@/components/legal";
 import { Logo } from "@/components/logo";
 
 export default function Home() {
@@ -24,6 +25,7 @@ export default function Home() {
           Se connecter
         </Link>
       </div>
+      <LegalLinks />
     </main>
   );
 }

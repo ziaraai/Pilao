@@ -66,9 +66,15 @@ let current; // the page, for a screenshot when a step fails
   await page.getByLabel("Votre nom").fill("Camille Test");
   await page.getByLabel("E-mail professionnel").fill(email);
   await page.getByLabel("Mot de passe").fill("court");
-  await page.getByRole("button", { name: "Créer mon compte" }).click();
+  const create = page.getByRole("button", { name: "Créer mon compte" });
+  if (await create.isEnabled())
+    throw new Error("sign-up possible without accepting the terms");
+  await page
+    .getByLabel("J'accepte, au nom de mon entreprise", { exact: false })
+    .check();
+  await create.click();
   await page.getByText("Mot de passe : 12 caractères minimum.").waitFor();
-  step("password rule shown in French");
+  step("terms to accept before sign-up; password rule shown in French");
   await page.getByLabel("Mot de passe").fill("correct-horse-battery");
   await page.getByRole("button", { name: "Créer mon compte" }).click();
   await page.getByText("Vérifiez votre boîte e-mail").waitFor();
@@ -545,6 +551,23 @@ let current; // the page, for a screenshot when a step fails
   step(
     `GDPR export downloaded (${exported.length} entries), deletion scheduled then cancelled`,
   );
+
+  // 12. Legal pages, from the footer of the application (ADR-029)
+  for (const [link, title] of [
+    ["Mentions légales", "Mentions légales"],
+    ["Confidentialité", "Politique de confidentialité"],
+    ["Conditions d'utilisation", "Conditions générales d'utilisation"],
+    ["Accord de traitement des données", "Accord de traitement des données"],
+  ]) {
+    await page.goto(`${WEB}/tableau-de-bord`);
+    await page
+      .getByRole("navigation", { name: "Informations légales" })
+      .getByRole("link", { name: link, exact: true })
+      .click();
+    await page.getByRole("heading", { level: 1, name: title }).waitFor();
+  }
+  step("legal pages reachable from the footer");
+  await page.goto(`${WEB}/profil`);
 
   // 8. Logout
   await page.getByRole("button", { name: "Déconnexion" }).click();

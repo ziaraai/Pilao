@@ -4,9 +4,11 @@ import importlib
 from datetime import date, datetime, time, timedelta
 from zoneinfo import ZoneInfo
 
+import pytest
 from croniter import croniter
 from sqlalchemy.orm import Session
 
+from app.core.config import get_settings
 from app.exports.dc_forms import french_date
 from app.services.alerts import run_daily
 from tests.api.helpers import signed_in_client
@@ -71,8 +73,14 @@ def test_the_morning_digest_lists_new_notices_above_the_threshold_once(
 
 
 def test_attestations_are_announced_at_30_and_7_days_then_once_expired(
-    make_client: Factory, outbox: Outbox, queue: FakeQueue, db: Session
+    make_client: Factory,
+    outbox: Outbox,
+    queue: FakeQueue,
+    db: Session,
+    monkeypatch: pytest.MonkeyPatch,
 ) -> None:
+    # the hourly run also purges expired sessions: this one must outlive the 31 days below
+    monkeypatch.setattr(get_settings(), "session_ttl_hours", 24 * 60)
     c = signed_in_client(make_client, outbox)
     doc = deposit(c).json()["id"]
     confirm(c, doc, valid_until=day(25))

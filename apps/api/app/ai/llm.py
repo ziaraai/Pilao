@@ -23,6 +23,7 @@ from pydantic import BaseModel, ValidationError
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
+from app.ai.routing import provider_routing
 from app.core.config import get_settings
 from app.db.models import AiCall
 
@@ -130,6 +131,7 @@ def _call_provider(
         timeout=300 if max_tokens and max_tokens > 4000 else 90,
         num_retries=2,
         **({"max_tokens": max_tokens} if max_tokens else {}),
+        **provider_routing(model),
     )
     content = resp.choices[0].message.content or ""
     usage = getattr(resp, "usage", None)

@@ -9,6 +9,7 @@ from sqlalchemy.orm import Session
 from app.core.config import get_settings
 from app.core.email import Email, Mailer
 from app.core.errors import ApiError
+from app.core.legal import TERMS_VERSION
 from app.core.security import hash_password, hash_token, needs_rehash, new_token, verify_password
 from app.db.models import AuditLog, AuthToken, LoginAttempt, Organization, User, UserSession
 from app.integrations.recherche_entreprises import CompanyDirectory, CompanyLookupUnavailable
@@ -86,6 +87,12 @@ def _prefill_from_registry(org: Organization, directory: CompanyDirectory) -> No
 def register(
     db: Session, data: RegisterIn, mailer: Mailer, directory: CompanyDirectory | None = None
 ) -> None:
+    if not data.accept_terms:
+        raise ApiError(
+            422,
+            "terms_required",
+            "Acceptez les conditions d'utilisation et la politique de confidentialité.",
+        )
     if db.scalar(select(Organization.id).where(Organization.siret == data.siret)):
         raise ApiError(409, "siret_taken", "Ce SIRET est déjà associé à un compte.")
     if db.scalar(select(User.id).where(User.email == data.email)):
@@ -105,6 +112,8 @@ def register(
             full_name=data.full_name,
             role="org_admin",
             password_hash=hash_password(data.password),
+            terms_accepted_at=_now(),
+            terms_version=TERMS_VERSION,
         )
         db.add(user)
         db.flush()

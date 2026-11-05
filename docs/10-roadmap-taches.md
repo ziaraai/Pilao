@@ -35,7 +35,8 @@ Objectif : savoir si la génération est assez bonne, avec quel modèle, à quel
 Corrigé pendant la revue : suppression d'un fichier via `/files` qui laissait l'index orphelin (désormais refusée, 409) ; document supprimé pendant son indexation ou sa lecture IA ; environnement par défaut non sécurisé (désormais `production`) ; CORS absent pour le front ; budget IA non appliqué aux embeddings ; lecture d'attestation trop stricte ou relancée à tort.
 
 Reste à faire :
-- [ ] Job de purge : `login_attempts` (> 30 jours), `user_sessions` expirées, `auth_tokens` utilisés ou expirés, objets S3 orphelins.
+- [x] Job de purge : `login_attempts` (> 30 jours), `user_sessions` expirées, `auth_tokens` utilisés ou expirés (ADR-029).
+- [ ] Objets S3 orphelins (fichier stocké dont la ligne `files` a disparu après une erreur).
 - [ ] Limiteur de débit public (`/companies/lookup`) en mémoire par processus → Redis quand l'API aura plusieurs instances.
 - [ ] Code de suivi des jobs dupliqué entre `services/knowledge.py` et `services/vault.py` ; deux écritures de `ai_calls` (`ai/calls.py`, `ai/llm.py`) → factoriser.
 - [ ] « Relire » une attestation pendant qu'une relance automatique RQ est programmée peut lancer deux lectures.
@@ -70,7 +71,8 @@ Reste à faire :
 - [ ] P4-01 Onboarding accompagné d'Abdraouf puis des testeurs
 - [ ] P4-02 Collecte des retours (formulaire + entretiens), suivi des temps gagnés
 - [ ] P4-03 Corrections et ajustements des prompts
-- [ ] P4-04 Pages légales (CGU, confidentialité, DPA), mise en production UE — images de production, garde-fous de démarrage et guide faits (ADR-025, `docs/14-deploiement.md`) ; restent les pages légales et le choix de l'hébergeur (Q5, Q7)
+- [ ] P4-04 Pages légales (CGU, confidentialité, DPA), mise en production UE — images de production, garde-fous de démarrage et guide faits (ADR-025, `docs/14-deploiement.md`) ; pages légales rédigées, acceptation enregistrée, rétention et non-entraînement appliqués par le code (ADR-029) ; restent les informations de la société (Q5), l'hébergeur (Q7), la relecture juridique (Q16)
+- [ ] Réacceptation des conditions à la connexion quand `TERMS_VERSION` change (promis à l'article 12 des CGU : à faire avant la première modification des textes)
 - [ ] P4-05 Décision prix et formules
 
 ## V2 (après validation)

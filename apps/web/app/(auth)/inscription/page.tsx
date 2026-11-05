@@ -16,6 +16,7 @@ export default function SignUpPage() {
     siret: "",
     org_name: "",
   });
+  const [accepted, setAccepted] = useState(false);
   const [lookup, setLookup] = useState<CompanyLookup | null>(null);
   const [done, setDone] = useState(false);
   const submit = useAction();
@@ -40,7 +41,9 @@ export default function SignUpPage() {
   async function onSubmit(e: React.FormEvent) {
     e.preventDefault();
     const ok = await submit.run(() =>
-      api("/auth/register", { json: { ...form, siret } }),
+      api("/auth/register", {
+        json: { ...form, siret, accept_terms: accepted },
+      }),
     );
     if (ok) setDone(true);
   }
@@ -151,8 +154,37 @@ export default function SignUpPage() {
           minLength={12}
         />
       </Field>
+      <label className="flex items-start gap-2 text-sm text-slate-700">
+        <input
+          type="checkbox"
+          className="mt-1"
+          checked={accepted}
+          onChange={(e) => setAccepted(e.target.checked)}
+          required
+        />
+        <span>
+          J&apos;accepte, au nom de mon entreprise, les{" "}
+          <TermsLink href="/conditions-utilisation">
+            conditions d&apos;utilisation
+          </TermsLink>
+          , l&apos;
+          <TermsLink href="/accord-de-traitement">
+            accord de traitement des données
+          </TermsLink>{" "}
+          et la{" "}
+          <TermsLink href="/confidentialite">
+            politique de confidentialité
+          </TermsLink>
+          .
+        </span>
+      </label>
       {submit.error && <Alert tone="danger">{submit.error}</Alert>}
-      <Button type="submit" busy={submit.busy} className="w-full">
+      <Button
+        type="submit"
+        busy={submit.busy}
+        disabled={!accepted}
+        className="w-full"
+      >
         Créer mon compte
       </Button>
       <p className="text-center text-sm text-slate-600">
@@ -165,5 +197,23 @@ export default function SignUpPage() {
         </Link>
       </p>
     </form>
+  );
+}
+
+function TermsLink({
+  href,
+  children,
+}: {
+  href: string;
+  children: React.ReactNode;
+}) {
+  return (
+    <Link
+      href={href}
+      target="_blank"
+      className="font-semibold text-brand-navy underline"
+    >
+      {children}
+    </Link>
   );
 }

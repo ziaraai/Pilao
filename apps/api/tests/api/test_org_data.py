@@ -19,7 +19,7 @@ from app.schemas.tenders import TenderIn
 from app.services.alerts import run_daily
 from app.services.org_data import EXCLUDED_TABLES
 from app.services.tenders import ingest
-from tests.api.helpers import signed_in_client
+from tests.api.helpers import PASSWORD, signed_in_client
 from tests.api.test_vault import confirm, deposit
 from tests.conftest import FakeQueue, MemoryStorage, Outbox
 from tests.documents_helpers import make_docx
@@ -173,7 +173,9 @@ def test_deletion_is_scheduled_cancellable_then_erases_everything(
     assert receipt.rows["users"] == 1 and receipt.rows["document_chunks"] >= 1
     assert outbox.sent[-1].subject == "Les données de Entreprise 1 ont été supprimées"
     assert a.get("/auth/me").status_code == 401  # sessions went with the account
-    assert b.get("/auth/me").status_code == 200
+    # the other company is intact (31 days later its session has expired: it logs in again)
+    login = {"email": "user2@example.fr", "password": PASSWORD}
+    assert b.post("/auth/login", json=login).status_code == 200
 
 
 def test_a_storage_failure_keeps_everything_for_the_next_run(

@@ -21,13 +21,14 @@ def valid_siret(prefix: str) -> str:
     raise AssertionError
 
 
-def register_payload(n: int = 1) -> dict[str, str]:
+def register_payload(n: int = 1) -> dict[str, str | bool]:
     return {
         "email": f"user{n}@example.fr",
         "password": PASSWORD,
         "full_name": f"User {n}",
         "siret": valid_siret(f"1234567{n:06d}"),
         "org_name": f"Entreprise {n}",
+        "accept_terms": True,
     }
 
 

@@ -96,6 +96,9 @@ EMBEDDING_MODEL=...
 AI_MONTHLY_BUDGET_EUR_PER_ORG=50   # garde-fou
 USD_EUR_RATE=0.86                  # prix des fournisseurs en dollars → coûts et budget en euros
 LLM_REASONING_TOKENS=8000          # marge pour le raisonnement caché des modèles, en plus de la réponse
+LLM_DENY_DATA_COLLECTION=true      # OpenRouter : écarte les fournisseurs qui conservent les requêtes
+LLM_ZERO_DATA_RETENTION=false      # true : uniquement les fournisseurs qui ne gardent rien (plus strict)
+LOGIN_ATTEMPTS_RETENTION_DAYS=30   # puis effacées (tâche horaire)
 # Intégrations
 BOAMP_BASE_URL=https://boamp-datadila.opendatasoft.com/api/explore/v2.1
 TED_BASE_URL=https://api.ted.europa.eu/v3

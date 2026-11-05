@@ -50,6 +50,11 @@ def test_litellm_embedder_batches_and_sums_usage(monkeypatch: pytest.MonkeyPatch
     assert result.input_tokens == 50 and result.cost_eur == pytest.approx(0.0027)  # 0.003 $
     assert result.model == "some/model"
 
+    seen: list[dict[str, Any]] = []
+    monkeypatch.setattr(litellm, "embedding", lambda **kw: seen.append(kw) or fake_embedding(**kw))
+    LiteLLMEmbedder("openrouter/vendor/embed", 4).embed(["a"])
+    assert seen[0]["extra_body"] == {"provider": {"data_collection": "deny"}}  # docs/09
+
 
 def test_litellm_errors_become_embedding_errors(monkeypatch: pytest.MonkeyPatch) -> None:
     import litellm
