@@ -87,7 +87,10 @@ class LiteLLMEmbedder:
             vectors.extend(item["embedding"] for item in resp.data)
             tokens += int(getattr(resp.usage, "prompt_tokens", 0) or 0)
             cost += float((getattr(resp, "_hidden_params", {}) or {}).get("response_cost") or 0.0)
-        return EmbeddingResult(vectors, self._model, tokens, cost * get_settings().usd_eur_rate)
+        s = get_settings()
+        if not cost:  # OpenRouter reports no cost for embeddings: the known price, then
+            cost = tokens / 1_000_000 * s.embedding_price_usd_per_million
+        return EmbeddingResult(vectors, self._model, tokens, cost * s.usd_eur_rate)
 
 
 @lru_cache

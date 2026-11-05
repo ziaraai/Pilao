@@ -72,6 +72,7 @@ Reste à faire :
 - [ ] P4-01 Onboarding accompagné d'Abdraouf puis des testeurs
 - [ ] P4-02 Collecte des retours (formulaire + entretiens), suivi des temps gagnés — formulaire « Votre avis » sur chaque page, temps avec et sans Pilao sur chaque dossier, total au tableau de bord, rapport `python -m app.cli feedback-report` faits (ADR-031) ; restent les entretiens avec les testeurs
 - [ ] P4-03 Corrections et ajustements des prompts
+- [x] P4-03b Pilote en ligne : serveur Plesk (Contabo), déploiement automatique depuis GitHub, e-mails SMTP, fichiers sur disque, sauvegardes (ADR-032, ADR-033) — reste la mise en place unique sur le serveur (docs/14)
 - [ ] P4-04 Pages légales (CGU, confidentialité, DPA), mise en production UE — images de production, garde-fous de démarrage et guide faits (ADR-025, `docs/14-deploiement.md`) ; pages légales rédigées, acceptation enregistrée, rétention et non-entraînement appliqués par le code (ADR-029) ; restent les informations de la société (Q5), l'hébergeur (Q7), la relecture juridique (Q16)
 - [x] Réacceptation des conditions quand `TERMS_VERSION` change (article 12 des CGU) : écran bloquant « Nos conditions ont changé », `POST /auth/accept-terms` (ADR-029)
 - [ ] P4-05 Décision prix et formules

@@ -55,7 +55,8 @@ ENV PATH="/app/.venv/bin:$PATH" \
     HOME=/home/pilao \
     LITELLM_LOCAL_MODEL_COST_MAP=True
 
-RUN useradd --create-home --uid 10001 pilao
+RUN useradd --create-home --uid 10001 pilao \
+    && install -d -o pilao -g pilao -m 700 /data/files  # STORAGE_BACKEND=disk (ADR-033)
 USER pilao
 EXPOSE 8000
 HEALTHCHECK --interval=30s --timeout=5s --retries=3 \

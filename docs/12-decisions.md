@@ -296,3 +296,31 @@ Format : numéro, date, décision, raison, statut. Ajouter une entrée pour chaq
 - **Raison** : sans mesure du temps gagné, on ne saura pas si Pilao tient sa promesse (des heures par dossier) ni à quel prix le vendre (Q3). Les avis reçus dans l'application, avec la page concernée, sont plus précis que ceux recueillis au téléphone une semaine plus tard. Les entretiens restent à faire.
 - **Données** : les avis et les durées font partie des données de l'entreprise. Ils figurent dans l'export, sont effacés avec elle, et un dossier d'une autre entreprise n'est jamais lié (session filtrée). La politique de confidentialité le dit.
 - **Statut** : validé.
+
+## ADR-032 — Envoi des e-mails par SMTP
+- **Date** : 2026-11-05
+- **Décision** : un seul expéditeur réel, `SmtpMailer`, utilisé dès que `SMTP_HOST` est réglé. Il fonctionne avec n'importe quel serveur SMTP : la messagerie de Plesk pour le pilote, Brevo ou Scaleway TEM plus tard. Les e-mails sont en texte, en UTF-8, avec STARTTLS et un certificat vérifié par défaut. Hors production et sans SMTP, la console sert toujours. En production sans SMTP, l'envoi est refusé, comme avant.
+- **Messages automatiques** (alertes, avis de suppression, dernier message après effacement) : `send_quietly` journalise un échec sans l'élever. Un serveur de messagerie en panne n'arrête donc pas la tâche horaire, ni les purges qu'elle porte. Une alerte que personne n'a reçue n'est pas enregistrée et repart l'heure suivante. Les e-mails qu'un utilisateur attend (confirmation, invitation) signalent l'échec, car il lui faut le lien.
+- **TLS local** : `SMTP_VERIFY_TLS=false` sert uniquement à joindre la messagerie du serveur lui-même depuis un conteneur (`host.docker.internal`). Son certificat est celui du serveur, et l'échange ne quitte pas la machine.
+- **Vérification** : `python -m app.cli send-test-email adresse`.
+- **Statut** : validé (Q11 : messagerie Plesk pour le pilote).
+
+## ADR-033 — Pilote sur un seul serveur Plesk, déployé depuis GitHub
+- **Date** : 2026-11-05
+- **Décision** : le pilote tourne sur le VPS Contabo géré par Plesk (`app.pilao.pro`), en conteneurs Docker (`infra/server/`). Il est déployé comme Ziara : **un envoi sur la branche par défaut, une fois la CI verte, est le déploiement** (`.github/workflows/deploy.yml`).
+  - Le runner construit les images et les publie sur ghcr.io.
+  - Il se connecte en SSH avec une clé qui ne vit que dans les secrets GitHub, envoie les fichiers de `infra/server`, puis lance `deploy.sh`.
+  - `deploy.sh` migre la base, démarre la nouvelle version et vérifie qu'elle répond. Sinon, il remet la précédente.
+  - Le jeton qui sert à télécharger les images est celui du job : il expire avec lui, et il est effacé du serveur à la fin.
+- **Secrets** : seuls trois secrets GitHub sont nécessaires (clé SSH, clé OpenRouter, mot de passe SMTP). Le mot de passe de la base et la clé de signature sont tirés au hasard sur le serveur au premier déploiement (`secrets.env`), et ne quittent jamais le serveur, sauf dans les sauvegardes. Les réglages sans secret sont versionnés (`infra/server/app.env`).
+- **Fichiers sur le disque** (`STORAGE_BACKEND=disk`) : l'image MinIO n'est plus publiée, et un service de stockage de plus serait un service de plus à maintenir sur un serveur partagé. Les fichiers vont donc dans un volume Docker, écrits de façon atomique, sous des clés strictement contrôlées (`<organisation>/<fichier>`). Le téléchargement passe par des liens que l'API signe elle-même (HMAC-SHA256 avec `APP_SECRET_KEY`, expiration, nom de fichier inclus dans la signature) et sert sur `GET /files/download`, sans session, comme une URL S3 présignée. Le mode S3 reste disponible pour la suite. En production sur disque, il faut `API_PUBLIC_URL` en https et une clé de signature d'au moins 32 caractères.
+- **Réseau** : l'API et l'interface ne sont publiées que sur `127.0.0.1` (ports 8100 et 3100). Le nginx de Plesk les sert sous `app.pilao.pro` et `app.pilao.pro/api/` : même origine, donc pas de CORS, et un seul cookie de session. Let's Encrypt est géré par Plesk.
+- **Embeddings** : Mistral Embed (`openrouter/mistralai/mistral-embed-2312`, dimension 1024, celle de la colonne), essayé sur le vrai service. OpenRouter ne renvoie pas le coût des embeddings, donc le prix connu sert au calcul (`EMBEDDING_PRICE_USD_PER_MILLION`).
+- **Répétition** : le déploiement a été joué de bout en bout avec Docker, avec les images construites depuis le code :
+  - premier déploiement (secrets créés, migrations, contrôle) ;
+  - redéploiement (rien de régénéré) ;
+  - version cassée (détectée, version précédente remise, sortie en échec) ;
+  - téléchargement signé (200, lien modifié refusé) ;
+  - sauvegarde (base de 72 tables, fichiers, secrets).
+- **Limites** : un seul serveur, donc pas de haute disponibilité. ClamAV prend environ 1,5 Go de mémoire. Les sauvegardes restent sur le serveur tant qu'elles ne sont pas copiées ailleurs (Plesk Backup Manager).
+- **Statut** : validé pour le pilote. La production ouverte au public reste à décider (Q7).

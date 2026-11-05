@@ -1,7 +1,9 @@
+import mimetypes
 import uuid
 from typing import Annotated
 
 from fastapi import APIRouter, Depends, Query, Response, UploadFile
+from fastapi.responses import FileResponse
 from sqlalchemy import any_, select
 
 from app.core.config import get_settings
@@ -18,10 +20,36 @@ from app.db.models import (
 from app.schemas.files import DownloadUrlOut, FileOut
 from app.services import files as svc
 from app.storage.antivirus import ScannerUnavailable, VirusScanner, get_scanner
-from app.storage.objects import ObjectStorage, get_storage
+from app.storage.objects import DiskStorage, InvalidLink, ObjectStorage, get_storage
 
 router = APIRouter(prefix="/files", tags=["files"])
 Storage = Annotated[ObjectStorage, Depends(get_storage)]
+
+
+@router.get("/download", include_in_schema=False)
+def download(
+    storage: Storage,
+    k: Annotated[str, Query(max_length=100)],
+    e: Annotated[int, Query()],
+    n: Annotated[str, Query(max_length=300)],
+    s: Annotated[str, Query(max_length=100)],
+) -> FileResponse:
+    """A link signed by ``DiskStorage`` (the S3 equivalent of a presigned URL): no session,
+    the signature and its expiry are the authorization. Declared before ``/{file_id}``."""
+    if not isinstance(storage, DiskStorage):
+        raise ApiError(404, "not_found", "Lien inconnu.")
+    try:
+        path = storage.open_signed(k, e, n, s)
+    except InvalidLink as exc:
+        raise ApiError(410, "link_invalid", "Lien expiré : relancez le téléchargement.") from exc
+    except FileNotFoundError as exc:
+        raise ApiError(404, "not_found", "Fichier introuvable.") from exc
+    return FileResponse(
+        path,
+        filename=n,  # attachment, with the UTF-8 name (filename*)
+        media_type=mimetypes.guess_type(n)[0] or "application/octet-stream",
+        headers={"Cache-Control": "private, no-store", "X-Content-Type-Options": "nosniff"},
+    )
 
 
 def _scanner() -> VirusScanner:

@@ -5,6 +5,7 @@
   duplicates, then matching for every company (the scoring runs in the worker).
 * ``feedback-report [--days 30] [--csv retours.csv]``: what the testers wrote from the
   application, and the time saved per company (P4-02). Read-only, every company.
+* ``send-test-email you@example.fr``: checks the outgoing e-mail settings (SMTP).
 * ``eval-models --models a,b,c`` runs the phase 0 comparison (docs/11) on ``samples/``:
   every DCE through the real pipeline with each model, then the anonymized memoirs, the
   rating grid and the cost report. Never on the production database.
@@ -46,7 +47,11 @@ def main(argv: list[str] | None = None) -> int:
     fb = commands.add_parser("feedback-report", help="retours des utilisateurs, temps gagné")
     fb.add_argument("--days", type=int, default=30)
     fb.add_argument("--csv", type=Path, default=None, help="écrire aussi les avis en CSV")
+    mail = commands.add_parser("send-test-email", help="vérifier l'envoi des e-mails (SMTP)")
+    mail.add_argument("to")
     args = parser.parse_args(argv)
+    if args.command == "send-test-email":
+        return send_test_email(args.to)
     if args.command == "eval-models":
         return eval_models(args)
     if args.command == "feedback-report":
@@ -62,6 +67,29 @@ def main(argv: list[str] | None = None) -> int:
         f"{report.awards} attribution(s), {report.unchanged} inchangée(s) ; "
         f"{matched} correspondance(s) avec les entreprises."
     )
+    return 0
+
+
+def send_test_email(to: str) -> int:
+    from app.core.email import Email
+    from app.core.errors import ApiError
+
+    s = get_settings()
+    try:
+        get_mailer().send(
+            Email(
+                to=to,
+                subject="Pilao — e-mail de test",
+                body=(
+                    "Bonjour,\n\nCet e-mail confirme que Pilao peut envoyer des messages "
+                    f"depuis {s.app_base_url} (serveur SMTP : {s.smtp_host or 'aucun'}).\n"
+                ),
+            )
+        )
+    except ApiError as exc:
+        print(f"Échec : {exc.message} Voir les journaux ci-dessus.", file=sys.stderr)
+        return 1
+    print(f"Envoyé à {to} par {s.smtp_host or 'la console (aucun SMTP configuré)'}.")
     return 0
 
 

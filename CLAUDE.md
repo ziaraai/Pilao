@@ -84,6 +84,7 @@ sudo apt-get install tesseract-ocr tesseract-ocr-fra libreoffice-writer-nogui fo
 cd apps/web && pnpm install && pnpm dev               # NEXT_PUBLIC_API_URL=http://localhost:8000 par défaut
 cd apps/web && pnpm test                             # tests unitaires du front ; parcours navigateur : apps/web/e2e/README.md
 cd apps/api && uv run pytest
+# Déploiement du pilote (app.pilao.pro) : pousser sur la branche par défaut, CI verte → workflow Deploy (docs/14, ADR-033)
 ```
 
 ## 8. Comment travailler avec moi (Claude Code)

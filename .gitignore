@@ -7,3 +7,7 @@ __pycache__/
 .ruff_cache/
 .pytest_cache/
 infra/production.env
+
+# Server deployment: these files exist on the server only (ADR-033)
+infra/server/secrets.env
+infra/server/release*.env

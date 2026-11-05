@@ -23,6 +23,10 @@ class Settings(BaseSettings):
     app_secret_key: str = "change-me"
     app_base_url: str = "http://localhost:3000"
     recherche_entreprises_base_url: str = "https://recherche-entreprises.api.gouv.fr"
+    # "s3" (MinIO locally, Scaleway / OVHcloud) or "disk" (single server, ADR-033)
+    storage_backend: str = "s3"
+    storage_dir: str = "/data/files"
+    api_public_url: str = ""  # how browsers reach the API, e.g. https://app.pilao.pro/api
     s3_endpoint: str | None = None  # None = AWS / provider default; MinIO locally
     s3_bucket: str = "pilao-local"
     s3_access_key: str = ""
@@ -62,6 +66,8 @@ class Settings(BaseSettings):
     # Empty = deterministic local HashEmbedder (development and tests only).
     embedding_model: str = ""
     embedding_dim: int = 1024  # changing it needs a migration AND a full re-embedding
+    # When the provider reports no cost (OpenRouter embeddings): price per million tokens
+    embedding_price_usd_per_million: float = 0.0
     # Secure by default: without an explicit ENVIRONMENT=local|test, production rules apply
     # (real antivirus and embeddings required, Secure cookies).
     environment: str = "production"  # local | test | production
@@ -72,6 +78,14 @@ class Settings(BaseSettings):
     invitation_ttl_hours: int = 24 * 7  # link sent to an invited colleague
     max_users_per_org: int = 25  # guard; the real limit will come with the plans (Q3)
     feedback_email: str = ""  # the team's inbox: every feedback is mailed there at once
+    # Outgoing e-mail (ADR-032): any SMTP server; empty host = console outside production
+    smtp_host: str = ""
+    smtp_port: int = 587
+    smtp_user: str = ""
+    smtp_password: str = ""
+    smtp_from: str = "Pilao <noreply@pilao.pro>"
+    smtp_starttls: bool = True
+    smtp_verify_tls: bool = True  # false only for the server's own mail system (local hop)
     feedback_max_per_hour: int = 20
     email_verify_max_per_hour: int = 5  # resend cap per account (anti mail-bombing)
     login_max_failures_per_email: int = 5
@@ -92,7 +106,12 @@ class Settings(BaseSettings):
             problems.append("APP_BASE_URL doit être en https:// (cookies sécurisés).")
         if "pilao:pilao@" in self.database_url or "localhost" in self.database_url:
             problems.append("DATABASE_URL utilise les identifiants ou l'hôte de développement.")
-        if self.s3_bucket == "pilao-local" or not (self.s3_access_key and self.s3_secret_key):
+        if self.storage_backend == "disk":
+            if not self.api_public_url.startswith("https://"):
+                problems.append("API_PUBLIC_URL doit être en https:// (liens de téléchargement).")
+            if self.app_secret_key == "change-me" or len(self.app_secret_key) < 32:
+                problems.append("APP_SECRET_KEY doit faire au moins 32 caractères aléatoires.")
+        elif self.s3_bucket == "pilao-local" or not (self.s3_access_key and self.s3_secret_key):
             problems.append("S3_BUCKET, S3_ACCESS_KEY et S3_SECRET_KEY de production sont requis.")
         if not self.clamav_host:
             problems.append("CLAMAV_HOST est requis (antivirus des fichiers déposés).")

@@ -43,6 +43,78 @@ Le TLS se termine au répartiteur de charge de l'hébergeur ou à un proxy inver
 - Chaque heure, la tâche planifiée efface les tentatives de connexion de plus de 30 jours, les sessions terminées et les liens utilisés ou expirés.
 - En production, les e-mails restent bloqués tant qu'aucun fournisseur n'est branché (question Q11) : l'inscription est refusée et les alertes ne partent pas.
 
+## Serveur Plesk du pilote : app.pilao.pro (ADR-033)
+
+Comme pour Ziara : **un envoi sur la branche par défaut de GitHub, une fois la CI verte, est le déploiement.** Le travail se fait dans Claude Code, et aucun accès au serveur n'est nécessaire au quotidien. La clé SSH reste dans les secrets de GitHub.
+
+### Ce qui tourne sur le serveur
+
+Tout est dans `/opt/pilao`, en dehors des dossiers web de Plesk. Le workflow le remplit à chaque déploiement, à partir de `infra/server/` :
+
+| Fichier | Rôle |
+|---|---|
+| `docker-compose.yml` | PostgreSQL 16 + pgvector, Redis, ClamAV, l'API, le worker, le planificateur, l'interface. Seules l'API (port 8100) et l'interface (port 3100) sont publiées, et seulement sur `127.0.0.1` : c'est nginx (Plesk) qui les sert au monde. |
+| `app.env` | Les réglages **sans secret** (versionnés) : adresses, modèles d'IA, envoi d'e-mails. Changer une valeur et pousser suffit. |
+| `secrets.env` | **Sur le serveur uniquement.** Il est créé au premier déploiement avec un mot de passe de base de données et une clé de signature tirés au hasard. La clé OpenRouter et le mot de passe SMTP y sont recopiés à chaque déploiement depuis les secrets GitHub. |
+| `deploy.sh` | Lancé par le workflow. Il télécharge les nouvelles images, migre la base, démarre la nouvelle version, et vérifie que l'API et l'interface répondent. Sinon, il **remet la version précédente**. |
+| `pilao.sh` | `docker compose` avec les images en service : `./pilao.sh ps`, `./pilao.sh logs -f api worker`. |
+| `backup.sh` | Sauvegarde de la base, des fichiers et de `secrets.env`, gardée 14 jours. |
+| `nginx-plesk.conf` | Le bloc à coller dans Plesk. |
+
+Les fichiers déposés sont stockés sur le disque du serveur, dans le volume `pilao_files` (`STORAGE_BACKEND=disk`). Les liens de téléchargement sont signés par l'API, valables 5 minutes, et ne peuvent pas être modifiés.
+
+### Mise en place (une fois, dans cet ordre)
+
+1. **Vérifier le serveur** (Plesk > Tools & Settings > SSH Terminal, ou une session SSH root) :
+   - la région du VPS doit être **dans l'Union européenne** (Contabo Allemagne : la politique de confidentialité s'y engage) ;
+   - il faut environ **3 Go de mémoire libre** (`free -h`) : ClamAV seul en prend environ 1,5 Go ;
+   - les ports 8100 et 3100 doivent être libres (`ss -ltn | grep -E ':(8100|3100) '` ne doit rien afficher).
+2. **Docker** : installer l'extension Docker (Plesk > Extensions > Docker), puis vérifier `docker compose version`. Si la commande manque : `apt-get install -y docker-compose-plugin`.
+3. **Clé de déploiement.**
+   - Si ce serveur est celui de Ziara (213.199.44.12), la même clé convient.
+   - Sinon, dans le SSH Terminal de Plesk :
+     ```bash
+     ssh-keygen -t ed25519 -N "" -C pilao-deploy -f /root/.ssh/pilao_deploy
+     cat /root/.ssh/pilao_deploy.pub >> /root/.ssh/authorized_keys
+     cat /root/.ssh/pilao_deploy        # à copier entièrement, lignes BEGIN et END comprises
+     rm /root/.ssh/pilao_deploy         # une fois la clé enregistrée dans GitHub
+     ```
+4. **Secrets GitHub** (`github.com/ziaraai/Pilao` > Settings > Secrets and variables > Actions > New repository secret) :
+   - `PILAO_SSH_KEY` : la clé privée entière ;
+   - `PILAO_OPENROUTER_API_KEY` : la clé OpenRouter (de préférence une nouvelle clé réservée au serveur) ;
+   - `PILAO_SMTP_PASSWORD` : le mot de passe de la boîte de l'étape 5.
+5. **Boîte d'envoi** : Plesk > Mail > Create Email Address `noreply@pilao.pro`, avec un mot de passe fort. Les e-mails partent par le serveur de messagerie de Plesk (`app.env` : `SMTP_HOST=host.docker.internal`).
+   - Si Plesk gère le DNS de `pilao.pro`, activer **DKIM** et vérifier **SPF** (Mail Settings), sinon les messages risquent de finir en indésirables.
+   - Pour un fournisseur (Brevo…), changer `SMTP_HOST`, `SMTP_USER` et `SMTP_VERIFY_TLS=true` dans `app.env`.
+6. **nginx** : Plesk > Websites & Domains > app.pilao.pro > Apache & nginx Settings.
+   - Décocher **Proxy mode**.
+   - Coller `infra/server/nginx-plesk.conf` dans **Additional nginx directives**, puis OK. Une erreur rouge veut dire : s'arrêter, rien n'a été changé.
+7. **Certificat** : SSL/TLS Certificates > Let's Encrypt pour `app.pilao.pro`, avec la redirection HTTP vers HTTPS.
+8. **Premier déploiement** : GitHub > Actions > **Deploy** > Run workflow. Il doit finir en vert par « https://app.pilao.pro answers ». Ensuite, chaque envoi sur la branche par défaut, une fois la CI verte, redéploie tout seul.
+9. **Vérifier les e-mails** (SSH Terminal) : `/opt/pilao/pilao.sh exec api python -m app.cli send-test-email vous@exemple.fr`.
+10. **Sauvegarde nocturne** : Plesk > Tools & Settings > Scheduled Tasks > Add Task.
+    - Commande : `/opt/pilao/backup.sh >> /var/log/pilao-backup.log 2>&1`.
+    - Fréquence : tous les jours à 03:15, utilisateur root.
+    - Les sauvegardes vont dans `/var/backups/pilao`. **Copier aussi ce dossier hors du serveur** (Plesk Backup Manager vers un stockage distant) : une sauvegarde qui reste sur le même disque ne protège pas d'une panne du serveur.
+11. **Sauvegarder `secrets.env`** dans un gestionnaire de mots de passe : sans lui, la base sauvegardée ne s'ouvre plus.
+
+### Au quotidien
+
+- Changer le code ici, puis pousser : la CI vérifie tout (tests, images), puis le workflow **Deploy** met en ligne. L'onglet Actions de GitHub montre chaque déploiement.
+- Si la nouvelle version ne répond pas, la précédente est remise toute seule et le workflow finit en rouge. Le message dit quoi regarder.
+- Les migrations de base passent avant la nouvelle version. Elles n'ajoutent que des tables et des colonnes, donc la version précédente fonctionne encore avec la base migrée.
+- Lire les journaux : `/opt/pilao/pilao.sh logs --tail 100 api worker`.
+- Les avis des testeurs : `/opt/pilao/pilao.sh exec api python -m app.cli feedback-report --days 7`.
+
+### Restaurer une sauvegarde
+
+```bash
+cd /opt/pilao && ./pilao.sh stop api worker scheduler web
+./pilao.sh exec -T postgres pg_restore -U pilao -d pilao --clean --if-exists < /var/backups/pilao/base-AAAA-MM-JJ.dump
+docker run --rm -v pilao_files:/data -v /var/backups/pilao:/backup alpine:3.20 sh -c "cd /data && tar xzf /backup/fichiers-AAAA-MM-JJ.tgz"
+./pilao.sh start api worker scheduler web
+```
+
 ## Avant d'ouvrir aux clients
 
 - [ ] Compléter `apps/web/lib/legal.ts` (éditeur, hébergeur, e-mails, sauvegardes, prix, plafond de responsabilité, tribunal). Les pages légales affichent `[À COMPLÉTER : …]` pour tout ce qui manque, et `missingFacts()` en donne la liste.

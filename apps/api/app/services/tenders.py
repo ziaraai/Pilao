@@ -19,7 +19,7 @@ from sqlalchemy.orm import Session
 
 from app.ai import llm
 from app.ai.prompts import load_prompt
-from app.core.email import Email, Mailer
+from app.core.email import Email, Mailer, send_quietly
 from app.core.errors import ApiError
 from app.core.tenancy import scope_session
 from app.db.models import (
@@ -287,9 +287,10 @@ def notify(
     users = db.scalars(
         select(User).where(User.org_id == org_id, User.email_verified_at.is_not(None))
     ).all()
-    for user in users:
-        mailer.send(Email(to=user.email, subject=subject, body=body))
-    db.add(Notification(org_id=org_id, kind=kind, key=key, recipients=len(users)))
+    sent = sum(send_quietly(mailer, Email(to=u.email, subject=subject, body=body)) for u in users)
+    if users and not sent:
+        return False  # the mail server is down: not recorded, so retried next hour
+    db.add(Notification(org_id=org_id, kind=kind, key=key, recipients=sent))
     db.flush()
     return True
 

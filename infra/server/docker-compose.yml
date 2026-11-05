@@ -1,0 +1,67 @@
+# Pilao on one server: the Plesk VPS of the pilot (ADR-033, docs/14-deploiement.md).
+# Deployed by .github/workflows/deploy.yml into /opt/pilao: never edit it on the server.
+# Settings: app.env (versioned, no secret) then secrets.env (server only, generated once).
+# By hand, always through ./pilao.sh (it knows which images are deployed):
+#   ./pilao.sh ps | ./pilao.sh logs -f api | ./pilao.sh exec postgres psql -U pilao
+name: pilao
+
+x-app: &app
+  image: ${PILAO_API_IMAGE:?deployed by deploy.sh, use ./pilao.sh}
+  env_file: [app.env, secrets.env]
+  restart: unless-stopped
+  volumes: [files:/data/files]  # STORAGE_BACKEND=disk: the deposited and generated files
+  extra_hosts: ["host.docker.internal:host-gateway"]  # the server's own mail system
+  depends_on:
+    postgres: { condition: service_healthy }
+    redis: { condition: service_started }
+
+services:
+  postgres:
+    image: pgvector/pgvector:pg16
+    restart: unless-stopped
+    env_file: [secrets.env]  # POSTGRES_PASSWORD
+    environment: { POSTGRES_USER: pilao, POSTGRES_DB: pilao }
+    volumes: [pgdata:/var/lib/postgresql/data]
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U pilao -d pilao"]
+      interval: 5s
+      retries: 30
+  redis:
+    image: redis:7-alpine
+    restart: unless-stopped
+    command: ["redis-server", "--appendonly", "yes"]
+    volumes: [redisdata:/data]
+  clamav:
+    image: clamav/clamav:stable
+    restart: unless-stopped
+    environment:  # DCE deposits go up to 250 MB (the default stops at 100 MB)
+      CLAMD_CONF_StreamMaxLength: 260M
+      CLAMD_CONF_MaxFileSize: 260M
+      CLAMD_CONF_MaxScanSize: 600M
+    volumes: [clamdb:/var/lib/clamav]
+  migrate:  # run by deploy.sh before the new version serves
+    <<: *app
+    command: ["alembic", "upgrade", "head"]
+    restart: "no"
+    profiles: [deploy]
+  api:
+    <<: *app
+    ports: ["127.0.0.1:8100:8000"]  # only nginx (Plesk) reaches it: /api/ of app.pilao.pro
+  worker:  # DCE processing, AI analysis, drafting, exports, watch
+    <<: *app
+    command: ["sh", "-c", "exec rq worker -u \"$$REDIS_URL\" default"]
+    healthcheck: { disable: true }
+  scheduler:  # hourly: alerts, digests, purges (ADR-024)
+    <<: *app
+    command: ["sh", "-c", "exec rq cron app/workers/cron.py -u \"$$REDIS_URL\""]
+    healthcheck: { disable: true }
+  web:
+    image: ${PILAO_WEB_IMAGE:?deployed by deploy.sh, use ./pilao.sh}
+    restart: unless-stopped
+    ports: ["127.0.0.1:3100:3000"]  # only nginx (Plesk) reaches it: app.pilao.pro
+
+volumes:
+  pgdata:
+  redisdata:
+  files:
+  clamdb:

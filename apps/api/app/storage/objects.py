@@ -1,13 +1,25 @@
-"""Object storage (S3-compatible: MinIO locally, Scaleway / OVHcloud in production, EU only).
+"""Object storage, behind one interface (ADR-033).
 
-Files are never served by the API: clients get short-lived signed URLs.
+* ``S3Storage``: any S3-compatible service (MinIO locally, Scaleway / OVHcloud, EU only);
+  clients download through short-lived presigned URLs.
+* ``DiskStorage``: the server's own disk, for a single-server deployment (the pilot).
+  Clients download through short-lived URLs signed by the API (HMAC, like S3's), served
+  by ``GET /files/download``: no session needed, nothing to guess, nothing to replay late.
 """
 
+import base64
+import hashlib
+import hmac
 import io
+import os
+import re
 import tempfile
+import time
+import uuid
 from functools import lru_cache
+from pathlib import Path
 from typing import TYPE_CHECKING, Any, BinaryIO, Protocol
-from urllib.parse import quote
+from urllib.parse import quote, urlencode
 
 import boto3
 from botocore.client import Config
@@ -107,6 +119,75 @@ class S3Storage:
         )
 
 
+_UUID = r"[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}"
+_KEY = re.compile(rf"^{_UUID}/{_UUID}$")  # "<organization>/<file>", as files.py builds them
+
+
+class InvalidLink(Exception):
+    """A download link that was altered, or has expired."""
+
+
+class DiskStorage:
+    def __init__(self, root: Path, secret: str, public_api_url: str) -> None:
+        self._root, self._secret = root, secret.encode()
+        self._base = public_api_url.rstrip("/")
+
+    def _path(self, key: str) -> Path:
+        if not _KEY.fullmatch(key):  # never a path built from anything else (no "..")
+            raise ValueError(f"invalid storage key: {key!r}")
+        return self._root / key
+
+    def put(self, key: str, fileobj: BinaryIO, content_type: str) -> None:
+        path = self._path(key)
+        path.parent.mkdir(parents=True, exist_ok=True)
+        tmp = path.with_name(f".{path.name}.{uuid.uuid4().hex}.part")
+        fileobj.seek(0)
+        try:
+            with tmp.open("wb") as out:
+                while chunk := fileobj.read(1024 * 1024):
+                    out.write(chunk)
+                out.flush()
+                os.fsync(out.fileno())
+            os.replace(tmp, path)  # a reader never sees half a file
+        finally:
+            tmp.unlink(missing_ok=True)
+        fileobj.seek(0)
+
+    def get(self, key: str) -> BinaryIO:
+        return self._path(key).open("rb")
+
+    def delete(self, key: str) -> None:
+        self._path(key).unlink(missing_ok=True)
+
+    def _signature(self, key: str, expires: int, filename: str) -> str:
+        mac = hmac.new(self._secret, f"{key}\n{expires}\n{filename}".encode(), hashlib.sha256)
+        return base64.urlsafe_b64encode(mac.digest()).decode().rstrip("=")
+
+    def signed_download_url(self, key: str, filename: str, ttl_seconds: int) -> str:
+        self._path(key)
+        expires = int(time.time()) + ttl_seconds
+        query = urlencode(
+            {"k": key, "e": expires, "n": filename, "s": self._signature(key, expires, filename)}
+        )
+        return f"{self._base}/files/download?{query}"
+
+    def open_signed(self, key: str, expires: int, filename: str, signature: str) -> Path:
+        """The file a link points to, if the link is intact and still valid."""
+        if not _KEY.fullmatch(key) or not hmac.compare_digest(
+            signature, self._signature(key, expires, filename)
+        ):
+            raise InvalidLink("altered")
+        if expires < time.time():
+            raise InvalidLink("expired")
+        path = self._path(key)
+        if not path.is_file():
+            raise FileNotFoundError(key)
+        return path
+
+
 @lru_cache
 def get_storage() -> ObjectStorage:
+    s = get_settings()
+    if s.storage_backend == "disk":
+        return DiskStorage(Path(s.storage_dir), s.app_secret_key, s.api_public_url)
     return S3Storage()

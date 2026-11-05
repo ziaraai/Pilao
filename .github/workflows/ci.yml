@@ -71,4 +71,10 @@ jobs:
           docker run --rm -e ENVIRONMENT=local pilao-api:ci python -c "from app.ai.prompts import load_prompt; from app.services.dce_analysis import SCHEMA_PATH; assert SCHEMA_PATH.exists(); [load_prompt(p) for p in ('extraction_dce', 'scoring_annonce', 'generation_memoire_chapitre')]"
           docker run --rm pilao-api:ci tesseract --list-langs | grep -qx fra
           docker run --rm pilao-api:ci soffice --version
+      - name: Server deployment files (infra/server, ADR-033)
+        working-directory: infra/server
+        run: |
+          touch secrets.env
+          PILAO_API_IMAGE=pilao-api:ci PILAO_WEB_IMAGE=pilao-web:ci docker compose config --quiet
+          for script in deploy.sh pilao.sh backup.sh; do bash -n "$script"; done
 

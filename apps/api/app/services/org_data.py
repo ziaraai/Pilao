@@ -23,7 +23,7 @@ from sqlalchemy import delete, func, select
 from sqlalchemy.orm import Session
 
 from app.core.config import get_settings
-from app.core.email import Email, Mailer
+from app.core.email import Email, Mailer, send_quietly
 from app.core.errors import ApiError
 from app.core.tenancy import scope_session
 from app.db.base import Base
@@ -254,7 +254,8 @@ def request_deletion(
     db.commit()
     when = french_date(due.date())
     for email in _recipients(db, org.id):
-        mailer.send(
+        send_quietly(
+            mailer,
             Email(
                 to=email,
                 subject=f"Suppression des données de {org.name} programmée le {when}",
@@ -265,7 +266,7 @@ def request_deletion(
                     "définitivement.\n\nD'ici là, un administrateur peut l'annuler dans Profil > "
                     "Vos données, et y télécharger un export complet.\n"
                 ),
-            )
+            ),
         )
     return req
 
@@ -280,13 +281,14 @@ def cancel_deletion(db: Session, user: User, org: Organization, mailer: Mailer) 
     )
     db.commit()
     for email in _recipients(db, org.id):
-        mailer.send(
+        send_quietly(
+            mailer,
             Email(
                 to=email,
                 subject=f"Suppression des données de {org.name} annulée",
                 body=f"Bonjour,\n\n{user.full_name or user.email} a annulé la suppression des "
                 f"données de {org.name}. Rien n'a été effacé.\n",
-            )
+            ),
         )
 
 
@@ -332,12 +334,13 @@ def _purge(db: Session, req: DataRequest, storage: ObjectStorage, mailer: Mailer
         "organization %s erased: %s rows, %s objects", org_id, sum(counts.values()), len(keys)
     )
     for email in recipients:  # the last message; the addresses are not kept
-        mailer.send(
+        send_quietly(
+            mailer,
             Email(
                 to=email,
                 subject=f"Les données de {name} ont été supprimées",
                 body=f"Bonjour,\n\nComme demandé, toutes les données de {name} ont été "
                 "supprimées de Pilao, fichiers compris. Ce message est le dernier.\n",
-            )
+            ),
         )
     return True

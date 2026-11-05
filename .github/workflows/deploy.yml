@@ -1,0 +1,148 @@
+# A push to the default branch, once CI is green, IS the deploy (as for Ziara).
+#
+# Pilao can be changed from anywhere (Claude Code on the web, a borrowed computer): the
+# SSH key lives in GitHub's secret store and is only ever written to a throwaway runner.
+#
+# Secrets (Settings > Secrets and variables > Actions), see docs/14-deploiement.md:
+#   PILAO_SSH_KEY             private key that is root on the server (required)
+#   PILAO_OPENROUTER_API_KEY  the AI provider's key (sent to the server's secrets.env)
+#   PILAO_SMTP_PASSWORD       password of the noreply@pilao.pro mailbox
+# Until PILAO_SSH_KEY is set, this workflow says so and deploys nothing.
+name: Deploy
+
+on:
+  workflow_run:
+    workflows: [CI]
+    types: [completed]
+  workflow_dispatch:
+
+# Two deploys must never interleave: they share one compose project on the server.
+concurrency:
+  group: deploy-pilao
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+  packages: write
+
+env:
+  SSH_HOST: vmi3105960.contaboserver.net
+  SSH_USER: root
+  REMOTE: /opt/pilao
+  SITE: https://app.pilao.pro
+  REGISTRY: ghcr.io/ziaraai
+
+jobs:
+  deploy:
+    # Only what CI tested, on a push to the default branch (or a manual run).
+    if: >-
+      github.event_name == 'workflow_dispatch' || (
+        github.event.workflow_run.conclusion == 'success' &&
+        github.event.workflow_run.event == 'push' &&
+        github.event.workflow_run.head_branch == github.event.repository.default_branch)
+    runs-on: ubuntu-latest
+    steps:
+      - name: Configured?
+        id: cfg
+        env:
+          KEY: ${{ secrets.PILAO_SSH_KEY }}
+        run: |
+          if [ -z "$KEY" ]; then
+            echo "::warning::PILAO_SSH_KEY is not set: nothing was deployed (docs/14, « Serveur Plesk »)."
+            echo "ready=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "ready=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      - uses: actions/checkout@v4
+        if: steps.cfg.outputs.ready == 'true'
+        with:
+          ref: ${{ github.event.workflow_run.head_sha || github.sha }}
+
+      - name: Version
+        if: steps.cfg.outputs.ready == 'true'
+        id: ver
+        run: echo "tag=$(git rev-parse --short=12 HEAD)" >> "$GITHUB_OUTPUT"
+
+      # ---- images ------------------------------------------------------------------
+      - uses: docker/setup-buildx-action@v3
+        if: steps.cfg.outputs.ready == 'true'
+      - uses: docker/login-action@v3
+        if: steps.cfg.outputs.ready == 'true'
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - name: API image (api, worker, scheduler, migrations)
+        if: steps.cfg.outputs.ready == 'true'
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: apps/api/Dockerfile
+          push: true
+          tags: ${{ env.REGISTRY }}/pilao-api:${{ steps.ver.outputs.tag }}
+          cache-from: type=gha,scope=api
+          cache-to: type=gha,scope=api,mode=max
+      - name: Web image (built with the public address of the API)
+        if: steps.cfg.outputs.ready == 'true'
+        uses: docker/build-push-action@v6
+        with:
+          context: apps/web
+          build-args: NEXT_PUBLIC_API_URL=${{ env.SITE }}/api
+          push: true
+          tags: ${{ env.REGISTRY }}/pilao-web:${{ steps.ver.outputs.tag }}
+          cache-from: type=gha,scope=web-server
+          cache-to: type=gha,scope=web-server,mode=max
+
+      # ---- ship --------------------------------------------------------------------
+      - name: Authorise SSH
+        if: steps.cfg.outputs.ready == 'true'
+        env:
+          KEY: ${{ secrets.PILAO_SSH_KEY }}
+        run: |
+          install -d -m 700 ~/.ssh
+          printf '%s\n' "$KEY" > ~/.ssh/id_deploy
+          chmod 600 ~/.ssh/id_deploy
+          ssh-keyscan -H "$SSH_HOST" >> ~/.ssh/known_hosts 2>/dev/null
+          printf 'Host target\n  HostName %s\n  User %s\n  IdentityFile ~/.ssh/id_deploy\n  IdentitiesOnly yes\n  ConnectTimeout 30\n  ServerAliveInterval 15\n' \
+            "$SSH_HOST" "$SSH_USER" > ~/.ssh/config
+          chmod 600 ~/.ssh/config
+
+      - name: Upload the server files
+        if: steps.cfg.outputs.ready == 'true'
+        run: |
+          ssh target "install -d -m 700 '$REMOTE'"
+          cd infra/server
+          scp -q docker-compose.yml app.env deploy.sh pilao.sh backup.sh nginx-plesk.conf "target:$REMOTE/"
+
+      - name: Deploy (migrations, new version, checked, previous one back on failure)
+        if: steps.cfg.outputs.ready == 'true'
+        env:
+          GHCR_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          OPENROUTER_API_KEY: ${{ secrets.PILAO_OPENROUTER_API_KEY }}
+          SMTP_PASSWORD: ${{ secrets.PILAO_SMTP_PASSWORD }}
+        run: |
+          tag=${{ steps.ver.outputs.tag }}
+          # The job's own token: it can pull this repository's images, and expires with it.
+          printf '%s' "$GHCR_TOKEN" | ssh target "docker login ghcr.io -u '${{ github.actor }}' --password-stdin" >/dev/null
+          printf 'OPENROUTER_API_KEY=%s\nSMTP_PASSWORD=%s\n' "$OPENROUTER_API_KEY" "$SMTP_PASSWORD" \
+            | ssh target "$REMOTE/deploy.sh '$REGISTRY/pilao-api:$tag' '$REGISTRY/pilao-web:$tag'"
+
+      - name: Forget the registry token on the server
+        if: always() && steps.cfg.outputs.ready == 'true'
+        run: ssh target "docker logout ghcr.io" >/dev/null 2>&1 || true
+
+      - name: The site answers from the internet
+        # Locally the new version answered (deploy.sh). Here, nginx and the certificate:
+        # a failure on the very first deploy usually means the Plesk nginx block is missing.
+        if: steps.cfg.outputs.ready == 'true'
+        run: |
+          for i in $(seq 1 12); do
+            api=$(curl -s -o /dev/null -w '%{http_code}' --max-time 20 "$SITE/api/health" || echo 000)
+            web=$(curl -s -o /dev/null -w '%{http_code}' --max-time 20 "$SITE/connexion" || echo 000)
+            if [ "$api" = 200 ] && [ "$web" = 200 ]; then echo "$SITE answers (api $api, web $web)"; exit 0; fi
+            echo "attempt $i: api $api, web $web"
+            sleep 10
+          done
+          echo "::error::$SITE does not answer. The server runs the new version: check the nginx block of Plesk (infra/server/nginx-plesk.conf) and the certificate (docs/14)."
+          exit 1

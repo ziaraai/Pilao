@@ -102,6 +102,12 @@ LOGIN_ATTEMPTS_RETENTION_DAYS=30   # puis effacées (tâche horaire)
 INVITATION_TTL_HOURS=168           # lien d'invitation d'un collaborateur (7 jours)
 MAX_USERS_PER_ORG=25               # garde-fou en attendant les formules
 FEEDBACK_EMAIL=equipe@…            # chaque avis « Votre avis » y est transmis aussitôt
+SMTP_HOST=… SMTP_PORT=587 SMTP_USER=… SMTP_PASSWORD=… SMTP_FROM=…  # envoi des e-mails (ADR-032)
+SMTP_VERIFY_TLS=true               # false seulement pour la messagerie du serveur lui-même
+STORAGE_BACKEND=s3                 # ou disk : fichiers sur le disque d'un seul serveur (ADR-033)
+STORAGE_DIR=/data/files            # avec disk
+API_PUBLIC_URL=https://…/api       # avec disk : base des liens de téléchargement signés
+EMBEDDING_PRICE_USD_PER_MILLION=0.1  # quand le fournisseur ne renvoie pas le coût
 # Intégrations
 BOAMP_BASE_URL=https://boamp-datadila.opendatasoft.com/api/explore/v2.1
 TED_BASE_URL=https://api.ted.europa.eu/v3
