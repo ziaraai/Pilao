@@ -15,6 +15,7 @@ from app.services.document_reading import get_document_reader
 from app.services.exports import run_export
 from app.services.knowledge import run_index_document
 from app.services.memoir_drafting import run_conformity, run_draft_section
+from app.services.org_data import run_org_export
 from app.services.tenders import match_tenders, rematch_org, score_org
 from app.services.vault import run_read_document
 from app.storage.antivirus import get_scanner
@@ -83,4 +84,9 @@ def score_tenders_job(org_id: str) -> None:
 
 def daily_alerts_job() -> None:
     with get_sessionmaker()() as db:  # unscoped: every company
-        run_daily(db, get_mailer())
+        run_daily(db, get_mailer(), storage=get_storage())
+
+
+def org_export_job(request_id: str) -> None:
+    with get_sessionmaker()() as db:
+        run_org_export(db, uuid.UUID(request_id), get_storage())

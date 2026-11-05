@@ -429,3 +429,15 @@ export type Dashboard = {
     success_rate: number | null;
   };
 };
+export type DataRequest = {
+  id: string;
+  kind: "export" | "deletion";
+  status: "pending" | "ready" | "error" | "cancelled";
+  error: string | null;
+  file_id: string | null;
+  filename: string | null;
+  size_bytes: number | null;
+  due_at: string | null;
+  created_at: string;
+};
+export type Deletion = { due_at: string | null; requested_at: string | null };

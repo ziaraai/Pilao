@@ -1,6 +1,7 @@
 "use client";
 
 import { CompanyIdentity } from "@/components/profile/company-identity";
+import { DataRights } from "@/components/profile/data-rights";
 import { References } from "@/components/profile/references";
 import { SimpleList } from "@/components/profile/simple-list";
 import { WatchSettings } from "@/components/profile/watch-settings";
@@ -117,6 +118,7 @@ export default function ProfilePage() {
         ]}
       />
       <References onChange={completeness.reload} />
+      <DataRights />
     </div>
   );
 }

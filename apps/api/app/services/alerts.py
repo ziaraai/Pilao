@@ -25,8 +25,10 @@ from app.db.models import (
     TenderMatch,
 )
 from app.exports.dc_forms import PROOF_LABELS, french_date
+from app.services.org_data import purge_due
 from app.services.tenders import notify
 from app.services.vault import refresh_stored_statuses
+from app.storage.objects import ObjectStorage
 
 logger = logging.getLogger("pilao.alerts")
 PARIS = ZoneInfo("Europe/Paris")
@@ -40,6 +42,7 @@ class AlertReport:
     digests: int = 0
     expiry_alerts: int = 0
     statuses_refreshed: int = 0
+    organizations_erased: int = 0
 
 
 def _paris(now: datetime) -> datetime:
@@ -154,11 +157,19 @@ def send_expiry_alerts(db: Session, mailer: Mailer, today: date) -> int:
     return sent
 
 
-def run_daily(db: Session, mailer: Mailer, now: datetime | None = None) -> AlertReport:
-    """Hourly entry point (unscoped session)."""
+def run_daily(
+    db: Session,
+    mailer: Mailer,
+    now: datetime | None = None,
+    storage: ObjectStorage | None = None,
+) -> AlertReport:
+    """Hourly entry point (unscoped session). Also erases the organizations whose deletion
+    date has come (ADR-026)."""
     now = now or datetime.now(UTC)
     today = _paris(now).date()
     report = AlertReport()
+    if storage is not None:
+        report.organizations_erased = purge_due(db, storage, mailer, now)
     report.statuses_refreshed = refresh_stored_statuses(db, today)
     db.commit()
     report.expiry_alerts = send_expiry_alerts(db, mailer, today)

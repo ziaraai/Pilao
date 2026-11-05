@@ -38,6 +38,8 @@ class Settings(BaseSettings):
     # LibreOffice for the PDF export (worker image); empty = PDF export unavailable
     soffice_path: str = "soffice"
     pdf_timeout_seconds: int = 180
+    # GDPR (ADR-026): an organization's deletion runs this long after the request (cancellable)
+    deletion_grace_days: int = 30
     # LLM models per task (LiteLLM names), fixed after phase 0 (ADR-005). Empty = not configured.
     llm_model_extraction: str = ""
     llm_model_generation: str = ""

@@ -27,6 +27,7 @@ class JobQueue(Protocol):
     def enqueue_match_tenders(self, tender_ids: list[uuid.UUID]) -> None: ...
     def enqueue_rematch_org(self, org_id: uuid.UUID) -> None: ...
     def enqueue_score_tenders(self, org_id: uuid.UUID) -> None: ...
+    def enqueue_org_export(self, request_id: uuid.UUID) -> None: ...
 
 
 class RqJobQueue:
@@ -131,6 +132,16 @@ class RqJobQueue:
             str(org_id),
             job_timeout=TENDER_JOB_TIMEOUT_SECONDS,
             result_ttl=0,
+            failure_ttl=7 * 24 * 3600,
+            retry=Retry(max=2, interval=[60, 300]),
+        )
+
+    def enqueue_org_export(self, request_id: uuid.UUID) -> None:
+        self._q.enqueue(
+            "app.workers.jobs.org_export_job",
+            str(request_id),
+            job_timeout=TENDER_JOB_TIMEOUT_SECONDS,
+            result_ttl=3600,
             failure_ttl=7 * 24 * 3600,
             retry=Retry(max=2, interval=[60, 300]),
         )

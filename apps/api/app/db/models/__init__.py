@@ -3,6 +3,7 @@ from app.db.models.analysis import DceAnalysis, Requirement
 from app.db.models.audit_log import AuditLog
 from app.db.models.auth import AuthToken, LoginAttempt, UserSession
 from app.db.models.bid import Bid, DceFile, DcePage, DceVersion
+from app.db.models.data_request import DataRequest, PurgeLog
 from app.db.models.document import DOCUMENT_KINDS, GeneratedDocument
 from app.db.models.file import File
 from app.db.models.job import Job
@@ -32,6 +33,7 @@ __all__ = [
     "CompanyReference",
     "ComplianceDocument",
     "ConformityItem",
+    "DataRequest",
     "DceAnalysis",
     "DceFile",
     "DcePage",
@@ -50,6 +52,7 @@ __all__ = [
     "Notification",
     "Organization",
     "PlatformAdmin",
+    "PurgeLog",
     "Requirement",
     "Tender",
     "TenderMatch",

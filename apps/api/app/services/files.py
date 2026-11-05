@@ -170,24 +170,49 @@ def store_generated(
 ) -> File:
     """Store a document Pilao produced (no antivirus: it is our own output). The caller
     commits, and calls ``discard_object`` if that commit fails."""
+    return store_generated_file(
+        db, org, user_id, io.BytesIO(data), len(data), filename, mime, extension, storage
+    )
+
+
+def store_generated_file(
+    db: Session,
+    org: Organization,
+    user_id: uuid.UUID | None,
+    fileobj: BinaryIO,
+    size: int,
+    filename: str,
+    mime: str,
+    extension: str,
+    storage: ObjectStorage,
+    check_quota: bool = True,
+) -> File:
+    """Same, from a (possibly large, temporary) file read from its start."""
     s = get_settings()
-    _check_quota(db, len(data), s.org_storage_quota_bytes)
+    if check_quota:
+        _check_quota(db, size, s.org_storage_quota_bytes)
+    digest = hashlib.sha256()
+    fileobj.seek(0)
+    while chunk := fileobj.read(1024 * 1024):
+        digest.update(chunk)
+    fileobj.seek(0)
     record = File(
         id=uuid.uuid4(),
         storage_key=f"{org.id}/{uuid.uuid4()}",
         filename=clean_filename(filename, extension),
         mime=mime,
-        size_bytes=len(data),
-        sha256=hashlib.sha256(data).hexdigest(),
+        size_bytes=size,
+        sha256=digest.hexdigest(),
         uploaded_by=user_id,
     )
-    storage.put(record.storage_key, io.BytesIO(data), mime)
+    storage.put(record.storage_key, fileobj, mime)
     db.execute(select(Organization.id).where(Organization.id == org.id).with_for_update())
-    try:
-        _check_quota(db, len(data), s.org_storage_quota_bytes)
-    except ApiError:
-        discard_object(storage, record.storage_key)
-        raise
+    if check_quota:
+        try:
+            _check_quota(db, size, s.org_storage_quota_bytes)
+        except ApiError:
+            discard_object(storage, record.storage_key)
+            raise
     db.add(record)
     db.flush()
     return record

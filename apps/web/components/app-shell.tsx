@@ -9,7 +9,8 @@ import { Alert, Button, Loading } from "@/components/ui";
 import { api } from "@/lib/api";
 import { AuthContext } from "@/lib/auth";
 import { useApi } from "@/lib/hooks";
-import type { Me, VaultSummary } from "@/lib/types";
+import { formatDate } from "@/lib/format";
+import type { Deletion, Me, VaultSummary } from "@/lib/types";
 
 const NAV = [
   { href: "/tableau-de-bord", label: "Tableau de bord" },
@@ -89,6 +90,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
             </div>
           </div>
         </header>
+        <DeletionBanner />
         <VaultBanner />
         <main className="mx-auto max-w-6xl px-4 py-8">{children}</main>
       </div>
@@ -120,6 +122,25 @@ function VaultBanner() {
       {parts.join(" · ")}.{" "}
       <Link href="/coffre-fort" className="font-semibold underline">
         Voir le coffre-fort
+      </Link>
+    </div>
+  );
+}
+
+/** ADR-026: every member sees that the company's data is about to be erased. */
+function DeletionBanner() {
+  const deletion = useApi<Deletion>("/organization/deletion");
+  const due = deletion.data?.due_at;
+  if (!due) return null;
+  return (
+    <div
+      role="alert"
+      className="border-b border-red-300 bg-red-50 px-4 py-2 text-center text-sm text-red-900"
+    >
+      Toutes les données de l&apos;entreprise seront supprimées le{" "}
+      {formatDate(due)}.{" "}
+      <Link href="/profil" className="font-semibold underline">
+        Annuler ou exporter
       </Link>
     </div>
   );

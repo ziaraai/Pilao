@@ -500,6 +500,51 @@ let current; // the page, for a screenshot when a step fails
   });
   step("result saved; dashboard shows the bid among the submitted ones");
 
+  // 11. GDPR: full export, then a deletion scheduled and cancelled (ADR-026)
+  await page.getByRole("link", { name: "Profil", exact: true }).click();
+  await page.waitForURL(`${WEB}/profil`);
+  await page.reload();
+  await page.getByRole("button", { name: "Préparer un export" }).click();
+  const exportButton = page.getByRole("button", {
+    name: /^Télécharger l'export du/,
+  });
+  for (let i = 0; i < 60 && (await exportButton.count()) === 0; i++) {
+    await page.waitForTimeout(1000);
+    await page.reload();
+  }
+  const [exportDownload] = await Promise.all([
+    page.waitForEvent("download"),
+    exportButton.click(),
+  ]);
+  await exportDownload.saveAs(`${S}/export.zip`);
+  const exported = zipNames(`${S}/export.zip`);
+  if (
+    !exported.includes("donnees.json") ||
+    !exported.some((n) => n.startsWith("fichiers/"))
+  )
+    throw new Error("export incomplete: " + exported.join(", "));
+  await page
+    .getByLabel("Pour confirmer, recopiez le nom de l'entreprise", {
+      exact: false,
+    })
+    .fill("Nettoyage E2E");
+  await page.getByRole("button", { name: "Programmer la suppression" }).click();
+  await page.getByRole("button", { name: "Annuler la suppression" }).waitFor();
+  await page.reload();
+  await page
+    .getByRole("alert")
+    .getByText("Toutes les données de l'entreprise seront supprimées le", {
+      exact: false,
+    })
+    .waitFor();
+  await page.getByRole("button", { name: "Annuler la suppression" }).click();
+  await page
+    .getByRole("button", { name: "Programmer la suppression" })
+    .waitFor();
+  step(
+    `GDPR export downloaded (${exported.length} entries), deletion scheduled then cancelled`,
+  );
+
   // 8. Logout
   await page.getByRole("button", { name: "Déconnexion" }).click();
   await page.waitForURL(/\/connexion/);
