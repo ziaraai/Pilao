@@ -2,6 +2,11 @@ name: CI
 on:
   push:
   pull_request:
+# A newer push replaces the run of the previous one on the same branch: only the newest
+# commit can then reach the Deploy workflow (an older one finishing last would roll back).
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
 jobs:
   api:
     runs-on: ubuntu-latest
@@ -20,21 +25,27 @@ jobs:
       - uses: actions/checkout@v4
       - uses: astral-sh/setup-uv@v5
       - name: OCR engine (Tesseract, French) and LibreOffice (PDF export, ODT/DOC/ODS/XLS)
-        # A runner's package mirror can hang for hours (2026-11-05): each try is bounded,
-        # and retried, so a stuck download never holds back a deploy.
-        timeout-minutes: 15
+        # A runner's package mirror can hang for hours (2026-11-05, 2026-11-06). Each try is
+        # bounded and, if all fail, the job goes on: the tests that need these tools then say
+        # they are skipped, and the « images » job still checks them in the production image.
+        id: tools
+        continue-on-error: true
+        timeout-minutes: 8
         run: |
-          for attempt in 1 2 3; do
-            if sudo timeout 240 apt-get -o Acquire::Retries=3 update -qq \
-              && sudo timeout 400 apt-get -o Acquire::Retries=3 install -y -qq --no-install-recommends \
+          for attempt in 1 2; do
+            if sudo timeout 120 apt-get -o Acquire::Retries=2 update -qq \
+              && sudo timeout 240 apt-get -o Acquire::Retries=2 install -y -qq --no-install-recommends \
                 tesseract-ocr tesseract-ocr-fra libreoffice-writer-nogui libreoffice-calc-nogui \
                 fonts-liberation; then
               exit 0
             fi
-            echo "::warning::package install, attempt $attempt failed: retrying"
-            sleep 15
+            echo "::warning::package install, attempt $attempt failed"
+            sleep 10
           done
           exit 1
+      - name: Tools missing?
+        if: steps.tools.outcome != 'success'
+        run: echo "::warning::Tesseract/LibreOffice could not be installed (package mirror). Their tests are skipped here; the images job checks OCR and every LibreOffice conversion in the production image."
       - run: uv sync
       - run: uv run ruff check .
       - run: uv run black --check .
@@ -88,6 +99,22 @@ jobs:
           docker run --rm pilao-api:ci soffice --version
           # spreadsheets (BPU, DPGF in .xls / .ods) need Calc in the image, not only Writer
           docker run --rm pilao-api:ci python -c "import io; from openpyxl import Workbook; wb = Workbook(); wb.active.append(['BPU', 1]); b = io.BytesIO(); wb.save(b); from app.documents.convert import soffice_convert; assert soffice_convert(b.getvalue(), 'xlsx', 'pdf').startswith(b'%PDF')"
+          # text documents: the memoir's PDF export, and an ODT (LibreOffice) read as a DOCX
+          docker run --rm -i pilao-api:ci python - <<'PY'
+          import io, subprocess, tempfile
+          from pathlib import Path
+          from docx import Document
+          from app.documents.convert import soffice_convert
+          d = Document(); d.add_heading("Méthodologie", 1); b = io.BytesIO(); d.save(b)
+          assert soffice_convert(b.getvalue(), "docx", "pdf").startswith(b"%PDF")
+          with tempfile.TemporaryDirectory() as t:
+              (Path(t) / "m.docx").write_bytes(b.getvalue())
+              subprocess.run(["soffice", "--headless", f"-env:UserInstallation=file://{t}/p",
+                              "--convert-to", "odt", "--outdir", t, f"{t}/m.docx"],
+                             check=True, capture_output=True, timeout=120)
+              odt = (Path(t) / "m.odt").read_bytes()
+          assert soffice_convert(odt, "odt", "docx").startswith(b"PK")
+          PY
       - name: Server deployment files (infra/server, ADR-033)
         working-directory: infra/server
         run: |

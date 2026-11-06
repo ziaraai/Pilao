@@ -47,13 +47,28 @@ jobs:
         id: cfg
         env:
           KEY: ${{ secrets.PILAO_SSH_KEY }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TESTED: ${{ github.event.workflow_run.head_sha }}
+          BRANCH: ${{ github.event.repository.default_branch }}
         run: |
           if [ -z "$KEY" ]; then
             echo "::warning::PILAO_SSH_KEY is not set: nothing was deployed (docs/14, « Serveur Plesk »)."
             echo "ready=false" >> "$GITHUB_OUTPUT"
-          else
-            echo "ready=true" >> "$GITHUB_OUTPUT"
+            exit 0
           fi
+          # Never put an older commit back in service: when the branch has moved on since this
+          # CI run started, the newer commit's own run deploys it.
+          if [ -n "$TESTED" ]; then
+            tip=$(curl -fsS --max-time 20 -H "Authorization: Bearer $GH_TOKEN" \
+              -H "Accept: application/vnd.github.sha" \
+              "https://api.github.com/repos/${{ github.repository }}/commits/$BRANCH" || true)
+            if [ -n "$tip" ] && [ "$tip" != "$TESTED" ]; then
+              echo "::notice::$BRANCH is now at ${tip:0:12}, newer than ${TESTED:0:12}: its own CI run deploys it."
+              echo "ready=false" >> "$GITHUB_OUTPUT"
+              exit 0
+            fi
+          fi
+          echo "ready=true" >> "$GITHUB_OUTPUT"
 
       - uses: actions/checkout@v4
         if: steps.cfg.outputs.ready == 'true'

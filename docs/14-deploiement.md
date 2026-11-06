@@ -108,6 +108,8 @@ Les fichiers déposés sont stockés sur le disque du serveur, dans le volume `p
 
 - Changer le code ici, puis pousser : la CI vérifie tout (tests, images), puis le workflow **Deploy** met en ligne. L'onglet Actions de GitHub montre chaque déploiement.
 - Si la nouvelle version ne répond pas, la précédente est remise toute seule et le workflow finit en rouge. Le message dit quoi regarder.
+- Deux envois rapprochés : la CI du premier est annulée, et seul le dernier commit est mis en ligne (un Deploy plus ancien s'arrête avec la note « newer than … »). Une version plus ancienne ne remplace donc jamais une plus récente.
+- Si le miroir de paquets d'Ubuntu bloque dans la CI (vu les 5 et 6 novembre 2026), l'installation de Tesseract et LibreOffice abandonne au bout de quelques minutes avec un avertissement. Leurs tests sont alors sautés dans le job `api`, mais le job `images` vérifie l'OCR et chaque conversion LibreOffice dans l'image de production : le déploiement n'est plus bloqué.
 - Les migrations de base passent avant la nouvelle version. Elles n'ajoutent que des tables et des colonnes, donc la version précédente fonctionne encore avec la base migrée.
 - Lire les journaux : `/opt/pilao/pilao.sh logs --tail 100 api worker`.
 - Les avis des testeurs : `/opt/pilao/pilao.sh exec api python -m app.cli feedback-report --days 7`.
