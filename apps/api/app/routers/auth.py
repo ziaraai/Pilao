@@ -11,7 +11,16 @@ from app.core.legal import TERMS_VERSION
 from app.db.models import Organization, User
 from app.db.session import get_db
 from app.integrations.recherche_entreprises import CompanyDirectory, get_company_directory
-from app.schemas.auth import LoginIn, MeOut, MessageOut, OrgOut, RegisterIn, ResendIn, VerifyEmailIn
+from app.schemas.auth import (
+    LoginIn,
+    MeOut,
+    MessageOut,
+    OrgOut,
+    RegisterIn,
+    RegisterOut,
+    ResendIn,
+    VerifyEmailIn,
+)
 from app.schemas.members import AcceptInvitationIn, InvitationLookupIn, InvitationOut
 from app.services import auth as svc
 from app.services import members
@@ -47,9 +56,18 @@ def register(
     db: Db,
     mailer: MailerDep,
     directory: Annotated[CompanyDirectory, Depends(get_company_directory)],
-) -> MessageOut:
-    svc.register(db, data, mailer, directory)
-    return MessageOut(message="Compte créé. Consultez votre e-mail pour le confirmer.")
+) -> RegisterOut:
+    if svc.register(db, data, mailer, directory):
+        return RegisterOut(
+            message="Compte créé. Consultez votre e-mail pour le confirmer.", email_sent=True
+        )
+    return RegisterOut(
+        message=(
+            "Compte créé, mais l'e-mail de confirmation n'est pas parti. Demandez-en un "
+            "nouveau depuis la page de connexion."
+        ),
+        email_sent=False,
+    )
 
 
 @router.post("/verify-email")

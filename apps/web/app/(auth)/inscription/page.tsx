@@ -18,7 +18,8 @@ export default function SignUpPage() {
   });
   const [accepted, setAccepted] = useState(false);
   const [lookup, setLookup] = useState<CompanyLookup | null>(null);
-  const [done, setDone] = useState(false);
+  // null: not signed up yet; false: account created but the e-mail did not leave
+  const [emailSent, setEmailSent] = useState<boolean | null>(null);
   const submit = useAction();
   const search = useAction();
   const set =
@@ -40,15 +41,35 @@ export default function SignUpPage() {
 
   async function onSubmit(e: React.FormEvent) {
     e.preventDefault();
-    const ok = await submit.run(() =>
-      api("/auth/register", {
+    const res = await submit.run(() =>
+      api<{ message: string; email_sent?: boolean }>("/auth/register", {
         json: { ...form, siret, accept_terms: accepted },
       }),
     );
-    if (ok) setDone(true);
+    if (res) setEmailSent(res.email_sent !== false);
   }
 
-  if (done) {
+  if (emailSent === false) {
+    return (
+      <div className="space-y-4">
+        <h1 className="text-xl font-bold text-brand-navy">Compte créé</h1>
+        <Alert tone="warning">
+          L&apos;e-mail de confirmation n&apos;a pas pu partir. Inutile de
+          recréer le compte : sur la page de connexion, entrez{" "}
+          <strong>{form.email}</strong> et votre mot de passe, puis cliquez sur
+          « Renvoyer l&apos;e-mail de confirmation ».
+        </Alert>
+        <Link
+          href="/connexion"
+          className="text-sm font-semibold text-brand-navy underline"
+        >
+          Aller à la connexion
+        </Link>
+      </div>
+    );
+  }
+
+  if (emailSent) {
     return (
       <div className="space-y-4">
         <h1 className="text-xl font-bold text-brand-navy">

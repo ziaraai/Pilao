@@ -86,7 +86,11 @@ def _prefill_from_registry(org: Organization, directory: CompanyDirectory) -> No
 
 def register(
     db: Session, data: RegisterIn, mailer: Mailer, directory: CompanyDirectory | None = None
-) -> None:
+) -> bool:
+    """Creates the company and its first admin; True when the confirmation e-mail left.
+
+    The account is kept when the e-mail does not leave: signing up again would then be
+    refused (SIRET taken), so the person asks for a new e-mail from the login page."""
     if not data.accept_terms:
         raise ApiError(
             422,
@@ -123,7 +127,13 @@ def register(
     except IntegrityError:  # concurrent registration with the same SIRET / e-mail
         db.rollback()
         raise ApiError(409, "already_exists", "Ce compte existe déjà.") from None
-    mailer.send(message)  # only once the token exists: never mail a dead link
+    try:
+        mailer.send(message)  # only once the token exists: never mail a dead link
+    except ApiError as exc:
+        if exc.code != "email_unavailable":
+            raise
+        return False  # already logged by the mailer
+    return True
 
 
 def verify_email(db: Session, token: str) -> None:

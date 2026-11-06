@@ -92,6 +92,12 @@ Les fichiers déposés sont stockés sur le disque du serveur, dans le volume `p
 7. **Certificat** : SSL/TLS Certificates > Let's Encrypt pour `app.pilao.pro`, avec la redirection HTTP vers HTTPS.
 8. **Premier déploiement** : GitHub > Actions > **Deploy** > Run workflow. Il doit finir en vert par « https://app.pilao.pro answers ». Ensuite, chaque envoi sur la branche par défaut, une fois la CI verte, redéploie tout seul.
 9. **Vérifier les e-mails** (SSH Terminal) : `/opt/pilao/pilao.sh exec api python -m app.cli send-test-email vous@exemple.fr`.
+   - « Envoyé à … » : c'est bon (regarder aussi les indésirables).
+   - « Échec » : la dernière ligne au-dessus dit pourquoi.
+     - `Connection refused` ou `timed out` : le port 587 n'est pas ouvert. Plesk > Tools & Settings > Mail Server Settings > cocher **Enable SMTP service on port 587 on all IP addresses**, puis vérifier que le pare-feu laisse passer le port 587.
+     - `Authentication failed` / `535` : la boîte `noreply@pilao.pro` n'existe pas, ou son mot de passe n'est pas celui du secret `PILAO_SMTP_PASSWORD`. Le corriger d'un côté ou de l'autre, puis relancer GitHub > Actions > Deploy (le secret n'est recopié qu'au déploiement).
+     - `Relay access denied` / `Sender address rejected` : l'adresse d'envoi doit être la boîte elle-même (`SMTP_FROM` dans `app.env`).
+   - Une inscription faite pendant la panne n'est pas perdue : le compte existe. Une fois les e-mails réparés, se connecter avec l'adresse et le mot de passe, puis « Renvoyer l'e-mail de confirmation ».
 10. **Sauvegarde nocturne** : Plesk > Tools & Settings > Scheduled Tasks > Add Task.
     - Commande : `/opt/pilao/backup.sh >> /var/log/pilao-backup.log 2>&1`.
     - Fréquence : tous les jours à 03:15, utilisateur root.

@@ -7,6 +7,7 @@ from fastapi.testclient import TestClient
 from sqlalchemy import select, update
 from sqlalchemy.orm import Session
 
+from app.core.errors import ApiError
 from app.core.legal import TERMS_VERSION
 from app.db.models import AuthToken, User
 from tests.api.helpers import PASSWORD, register_payload, signed_in_client
@@ -20,10 +21,36 @@ def test_register_creates_unverified_account_and_sends_email(
 ) -> None:
     c = make_client()
     res = c.post("/auth/register", json=register_payload())
-    assert res.status_code == 201
+    assert res.status_code == 201 and res.json()["email_sent"] is True
     assert len(outbox.sent) == 1 and outbox.sent[0].to == "user1@example.fr"
     res = c.post("/auth/login", json={"email": "user1@example.fr", "password": PASSWORD})
     assert res.status_code == 403 and res.json()["error"]["code"] == "email_not_verified"
+
+
+def test_register_keeps_the_account_when_the_email_does_not_leave(
+    make_client: Factory, outbox: Outbox, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Seen on the pilot: the mail server refused, the account was created all the same,
+    and « réessayez » only led to « SIRET déjà associé ». Now the page says what to do."""
+    c = make_client()
+
+    def down(message: object) -> None:
+        raise ApiError(503, "email_unavailable", "L'e-mail n'a pas pu être envoyé : réessayez.")
+
+    monkeypatch.setattr(outbox, "send", down)
+    res = c.post("/auth/register", json=register_payload())
+    assert res.status_code == 201 and res.json()["email_sent"] is False
+    assert "page de connexion" in res.json()["message"]
+    assert c.post("/auth/register", json=register_payload()).json()["error"]["code"] == (
+        "siret_taken"
+    )
+
+    monkeypatch.undo()  # the mail server is back: the login page sends a new link
+    login = {"email": "user1@example.fr", "password": PASSWORD}
+    assert c.post("/auth/login", json=login).json()["error"]["code"] == "email_not_verified"
+    assert c.post("/auth/resend-verification", json={"email": login["email"]}).status_code == 200
+    assert c.post("/auth/verify-email", json={"token": outbox.last_token()}).status_code == 200
+    assert c.post("/auth/login", json=login).status_code == 200
 
 
 def test_register_requires_and_records_the_acceptance_of_the_terms(

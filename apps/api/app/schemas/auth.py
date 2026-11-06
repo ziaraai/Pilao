@@ -73,3 +73,7 @@ class MeOut(BaseModel):
 
 class MessageOut(BaseModel):
     message: str
+
+
+class RegisterOut(MessageOut):
+    email_sent: bool  # False: the account exists, the e-mail is asked for again at login
