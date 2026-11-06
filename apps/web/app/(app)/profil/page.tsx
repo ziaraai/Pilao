@@ -1,5 +1,8 @@
 "use client";
 
+import { usePathname, useRouter, useSearchParams } from "next/navigation";
+import { Suspense, useRef } from "react";
+
 import { CompanyIdentity } from "@/components/profile/company-identity";
 import { DataRights } from "@/components/profile/data-rights";
 import { Members } from "@/components/profile/members";
@@ -12,16 +15,70 @@ import { formatDate } from "@/lib/format";
 import { useApi } from "@/lib/hooks";
 import type { Completeness, Profile, Trade } from "@/lib/types";
 
+// One tab per part of the profile; `keys` are the completeness items it holds.
+const TABS = [
+  { id: "identite", label: "Identité", keys: ["identity"] },
+  {
+    id: "veille",
+    label: "Activité et veille",
+    keys: ["trades", "watch", "departments", "revenue"],
+  },
+  { id: "moyens", label: "Moyens", keys: ["human_resources", "equipment"] },
+  { id: "certifications", label: "Certifications", keys: ["certifications"] },
+  { id: "references", label: "Références", keys: ["references"] },
+  { id: "utilisateurs", label: "Utilisateurs", keys: [] },
+  { id: "donnees", label: "Vos données", keys: [] },
+] as const;
+type TabId = (typeof TABS)[number]["id"];
+
+function tabOf(key: string): TabId {
+  return (
+    TABS.find((t) => (t.keys as readonly string[]).includes(key))?.id ??
+    "identite"
+  );
+}
+
 export default function ProfilePage() {
+  return (
+    <Suspense fallback={<Loading />}>
+      <ProfileTabs />
+    </Suspense>
+  );
+}
+
+function ProfileTabs() {
   const { me } = useMe();
+  const router = useRouter();
+  const pathname = usePathname();
+  const params = useSearchParams();
   const profile = useApi<Profile>("/profile");
   const trades = useApi<Trade[]>("/profile/trades");
   const completeness = useApi<Completeness>("/profile/completeness");
+  const tabs = useRef<(HTMLButtonElement | null)[]>([]);
+
+  const asked = params.get("onglet");
+  const current: TabId = TABS.some((t) => t.id === asked)
+    ? (asked as TabId)
+    : "identite";
+  // The tab is in the address: a reload or a link (« Annuler ou exporter ») opens it.
+  const open = (id: TabId) =>
+    router.replace(`${pathname}?onglet=${id}`, { scroll: false });
 
   if (profile.error || trades.error)
     return <Alert tone="danger">{profile.error ?? trades.error}</Alert>;
   if (!profile.data || !trades.data) return <Loading />;
   const c = completeness.data ?? profile.data.completeness;
+  const keys = c.missing_keys ?? [];
+  const missingIn = (id: TabId) => keys.filter((k) => tabOf(k) === id).length;
+
+  function onKeyDown(e: React.KeyboardEvent, index: number) {
+    const step = e.key === "ArrowRight" ? 1 : e.key === "ArrowLeft" ? -1 : 0;
+    if (!step) return;
+    e.preventDefault();
+    const next = (index + step + TABS.length) % TABS.length;
+    open(TABS[next].id);
+    tabs.current[next]?.focus();
+  }
 
   return (
     <div className="space-y-6">
@@ -44,11 +101,22 @@ export default function ProfilePage() {
           />
         </div>
         {c.missing.length > 0 ? (
-          <ul className="mt-3 list-inside list-disc text-sm text-slate-700">
-            {c.missing.map((m) => (
-              <li key={m}>{m}</li>
-            ))}
-          </ul>
+          <div className="mt-3">
+            <p className="text-sm text-slate-700">À compléter :</p>
+            <ul className="mt-2 flex flex-wrap gap-2">
+              {c.missing.map((label, i) => (
+                <li key={label}>
+                  <button
+                    type="button"
+                    onClick={() => open(tabOf(keys[i] ?? ""))}
+                    className="rounded-full bg-amber-50 px-3 py-1 text-xs font-medium text-amber-900 ring-1 ring-inset ring-amber-200 hover:bg-amber-100"
+                  >
+                    {label}
+                  </button>
+                </li>
+              ))}
+            </ul>
+          </div>
         ) : (
           <p className="mt-3 text-sm text-slate-700">
             Votre profil est complet : vos mémoires pourront s&apos;appuyer sur
@@ -60,67 +128,127 @@ export default function ProfilePage() {
           rien n&apos;est inventé.
         </p>
       </Card>
-      <CompanyIdentity />
-      <WatchSettings
-        profile={profile.data}
-        trades={trades.data}
-        onSaved={(p) => {
-          profile.setData(p);
-          completeness.reload();
-        }}
-      />
-      <SimpleList
-        title="Moyens humains"
-        path="/profile/human-resources"
-        onChange={completeness.reload}
-        emptyText="Aucun moyen humain : ajoutez vos équipes (ex. 12 agents de service)."
-        columns={[
-          { key: "qualification", label: "Qualification", required: true },
-          {
-            key: "count",
-            label: "Nombre",
-            type: "number",
-            required: true,
-            render: (v) => `× ${String(v)}`,
-          },
-          { key: "description", label: "Précisions" },
-        ]}
-      />
-      <SimpleList
-        title="Moyens matériels"
-        path="/profile/equipment"
-        onChange={completeness.reload}
-        emptyText="Aucun matériel : ajoutez vos machines (ex. autolaveuse)."
-        columns={[
-          { key: "name", label: "Matériel", required: true },
-          { key: "category", label: "Catégorie" },
-          {
-            key: "quantity",
-            label: "Quantité",
-            type: "number",
-            render: (v) => `× ${String(v)}`,
-          },
-        ]}
-      />
-      <SimpleList
-        title="Certifications"
-        path="/profile/certifications"
-        onChange={completeness.reload}
-        emptyText="Aucune certification (ISO 9001, Qualipropre…)."
-        columns={[
-          { key: "name", label: "Certification", required: true },
-          { key: "number", label: "Numéro" },
-          {
-            key: "valid_until",
-            label: "Valable jusqu'au",
-            type: "date",
-            render: (v) => `jusqu'au ${formatDate(String(v))}`,
-          },
-        ]}
-      />
-      <References onChange={completeness.reload} />
-      <Members />
-      <DataRights />
+
+      <div
+        role="tablist"
+        aria-label="Parties du profil"
+        className="-mx-4 flex gap-1 overflow-x-auto border-b border-slate-200 px-4 lg:mx-0 lg:px-0"
+      >
+        {TABS.map((t, i) => {
+          const selected = t.id === current;
+          const missing = missingIn(t.id);
+          return (
+            <button
+              key={t.id}
+              ref={(el) => {
+                tabs.current[i] = el;
+              }}
+              type="button"
+              role="tab"
+              id={`tab-${t.id}`}
+              aria-selected={selected}
+              aria-controls={`panel-${t.id}`}
+              tabIndex={selected ? 0 : -1}
+              onClick={() => open(t.id)}
+              onKeyDown={(e) => onKeyDown(e, i)}
+              className={`-mb-px inline-flex shrink-0 items-center gap-2 whitespace-nowrap border-b-2 px-3 py-2.5 text-sm font-medium ${selected ? "border-brand-navy text-brand-navy" : "border-transparent text-slate-600 hover:border-slate-300 hover:text-slate-800"}`}
+            >
+              {t.label}
+              {missing > 0 && (
+                <span
+                  className="rounded-full bg-amber-100 px-1.5 text-xs font-semibold text-amber-900"
+                  aria-label={`${missing} à compléter`}
+                >
+                  {missing}
+                </span>
+              )}
+            </button>
+          );
+        })}
+      </div>
+
+      <div
+        role="tabpanel"
+        id={`panel-${current}`}
+        aria-labelledby={`tab-${current}`}
+        className="space-y-6"
+      >
+        {current === "identite" && <CompanyIdentity />}
+        {current === "veille" && (
+          <WatchSettings
+            profile={profile.data}
+            trades={trades.data}
+            onSaved={(p) => {
+              profile.setData(p);
+              completeness.reload();
+            }}
+          />
+        )}
+        {current === "moyens" && (
+          <>
+            <SimpleList
+              title="Moyens humains"
+              path="/profile/human-resources"
+              onChange={completeness.reload}
+              emptyText="Aucun moyen humain : ajoutez vos équipes (ex. 12 agents de service)."
+              columns={[
+                {
+                  key: "qualification",
+                  label: "Qualification",
+                  required: true,
+                },
+                {
+                  key: "count",
+                  label: "Nombre",
+                  type: "number",
+                  required: true,
+                  render: (v) => `× ${String(v)}`,
+                },
+                { key: "description", label: "Précisions" },
+              ]}
+            />
+            <SimpleList
+              title="Moyens matériels"
+              path="/profile/equipment"
+              onChange={completeness.reload}
+              emptyText="Aucun matériel : ajoutez vos machines (ex. autolaveuse)."
+              columns={[
+                { key: "name", label: "Matériel", required: true },
+                { key: "category", label: "Catégorie" },
+                {
+                  key: "quantity",
+                  label: "Quantité",
+                  type: "number",
+                  render: (v) => `× ${String(v)}`,
+                },
+              ]}
+            />
+          </>
+        )}
+        {current === "certifications" && (
+          <SimpleList
+            title="Certifications"
+            path="/profile/certifications"
+            onChange={completeness.reload}
+            emptyText="Aucune certification (ISO 9001, Qualipropre…)."
+            columns={[
+              { key: "name", label: "Certification", required: true },
+              { key: "number", label: "Numéro" },
+              {
+                key: "valid_until",
+                label: "Valable jusqu'au",
+                type: "date",
+                render: (v) => `jusqu'au ${formatDate(String(v))}`,
+              },
+            ]}
+          />
+        )}
+        {current === "references" && (
+          <References onChange={completeness.reload} />
+        )}
+        {current === "utilisateurs" && <Members />}
+        {current === "donnees" && <DataRights />}
+      </div>
     </div>
   );
 }

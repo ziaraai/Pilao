@@ -4,24 +4,14 @@ import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { useEffect } from "react";
 
-import { FeedbackButton } from "@/components/feedback";
 import { LegalLinks } from "@/components/legal";
-import { Logo } from "@/components/logo";
+import { Sidebar } from "@/components/sidebar";
 import { Alert, Button, Loading } from "@/components/ui";
 import { api } from "@/lib/api";
 import { AuthContext } from "@/lib/auth";
 import { useAction, useApi } from "@/lib/hooks";
 import { formatDate } from "@/lib/format";
 import type { Deletion, Me, VaultSummary } from "@/lib/types";
-
-const NAV = [
-  { href: "/tableau-de-bord", label: "Tableau de bord" },
-  { href: "/annonces", label: "Annonces" },
-  { href: "/dossiers", label: "Dossiers" },
-  { href: "/coffre-fort", label: "Coffre-fort" },
-  { href: "/documents", label: "Base documentaire" },
-  { href: "/profil", label: "Profil" },
-];
 
 export function AppShell({ children }: { children: React.ReactNode }) {
   const router = useRouter();
@@ -60,51 +50,22 @@ export function AppShell({ children }: { children: React.ReactNode }) {
 
   return (
     <AuthContext.Provider value={{ me: me.data, refresh: me.reload }}>
-      <div className="min-h-screen bg-slate-50">
-        <header className="border-b border-slate-200 bg-white">
-          <div className="mx-auto flex max-w-6xl flex-wrap items-center gap-x-6 gap-y-2 px-4 py-3">
-            <Link href="/tableau-de-bord" aria-label="Accueil Pilao">
-              <Logo className="h-8 w-auto" />
-            </Link>
-            <nav
-              aria-label="Navigation principale"
-              className="flex flex-wrap gap-1"
-            >
-              {NAV.map((item) => {
-                const active = pathname.startsWith(item.href);
-                return (
-                  <Link
-                    key={item.href}
-                    href={item.href}
-                    aria-current={active ? "page" : undefined}
-                    className={`rounded-md px-3 py-1.5 text-sm font-medium ${active ? "bg-brand-navy text-white" : "text-slate-700 hover:bg-slate-100"}`}
-                  >
-                    {item.label}
-                  </Link>
-                );
-              })}
-            </nav>
-            <div className="ml-auto flex items-center gap-3 text-sm text-slate-600">
-              <FeedbackButton />
-              <span className="hidden sm:inline">{me.data.org.name}</span>
-              <Button variant="ghost" onClick={logout}>
-                Déconnexion
-              </Button>
-            </div>
-          </div>
-        </header>
-        <DeletionBanner />
-        <VaultBanner />
-        <main className="mx-auto max-w-6xl px-4 py-8">
-          {me.data.terms_current !== false ? ( // an older API omits it: never block
-            children
-          ) : (
-            <TermsUpdate onAccepted={me.reload} />
-          )}
-        </main>
-        <footer className="mx-auto max-w-6xl px-4 pb-8">
-          <LegalLinks />
-        </footer>
+      <div className="min-h-screen bg-slate-50 lg:flex">
+        <Sidebar orgName={me.data.org.name} onLogout={logout} />
+        <div className="flex min-w-0 flex-1 flex-col">
+          <DeletionBanner />
+          <VaultBanner />
+          <main className="mx-auto w-full max-w-6xl flex-1 px-4 py-8 lg:px-8">
+            {me.data.terms_current !== false ? ( // an older API omits it: never block
+              children
+            ) : (
+              <TermsUpdate onAccepted={me.reload} />
+            )}
+          </main>
+          <footer className="mx-auto w-full max-w-6xl px-4 pb-8 lg:px-8">
+            <LegalLinks />
+          </footer>
+        </div>
       </div>
     </AuthContext.Provider>
   );
@@ -151,7 +112,7 @@ function DeletionBanner() {
     >
       Toutes les données de l&apos;entreprise seront supprimées le{" "}
       {formatDate(due)}.{" "}
-      <Link href="/profil" className="font-semibold underline">
+      <Link href="/profil?onglet=donnees" className="font-semibold underline">
         Annuler ou exporter
       </Link>
     </div>

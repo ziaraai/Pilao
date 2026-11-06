@@ -100,7 +100,10 @@ let current; // the page, for a screenshot when a step fails
   await page.getByRole("heading", { name: "Profil de l'entreprise" }).waitFor();
   step("guard redirect + login back to /profil");
 
-  // 4. Profile: watch settings, staff, Excel import
+  // 4. Profile, one tab per part: watch settings, staff, Excel import
+  const tab = (name) => page.getByRole("tab", { name, exact: false }).click();
+  await tab("Activité et veille");
+  await page.waitForURL(`${WEB}/profil?onglet=veille`);
   await page
     .getByLabel("Nettoyage de locaux (bureaux, écoles, bâtiments)")
     .check();
@@ -121,6 +124,7 @@ let current; // the page, for a screenshot when a step fails
   await page.getByText("Montant illisible").waitFor();
   await page.getByLabel("Montant minimum (€ HT)").fill("");
   step("watch settings saved, CPV pre-selected, bad amount refused");
+  await tab("Moyens");
   await page
     .locator("#\\/profile\\/human-resources-qualification")
     .fill("Agent de service");
@@ -130,6 +134,7 @@ let current; // the page, for a screenshot when a step fails
     .first()
     .click();
   await page.getByText("× 12").waitFor();
+  await tab("Références");
   await page.setInputFiles("#ref-import", `${S}/references.xlsx`);
   await page.getByRole("button", { name: "Importer", exact: true }).click();
   await page.getByText("1 référence(s) importée(s) sur 2 ligne(s).").waitFor();
@@ -143,6 +148,7 @@ let current; // the page, for a screenshot when a step fails
   step(`staff added, Excel import reported (1 ok, 1 error) — ${pct}`);
 
   // 4b. Company identity for DC1/DC2 and the Word layout (P2-06)
+  await tab("Identité");
   await page.getByLabel("Téléphone").fill("04 78 00 00 00");
   await page.getByLabel("Signataire (nom et prénom)").fill("Abdraouf Exemple");
   await page.getByLabel("Qualité du signataire").fill("Gérant");
@@ -536,7 +542,7 @@ let current; // the page, for a screenshot when a step fails
   // 11. GDPR: full export, then a deletion scheduled and cancelled (ADR-026)
   await page.getByRole("link", { name: "Profil", exact: true }).click();
   await page.waitForURL(`${WEB}/profil`);
-  await page.reload();
+  await page.goto(`${WEB}/profil?onglet=donnees`); // the tab is in the address
   await page.getByRole("button", { name: "Préparer un export" }).click();
   const exportButton = page.getByRole("button", {
     name: /^Télécharger l'export du/,
@@ -581,6 +587,7 @@ let current; // the page, for a screenshot when a step fails
   // 13. A colleague invited by e-mail joins the company, then is removed (US-1.5)
   const colleague = `collegue${n}@example.fr`;
   await page.goto(`${WEB}/profil`);
+  await tab("Utilisateurs");
   await page.getByLabel("E-mail du collaborateur").fill(colleague);
   await page.getByLabel("Nom (facultatif)").fill("Sophie Collègue");
   await page.getByRole("button", { name: "Inviter", exact: true }).click();
@@ -605,7 +612,7 @@ let current; // the page, for a screenshot when a step fails
   await second.getByLabel("J'accepte les", { exact: false }).check();
   await second.getByRole("button", { name: "Créer mon accès" }).click();
   await second.waitForURL(`${WEB}/tableau-de-bord`);
-  await second.goto(`${WEB}/profil`);
+  await second.goto(`${WEB}/profil?onglet=utilisateurs`);
   await second
     .getByText(
       "Seul un administrateur peut inviter ou retirer des collaborateurs.",

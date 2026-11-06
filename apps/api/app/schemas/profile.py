@@ -90,6 +90,7 @@ class ProfileIn(BaseModel):
 class CompletenessOut(BaseModel):
     pct: int
     missing: list[str]
+    missing_keys: list[str] = []  # identity, trades, watch, departments, revenue…
 
 
 class ProfileOut(BaseModel):

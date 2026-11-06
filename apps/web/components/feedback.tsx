@@ -13,8 +13,9 @@ const KINDS = [
   { value: "question", label: "Une question" },
 ];
 
-/** P4-02: tell the team something in two clicks, from any page of the application. */
-export function FeedbackButton() {
+/** P4-02: tell the team something in two clicks, from any page of the application.
+ * In the sidebar it sits at the bottom, so the form opens above it. */
+export function FeedbackButton({ className = "" }: { className?: string }) {
   const pathname = usePathname();
   const [open, setOpen] = useState(false);
   const [kind, setKind] = useState("idea");
@@ -27,6 +28,7 @@ export function FeedbackButton() {
     <div className="relative">
       <Button
         variant="secondary"
+        className={className}
         aria-expanded={open}
         onClick={() => {
           setOpen((o) => !o);
@@ -39,7 +41,7 @@ export function FeedbackButton() {
         <div
           role="dialog"
           aria-label="Votre avis"
-          className="absolute right-0 z-20 mt-2 w-80 rounded-lg bg-white p-4 shadow-lg ring-1 ring-slate-200"
+          className="absolute bottom-full left-0 z-40 mb-2 w-[min(20rem,calc(100vw-2rem))] rounded-lg bg-white p-4 shadow-lg ring-1 ring-slate-200"
         >
           {thanks ? (
             <div className="space-y-3">

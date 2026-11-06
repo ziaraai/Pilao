@@ -28,7 +28,11 @@ export type Trade = {
   cpv_codes: string[];
   keywords: string[];
 };
-export type Completeness = { pct: number; missing: string[] };
+export type Completeness = {
+  pct: number;
+  missing: string[];
+  missing_keys?: string[]; // identity, trades, watch… (which profile tab)
+};
 export type Profile = {
   trades: string[];
   cpv_codes: string[];

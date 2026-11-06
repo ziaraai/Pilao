@@ -34,6 +34,7 @@ class Facts:
 class Completeness:
     pct: int
     missing: list[str]
+    missing_keys: list[str]  # the same items, as CRITERIA keys (the profile tab to open)
 
 
 def compute(f: Facts) -> Completeness:
@@ -49,4 +50,8 @@ def compute(f: Facts) -> Completeness:
         "references": f.references >= 3,
     }
     pct = sum(w for k, w, _ in CRITERIA if ok[k])
-    return Completeness(pct=pct, missing=[label for k, _, label in CRITERIA if not ok[k]])
+    return Completeness(
+        pct=pct,
+        missing=[label for k, _, label in CRITERIA if not ok[k]],
+        missing_keys=[k for k, _, _ in CRITERIA if not ok[k]],
+    )

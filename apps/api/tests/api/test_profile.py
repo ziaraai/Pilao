@@ -108,6 +108,9 @@ def test_completeness_grows_with_data(make_client: Factory, outbox: Outbox) -> N
     after = c.get("/profile/completeness").json()
     assert after["pct"] == pct + 10 + 10
     assert "Moyens humains" not in after["missing"] and "Certifications" in after["missing"]
+    # the keys say which profile tab to open, in the same order as the labels
+    assert "human_resources" not in after["missing_keys"]
+    assert after["missing_keys"].index("certifications") == after["missing"].index("Certifications")
     assert c.get("/profile").json()["completeness"]["pct"] == after["pct"]
 
 

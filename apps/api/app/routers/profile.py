@@ -86,13 +86,15 @@ def put_company(data: CompanyIn, ctx: CurrentAuth, db: ScopedDb) -> CompanyOut:
 def get_completeness(ctx: CurrentAuth, db: ScopedDb) -> CompletenessOut:
     profile = svc.get_or_create_profile(db, ctx.org)
     result = svc.compute_completeness(db, ctx.org, profile)
-    return CompletenessOut(pct=result.pct, missing=result.missing)
+    return CompletenessOut(pct=result.pct, missing=result.missing, missing_keys=result.missing_keys)
 
 
 def _profile_out(profile: Any, result: Any) -> ProfileOut:
     return ProfileOut(
         **{k: getattr(profile, k) for k in ProfileOut.model_fields if k != "completeness"},
-        completeness=CompletenessOut(pct=result.pct, missing=result.missing),
+        completeness=CompletenessOut(
+            pct=result.pct, missing=result.missing, missing_keys=result.missing_keys
+        ),
     )
 
 
