@@ -102,7 +102,7 @@ let current; // the page, for a screenshot when a step fails
 
   // 4. Profile, one tab per part: watch settings, staff, Excel import
   const tab = (name) => page.getByRole("tab", { name, exact: false }).click();
-  await tab("Activité et veille");
+  await tab("Métiers et veille");
   await page.waitForURL(`${WEB}/profil?onglet=veille`);
   await page
     .getByLabel("Nettoyage de locaux (bureaux, écoles, bâtiments)")
@@ -124,6 +124,20 @@ let current; // the page, for a screenshot when a step fails
   await page.getByText("Montant illisible").waitFor();
   await page.getByLabel("Montant minimum (€ HT)").fill("");
   step("watch settings saved, CPV pre-selected, bad amount refused");
+  await tab("Chiffre d'affaires");
+  await page.getByLabel("Exercice N-1").fill("850 000");
+  await page.getByLabel("Exercice N-2").fill("790 000");
+  await page.getByLabel("Exercice N-3").fill("720 000");
+  await page.getByRole("button", { name: "Enregistrer", exact: true }).click();
+  await page.getByText("Chiffre d'affaires enregistré.").waitFor();
+  await tab("Métiers et veille"); // saving the revenue kept the watch settings
+  if (
+    !(
+      await page.getByRole("textbox", { name: "Codes CPV" }).inputValue()
+    ).includes("90919200")
+  )
+    throw new Error("revenue save lost the CPV codes");
+  step("revenue saved in its own tab, watch settings kept");
   await tab("Moyens");
   await page
     .locator("#\\/profile\\/human-resources-qualification")

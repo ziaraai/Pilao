@@ -20,9 +20,10 @@ const TABS = [
   { id: "identite", label: "Identité", keys: ["identity"] },
   {
     id: "veille",
-    label: "Activité et veille",
-    keys: ["trades", "watch", "departments", "revenue"],
+    label: "Métiers et veille",
+    keys: ["trades", "watch", "departments"],
   },
+  { id: "chiffre-affaires", label: "Chiffre d'affaires", keys: ["revenue"] },
   { id: "moyens", label: "Moyens", keys: ["human_resources", "equipment"] },
   { id: "certifications", label: "Certifications", keys: ["certifications"] },
   { id: "references", label: "Références", keys: ["references"] },
@@ -174,8 +175,10 @@ function ProfileTabs() {
         className="space-y-6"
       >
         {current === "identite" && <CompanyIdentity />}
-        {current === "veille" && (
+        {(current === "veille" || current === "chiffre-affaires") && (
           <WatchSettings
+            key={current} // a fresh form from the saved profile on each tab
+            part={current === "veille" ? "watch" : "revenue"}
             profile={profile.data}
             trades={trades.data}
             onSaved={(p) => {

@@ -40,14 +40,18 @@ function toForm(p: Profile): Form {
   };
 }
 
+/** The profile's watch settings, or its revenue (`part`): two tabs, one PUT /profile, so
+ * each sends the other's values as they are saved. */
 export function WatchSettings({
   profile,
   trades,
   onSaved,
+  part = "watch",
 }: {
   profile: Profile;
   trades: Trade[];
   onSaved: (p: Profile) => void;
+  part?: "watch" | "revenue";
 }) {
   const [form, setForm] = useState<Form>(() => toForm(profile));
   const [saved, setSaved] = useState(false);
@@ -105,6 +109,46 @@ export function WatchSettings({
       onSaved(result);
     }
   }
+
+  const errors = (moneyError || save.error) && (
+    <Alert tone="danger">{moneyError ?? save.error}</Alert>
+  );
+
+  if (part === "revenue")
+    return (
+      <Card title="Chiffre d'affaires">
+        <form onSubmit={onSubmit} className="space-y-5" noValidate>
+          <p className="text-sm text-slate-700">
+            Les 3 derniers exercices clos, en euros hors taxes. Ils remplissent
+            le DC2 et les mémoires qui les demandent.
+          </p>
+          <div className="grid gap-3 sm:grid-cols-3">
+            {(["y1", "y2", "y3"] as const).map((k, i) => (
+              <Field
+                key={k}
+                label={`Exercice N-${i + 1}`}
+                htmlFor={k}
+                hint={i === 0 ? "Le dernier exercice clos." : undefined}
+              >
+                <Input
+                  id={k}
+                  inputMode="decimal"
+                  value={form[k]}
+                  onChange={set(k)}
+                />
+              </Field>
+            ))}
+          </div>
+          {errors}
+          {saved && (
+            <Alert tone="ok">Chiffre d&apos;affaires enregistré.</Alert>
+          )}
+          <Button type="submit" busy={save.busy}>
+            Enregistrer
+          </Button>
+        </form>
+      </Card>
+    );
 
   return (
     <Card title="Paramètres de veille" id="veille">
@@ -210,23 +254,6 @@ export function WatchSettings({
             />
           </Field>
         </div>
-        <fieldset>
-          <legend className="text-sm font-medium text-slate-800">
-            Chiffre d&apos;affaires des 3 derniers exercices (€ HT)
-          </legend>
-          <div className="mt-2 grid gap-3 sm:grid-cols-3">
-            {(["y1", "y2", "y3"] as const).map((k, i) => (
-              <Field key={k} label={`Exercice N-${i + 1}`} htmlFor={k}>
-                <Input
-                  id={k}
-                  inputMode="decimal"
-                  value={form[k]}
-                  onChange={set(k)}
-                />
-              </Field>
-            ))}
-          </div>
-        </fieldset>
         <Field label="Seuil d'alerte (score sur 100)" htmlFor="minScore">
           <Input
             id="minScore"
@@ -238,9 +265,7 @@ export function WatchSettings({
             className="max-w-32"
           />
         </Field>
-        {(moneyError || save.error) && (
-          <Alert tone="danger">{moneyError ?? save.error}</Alert>
-        )}
+        {errors}
         {saved && <Alert tone="ok">Paramètres enregistrés.</Alert>}
         <Button type="submit" busy={save.busy}>
           Enregistrer
