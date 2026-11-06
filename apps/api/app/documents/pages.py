@@ -13,8 +13,17 @@ from docx import Document
 from openpyxl import load_workbook
 from PIL import Image
 
+from app.documents.convert import ConversionUnavailable, readable_form
 from app.documents.ocr import OcrEngine, OcrUnavailable
-from app.domain.filetypes import DOCX, JPEG, PDF, PNG, XLSX
+from app.domain.filetypes import (
+    DOCX,
+    JPEG,
+    PDF,
+    PNG,
+    SHEETS_TO_CONVERT,
+    TEXT_TO_CONVERT,
+    XLSX,
+)
 
 MAX_PAGES = 600
 MAX_OCR_PAGES = 200  # per file: a 300-page DCE is rarely more than a few scanned pieces
@@ -144,6 +153,13 @@ def _image(fileobj: BinaryIO, ocr: OcrEngine | None) -> Extraction:
 
 def extract_pages(fileobj: BinaryIO, mime: str, ocr: OcrEngine | None) -> Extraction:
     fileobj.seek(0)
+    to_convert = {t.mime: t for t in (*TEXT_TO_CONVERT, *SHEETS_TO_CONVERT)}
+    if mime in to_convert:  # LibreOffice / Office 97-2003: a PDF keeps the pages (ADR-034)
+        try:
+            converted, kind = readable_form(fileobj.read(), to_convert[mime], text_target="pdf")
+        except ConversionUnavailable as exc:
+            return Extraction(status="error", error=f"Lecture impossible : {exc}")
+        fileobj, mime = io.BytesIO(converted), kind.mime
     data: BinaryIO = io.BytesIO(fileobj.read()) if mime != PDF.mime else fileobj
     if mime == PDF.mime:
         return _pdf(data, ocr)

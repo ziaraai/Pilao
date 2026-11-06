@@ -12,7 +12,7 @@ from sqlalchemy.orm import Session
 from app.core.config import get_settings
 from app.core.errors import ApiError
 from app.db.models import AuditLog, File, Organization, User
-from app.domain.filetypes import ALLOWED, detect
+from app.domain.filetypes import ALLOWED, detect, label
 from app.storage.antivirus import ScannerUnavailable, ScanTooLarge, VirusScanner
 from app.storage.objects import ObjectStorage
 
@@ -82,11 +82,11 @@ def upload_file(
         raise ApiError(
             415,
             "unsupported_type",
-            "Format non accepté. Formats : PDF, DOCX, XLSX, ZIP, PNG, JPEG.",
+            f"Format non accepté. Formats : {label(ALLOWED)}.",
         )
 
     if allowed_mimes is not None and kind.mime not in allowed_mimes:
-        accepted = ", ".join(t.extension.upper() for t in ALLOWED if t.mime in allowed_mimes)
+        accepted = label([t for t in ALLOWED if t.mime in allowed_mimes])
         raise ApiError(415, "unsupported_type", f"Format non accepté pour ce dépôt ({accepted}).")
 
     _check_quota(db, size, s.org_storage_quota_bytes)  # fast refusal before scan and upload

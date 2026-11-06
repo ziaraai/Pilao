@@ -68,7 +68,7 @@ export default function KnowledgePage() {
         <UploadButton
           id="kb-upload"
           label="Déposer"
-          accept=".pdf,.docx"
+          accept=".pdf,.docx,.odt,.doc"
           multiple
           busy={upload.busy}
           onFiles={onFiles}

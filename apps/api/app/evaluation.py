@@ -78,7 +78,7 @@ from app.services.exports import memoir_data
 from app.services.profile import get_or_create_profile, refresh_completeness, update_profile
 
 logger = logging.getLogger("pilao.evaluation")
-DCE_SUFFIXES = {".zip", ".pdf", ".docx", ".xlsx"}
+DCE_SUFFIXES = {".zip", ".pdf", ".docx", ".xlsx", ".odt", ".doc", ".ods", ".xls"}
 CRITERIA = [  # docs/11 — rating grid, out of 10 each
     ("Conformité au plan", "Le plan imposé par le RC est-il respecté ?"),
     ("Réponse au CCTP", "Les exigences du CCTP sont-elles toutes traitées, concrètement ?"),
@@ -645,7 +645,7 @@ def run_evaluation(
     check_company(company)
     base = samples / "base"
     knowledge = (
-        sorted(p for p in base.iterdir() if p.suffix.lower() in {".pdf", ".docx"})
+        sorted(p for p in base.iterdir() if p.suffix.lower() in {".pdf", ".docx", ".odt", ".doc"})
         if base.is_dir()
         else []
     )

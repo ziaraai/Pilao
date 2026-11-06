@@ -324,3 +324,16 @@ Format : numéro, date, décision, raison, statut. Ajouter une entrée pour chaq
   - sauvegarde (base de 72 tables, fichiers, secrets).
 - **Limites** : un seul serveur, donc pas de haute disponibilité. ClamAV prend environ 1,5 Go de mémoire. Les sauvegardes restent sur le serveur tant qu'elles ne sont pas copiées ailleurs (Plesk Backup Manager).
 - **Statut** : validé pour le pilote. La production ouverte au public reste à décider (Q7).
+
+## ADR-034 — Fichiers LibreOffice et Office 97-2003
+- **Date** : 2026-11-06
+- **Contexte** : le premier mémoire envoyé par Abdraouf est un `.odt` (LibreOffice). Pilao n'acceptait que PDF, DOCX et XLSX. Les PME utilisent souvent LibreOffice, et beaucoup d'acheteurs publient encore des pièces en `.doc` ou `.xls`.
+- **Décision** : ODT, ODS, DOC et XLS sont acceptés.
+  - **Reconnaissance par le contenu**, jamais par l'extension : le fichier `mimetype` des documents OpenDocument, et les flux `WordDocument` ou `Workbook` des fichiers Office 97-2003 (bibliothèque `olefile`).
+  - **Lecture après une conversion LibreOffice** dans le worker. Le fichier déposé est conservé tel quel.
+    - Une pièce de DCE texte (ODT, DOC) devient un **PDF**. Elle garde ainsi ses numéros de page, et chaque information extraite reste citée « fichier + page ».
+    - Un document de la base documentaire devient un **DOCX**, ce qui garde ses titres pour le découpage.
+    - Un tableur (ODS, XLS) devient un **XLSX**.
+  - **Un seul lanceur LibreOffice** pour ces conversions et pour l'export PDF du mémoire : un profil par conversion, une durée bornée, aucune macro exécutée.
+- **Conséquence** : l'image du serveur installe aussi Calc (`libreoffice-calc-nogui`). La CI vérifie qu'un tableur s'y convertit vraiment.
+- **Statut** : validé.

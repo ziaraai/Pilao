@@ -1,4 +1,5 @@
 import hashlib
+import io
 import logging
 import time
 import uuid
@@ -24,8 +25,9 @@ from app.db.models import (
     User,
 )
 from app.documents.chunk import Chunk, chunk_blocks
-from app.documents.extract import ExtractionError, extract_docx, extract_pdf
-from app.domain.filetypes import DOCX, PDF
+from app.documents.convert import ConversionUnavailable, readable_form
+from app.documents.extract import Block, ExtractionError, extract_docx, extract_pdf
+from app.domain.filetypes import DOC, DOCX, ODT, PDF
 from app.services import files as files_svc
 from app.services.jobs import set_job_status
 from app.storage.antivirus import VirusScanner
@@ -35,7 +37,23 @@ from app.workers.queue import INDEX_JOB_TIMEOUT_SECONDS, JobQueue
 logger = logging.getLogger("pilao.knowledge")
 
 JOB_KIND = "index_knowledge_document"
-ALLOWED_MIMES = frozenset({PDF.mime, DOCX.mime})
+ALLOWED_MIMES = frozenset({PDF.mime, DOCX.mime, ODT.mime, DOC.mime})
+
+
+def _blocks(fileobj: BinaryIO, mime: str) -> list[Block]:
+    """PDF and DOCX directly; ODT and DOC through a DOCX, which keeps the headings."""
+    if mime == PDF.mime:
+        return extract_pdf(fileobj)
+    if mime in (ODT.mime, DOC.mime):
+        kind = ODT if mime == ODT.mime else DOC
+        try:
+            converted, _ = readable_form(fileobj.read(), kind, text_target="docx")
+        except ConversionUnavailable as exc:
+            raise ExtractionError(f"Lecture impossible : {exc}") from exc
+        return extract_docx(io.BytesIO(converted))
+    return extract_docx(fileobj)
+
+
 EMBED_BATCH = 64
 
 
@@ -180,7 +198,7 @@ def run_index_document(
     try:
         fileobj = storage.get(record.storage_key)
         try:
-            blocks = extract_pdf(fileobj) if record.mime == PDF.mime else extract_docx(fileobj)
+            blocks = _blocks(fileobj, record.mime)
         finally:
             fileobj.close()
         chunks = chunk_blocks(blocks)

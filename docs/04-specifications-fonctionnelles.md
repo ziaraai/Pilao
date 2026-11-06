@@ -36,7 +36,7 @@ Je saisis mes moyens humains, matériels, certifications et références de chan
 
 **US-1.4 Base documentaire**
 Je dépose mon mémoire modèle, mes anciens mémoires et mes documents qualité / sécurité / environnement.
-- CA1 : formats acceptés : PDF, DOCX. Taille max 50 Mo par fichier.
+- CA1 : formats acceptés : PDF, Word (DOCX, DOC), LibreOffice (ODT). Taille max 50 Mo par fichier.
 - CA2 : chaque document est découpé et indexé (voir `docs/08-pipeline-ia.md`). Statut visible : en cours / prêt / erreur.
 - CA3 : je peux supprimer un document, ce qui supprime aussi son index.
 
@@ -79,6 +79,7 @@ Je dépose le ZIP ou les fichiers du DCE dans un dossier.
 - CA1 : décompression automatique (ZIP, y compris ZIP imbriqués).
 - CA2 : chaque fichier est typé automatiquement (RC, CCAP, CCTP, BPU, DPGF, DQE, AE, annexe, autre), modifiable par l'utilisateur.
 - CA3 : extraction du texte page par page ; reconnaissance de texte (OCR) pour les PDF scannés.
+- CA5 : pièces acceptées : PDF, Word (DOCX, DOC), Excel (XLSX, XLS), LibreOffice (ODT, ODS), images ; les documents texte non PDF gardent leurs numéros de page (ADR-034).
 - CA4 : un nouveau dépôt (DCE modifié) crée une nouvelle version et signale les différences.
 
 **US-3.2 Fiche d'analyse**

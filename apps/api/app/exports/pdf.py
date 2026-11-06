@@ -6,13 +6,11 @@ would block each other (LibreOffice locks its profile), and none is left behind.
 
 import logging
 import shutil
-import subprocess
-import tempfile
 from functools import lru_cache
-from pathlib import Path
 from typing import Protocol
 
 from app.core.config import get_settings
+from app.documents.convert import ConversionUnavailable, soffice_convert
 
 logger = logging.getLogger("pilao.pdf")
 
@@ -30,42 +28,13 @@ class LibreOfficeConverter:
         self._soffice, self._timeout = soffice, timeout
 
     def convert(self, docx: bytes) -> bytes:
-        binary = shutil.which(self._soffice) if self._soffice else None
-        if binary is None:
+        if not self._soffice or shutil.which(self._soffice) is None:
             raise PdfUnavailable("LibreOffice n'est pas installé sur le serveur.")
-        with tempfile.TemporaryDirectory(prefix="pilao-pdf-") as tmp:
-            work = Path(tmp)
-            source = work / "memoire.docx"
-            source.write_bytes(docx)
-            command = [
-                binary,
-                "--headless",
-                "--norestore",
-                "--nolockcheck",
-                f"-env:UserInstallation={(work / 'profile').as_uri()}",
-                "--convert-to",
-                "pdf",
-                "--outdir",
-                str(work),
-                str(source),
-            ]
-            try:
-                subprocess.run(
-                    command,
-                    check=True,
-                    capture_output=True,
-                    timeout=self._timeout,
-                    stdin=subprocess.DEVNULL,
-                )
-            except subprocess.TimeoutExpired as exc:
-                raise PdfUnavailable("La conversion PDF a pris trop de temps.") from exc
-            except subprocess.CalledProcessError as exc:
-                logger.error("soffice failed: %s", exc.stderr[-2000:])
-                raise PdfUnavailable("La conversion PDF a échoué.") from exc
-            result = work / "memoire.pdf"
-            if not result.exists() or not result.read_bytes().startswith(b"%PDF"):
-                raise PdfUnavailable("La conversion PDF n'a produit aucun fichier.")
-            return result.read_bytes()
+        try:
+            return soffice_convert(docx, "docx", "pdf", self._timeout)
+        except ConversionUnavailable as exc:
+            message = str(exc).replace("La conversion", "La conversion PDF")
+            raise PdfUnavailable(message) from exc
 
 
 @lru_cache

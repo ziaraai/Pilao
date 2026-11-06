@@ -49,14 +49,14 @@ export function DceSection({
             ? "Déposer une nouvelle version"
             : "Déposer le DCE"
         }
-        accept=".zip,.pdf,.docx,.xlsx,.png,.jpg,.jpeg"
+        accept=".zip,.pdf,.docx,.doc,.odt,.xlsx,.xls,.ods,.png,.jpg,.jpeg"
         multiple
         busy={deposit.busy || busy}
         onFiles={onFiles}
       />
       <p className="mt-2 text-xs text-slate-500">
-        Le ZIP téléchargé sur le profil acheteur, ou les pièces une par une (250
-        Mo maximum par fichier).
+        Le ZIP téléchargé sur le profil acheteur, ou les pièces une par une :
+        PDF, Word, Excel, LibreOffice, images (250 Mo maximum par fichier).
       </p>
       {deposit.error && (
         <div className="mt-3">

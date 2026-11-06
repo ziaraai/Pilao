@@ -20,7 +20,17 @@ from app.documents.archive import ArchiveError, Member, expand
 from app.documents.ocr import OcrEngine
 from app.documents.pages import extract_pages
 from app.domain.dce import kind_from_content, kind_from_filename, normalize
-from app.domain.filetypes import DOCX, JPEG, PDF, PNG, XLSX, ZIP, detect
+from app.domain.filetypes import (
+    DOCX,
+    JPEG,
+    PDF,
+    PNG,
+    SHEETS_TO_CONVERT,
+    TEXT_TO_CONVERT,
+    XLSX,
+    ZIP,
+    detect,
+)
 from app.services import files as files_svc
 from app.services.jobs import set_job_status
 from app.storage.antivirus import VirusScanner
@@ -29,7 +39,10 @@ from app.workers.queue import DCE_JOB_TIMEOUT_SECONDS, JobQueue
 
 logger = logging.getLogger("pilao.dce")
 JOB_KIND = "process_dce"
-DEPOSIT_MIMES = frozenset({PDF.mime, DOCX.mime, XLSX.mime, ZIP.mime, PNG.mime, JPEG.mime})
+DEPOSIT_MIMES = frozenset(
+    {PDF.mime, DOCX.mime, XLSX.mime, ZIP.mime, PNG.mime, JPEG.mime}
+    | {t.mime for t in (*TEXT_TO_CONVERT, *SHEETS_TO_CONVERT)}  # read after conversion
+)
 MEMBER_MIMES = DEPOSIT_MIMES - {ZIP.mime}
 MAX_FILES_PER_DEPOSIT = 50
 

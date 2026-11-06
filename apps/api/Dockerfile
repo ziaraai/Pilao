@@ -29,7 +29,8 @@ RUN --mount=type=secret,id=extra_ca \
     apt-get $CA update \
     && apt-get $CA install -y --no-install-recommends \
         ca-certificates python3.12 python3.12-venv \
-        tesseract-ocr tesseract-ocr-fra libreoffice-writer-nogui fonts-liberation \
+        tesseract-ocr tesseract-ocr-fra libreoffice-writer-nogui libreoffice-calc-nogui \
+        fonts-liberation \
     && rm -rf /var/lib/apt/lists/* /tmp/extra_ca.crt
 
 RUN --mount=type=secret,id=extra_ca \

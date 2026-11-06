@@ -25,6 +25,7 @@ dependencies = [
   "tzdata>=2026.6",
   "pytesseract>=0.3.13",
   "tenacity>=9",
+  "olefile>=0.47",
 ]
 
 [dependency-groups]
@@ -53,5 +54,5 @@ plugins = ["pydantic.mypy"]
 testpaths = ["tests"]
 
 [[tool.mypy.overrides]]
-module = ["pytesseract"]  # no type information published
+module = ["pytesseract", "olefile"]  # no type information published
 ignore_missing_imports = true
