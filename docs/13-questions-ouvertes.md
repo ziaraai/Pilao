@@ -2,7 +2,7 @@
 
 | # | Question | Qui | Statut |
 |---|---|---|---|
-| Q1 | Recevoir le plan type des mémoires et 3 vrais DCE d'Abdraouf | Abdraouf | En attente |
+| Q1 | Recevoir le plan type des mémoires et 3 vrais DCE d'Abdraouf. Reçu le 06/11 : mémoire 2017, DPGF du lot 34 de L'Orée du Parc, CCTP et DPGF du lot CE16 Récamier (plâtrerie). Manquent les RC, les mémoires envoyés et deux DCE de nettoyage complets | Abdraouf | En cours |
 | Q2 | Les acheteurs acceptent-ils l'attestation RNE à la place du Kbis ? | Faycal / Abdraouf | À vérifier |
 | Q3 | Prix de l'abonnement et formules | Faycal + Abdraouf | Après les tests |
 | Q4 | Nom définitif « Pilao » : marque INPI (classes 9, 35, 42) et domaines .fr/.com | Faycal | À vérifier |

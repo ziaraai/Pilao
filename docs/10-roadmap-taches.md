@@ -7,6 +7,12 @@ Durée estimée de la V1 : environ 4 mois (≈ 80 jours de développement). Coch
 Objectif : savoir si la génération est assez bonne, avec quel modèle, à quel coût.
 
 - [ ] P0-01 Recevoir d'Abdraouf 3 DCE réels + les mémoires envoyés + son mémoire modèle + ses références → `samples/` (non versionné)
+  - Reçu le 06/11 :
+    - son mémoire de 2017 (`.odt`, entreprise ENG PRO) ;
+    - le DPGF chiffré du lot 34 « Nettoyage final » de L'Orée du Parc (Villars) ;
+    - le CCTP et le DPGF du lot CE16 « Plâtrerie-Peinture-Plafonds » du lycée Récamier (Lyon), qui n'est pas son métier.
+  - Manquent : les RC, les mémoires réellement envoyés, et deux DCE de nettoyage complets.
+  - Premier essai réel sur le CCTP CE16 (71 pages, modèle bon marché) : analyse juste et sourcée (34 exigences avec leur page, rien d'inventé sans RC), 9 chapitres sur 9, matrice faite, 0,13 € et 6,6 minutes.
 - [x] P0-02 Extraction texte + OCR des DCE : le traitement du produit, appelé par `eval-models` (ADR-027)
 - [x] P0-03 Analyse du DCE avec `prompts/extraction_dce.md` sur 1 à 6 modèles (`--models`)
 - [x] P0-04 Génération d'un mémoire complet par modèle (chapitres, matrice, export Word)
@@ -41,6 +47,7 @@ Reste à faire :
 - [ ] Limiteur de débit public (`/companies/lookup`) en mémoire par processus → Redis quand l'API aura plusieurs instances.
 - [ ] Code de suivi des jobs dupliqué entre `services/knowledge.py` et `services/vault.py` ; deux écritures de `ai_calls` (`ai/calls.py`, `ai/llm.py`) → factoriser.
 - [ ] « Relire » une attestation pendant qu'une relance automatique RQ est programmée peut lancer deux lectures.
+- [ ] Mémoire modèle sans styles de titres (celui d'Abdraouf : « 1- PRESENTATION DE L'ENTREPRISE » en simple gras) : son plan n'est pas repris, c'est le plan type du secteur qui sert. Reconnaître les titres numérotés ou en gras.
 - [ ] Détection des titres dans les PDF : une ligne comme « 2 Agents de propreté… » est prise pour un titre (à régler sur de vrais mémoires).
 - [ ] `EMBEDDING_DIM` paraît réglable, mais la colonne est fixée à 1024 par la migration : le changer impose une migration et un ré-embedding.
 - [ ] Les embeddings appellent LiteLLM depuis `app/ai/embeddings.py` et non `app/ai/llm.py` (reste dans la couche IA, mais deux points d'entrée).
