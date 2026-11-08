@@ -29,6 +29,9 @@ class TenderIn(BaseModel):
     ]
     notice_type: NoticeType = "contract_notice"
     corrects: str | None = None  # source_id of the notice a correction modifies
+    # The correction repeats the whole notice (TED change notices): if the notice it
+    # modifies is unknown, it is stored as that notice, under ``corrects``.
+    complete: bool = False
     title: Annotated[str, StringConstraints(strip_whitespace=True, min_length=1, max_length=2000)]
     description: Annotated[str, StringConstraints(max_length=20_000)] | None = None
     buyer_name: Short | None = None

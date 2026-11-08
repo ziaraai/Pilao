@@ -23,6 +23,12 @@ class Settings(BaseSettings):
     app_secret_key: str = "change-me"
     app_base_url: str = "http://localhost:3000"
     recherche_entreprises_base_url: str = "https://recherche-entreprises.api.gouv.fr"
+    # Notices (P3-01, P3-02): fetched every 2 hours by the scheduler, since the last pass
+    ted_api_url: str = "https://api.ted.europa.eu"
+    ted_import_enabled: bool = True
+    boamp_api_url: str = "https://boamp-datadila.opendatasoft.com/api/explore/v2.1"
+    boamp_import_enabled: bool = False  # on once its reader is checked from the server
+    tender_import_backfill_days: int = 14  # the first pass looks this far back
     # "s3" (MinIO locally, Scaleway / OVHcloud) or "disk" (single server, ADR-033)
     storage_backend: str = "s3"
     storage_dir: str = "/data/files"

@@ -6,9 +6,9 @@ Légende : **Vérifié** = confirmé sur la documentation officielle (novembre 2
 
 | API | Usage | Accès | Statut |
 |---|---|---|---|
-| BOAMP (DILA, Opendatasoft) | Annonces françaises | Gratuit, Licence Ouverte | Vérifié (existence, licence, fréquence) / champs à vérifier |
-| TED (UE) | Annonces au-dessus des seuils européens | Gratuit, recherche sans clé | Vérifié (endpoint, accès) / syntaxe à vérifier |
-| Recherche d'entreprises (data.gouv) | Profil à partir du SIRET | Ouvert, 7 appels/s | Vérifié (base URL, limite) / paramètres à vérifier |
+| BOAMP (DILA, Opendatasoft) | Annonces françaises | Gratuit, Licence Ouverte | Vérifié (existence, licence, fréquence) / champs à vérifier depuis le serveur |
+| TED (UE) | Annonces au-dessus des seuils européens | Gratuit, recherche sans clé | Vérifié sur de vrais appels (2026-11-08), importé toutes les 2 h |
+| Recherche d'entreprises (data.gouv) | Profil à partir du SIRET | Ouvert, 7 appels/s | Vérifié sur une vraie réponse (2026-11-08) |
 | DECP (data.gouv) | Marchés attribués (V2) | Fichiers ouverts, quotidiens | Vérifié |
 | APProch (data.gouv) | Achats prévus de l'État (V2) | Fichiers CSV/JSON ouverts | Vérifié |
 | API Entreprise (État) | Attestations URSSAF, DGFiP… | **Réservée aux acteurs publics** — inutilisable par Pilao | Vérifié |
@@ -22,48 +22,37 @@ Légende : **Vérifié** = confirmé sur la documentation officielle (novembre 2
 - **Fréquence** : diffusion le jour de publication, 2 fois par jour, 7 jours sur 7 (selon la fiche data.gouv).
 - **Accès** : dataset `boamp` sur `https://boamp-datadila.opendatasoft.com`. Licence Ouverte. Pas de clé mentionnée.
 - **API** (standard Opendatasoft Explore v2.1) :
-  - Schéma du dataset : `GET {BOAMP_BASE_URL}/catalog/datasets/boamp`
-  - Enregistrements : `GET {BOAMP_BASE_URL}/catalog/datasets/boamp/records?where=...&order_by=...&limit=100&offset=0`
-  - Export complet : `GET {BOAMP_BASE_URL}/catalog/datasets/boamp/exports/json?where=...`
+  - Schéma du dataset : `GET {BOAMP_API_URL}/catalog/datasets/boamp`
+  - Enregistrements : `GET {BOAMP_API_URL}/catalog/datasets/boamp/records?where=...&order_by=...&limit=100&offset=0`
+  - Export complet : `GET {BOAMP_API_URL}/catalog/datasets/boamp/exports/json?where=...`
 - **Historique et schémas XML** : `https://echanges.dila.gouv.fr/OPENDATA/BOAMP/`
-- **À vérifier en premier (ticket P1-INT-01)** :
-  - [ ] liste exacte des champs (objet, acheteur, dates de parution et de limite, département, descripteurs/CPV, type d'avis, procédure, URL de l'avis, champ JSON détaillé) — appeler le schéma et enregistrer un exemple dans `apps/api/tests/fixtures/boamp_record.json` ;
-  - [ ] syntaxe de filtre ODSQL pour « date de parution ≥ X » et « département IN (…) » ;
-  - [ ] quotas d'appels Opendatasoft (anonyme vs avec clé) ;
-  - [ ] où se trouve l'URL du DCE / profil acheteur dans l'enregistrement.
-- **Stratégie d'import** : récupérer les avis publiés depuis le dernier import (curseur = date de parution), paginer, upsert sur `(source='boamp', source_id)`.
+- **Lecteur** : `apps/api/app/integrations/boamp.py` (pages de 100 par date de parution, conversion au format commun, tolérante). Import **désactivé** (`BOAMP_IMPORT_ENABLED=false`) tant que le format n'est pas vérifié.
+- **⚠ Toujours non vérifié (P1-INT-01)** : le 2026-11-08, l'hôte était autorisé mais ne répondait pas depuis la session de développement (connexion ouverte, poignée de main TLS sans réponse au bout de 10 s), alors que TED et l'API Recherche d'entreprises répondaient. Les noms de champs viennent donc de la documentation : `idweb`, `objet`, `nomacheteur`, `dateparution`, `datelimitereponse`, `code_departement`, `type_marche`, `nature`, `procedure_libelle`, `url_avis`, `annonce_lie`, `donnees` (l'avis complet, JSON dans une chaîne : codes CPV, lots, montants).
+- **Vérification depuis le serveur** : `/opt/pilao/pilao.sh exec api python -m app.cli import-tenders --source boamp --essai` affiche la vraie liste des champs, les clés d'un vrai avis, le début de `donnees` et 3 avis tels que Pilao les lit, sans rien enregistrer. Corriger `boamp.py` d'après ce résultat, enregistrer un exemple dans `apps/api/tests/fixtures/boamp_record.json`, puis passer `BOAMP_IMPORT_ENABLED=true` dans `infra/server/app.env`.
+- **Points ouverts** : quotas Opendatasoft (anonyme), lien du DCE / profil acheteur dans `donnees`, volume par jour (BOAMP ne se filtre pas par CPV côté serveur : tous les avis de la période sont lus, le pré-filtre de chaque entreprise trie).
+- **Stratégie d'import** : celle de TED (ci-dessous) : depuis la dernière passe réussie moins un jour, upsert sur `(source='boamp', source_id=idweb)`.
 
 ## 2. TED (Tenders Electronic Daily)
 
-- **Endpoint** (vérifié) : `POST https://api.ted.europa.eu/v3/notices/search`
-- **Accès** (vérifié) : la Search API ne nécessite pas d'authentification.
-- **Pagination** (vérifié) : mode page (`page`, `limit`, max 250 par page, plafond 15 000 avis) ou mode itération (`paginationMode: "ITERATION"` + `iterationNextToken`, sans plafond ; jeton valable jusqu'à la prochaine publication + 24 h).
-- **Réponse** : `notices`, `totalNoticeCount`, `iterationNextToken`. Champs au format eForms (BT-…).
-- **Documentation** : `https://docs.ted.europa.eu/api/latest/index.html`, Swagger : `https://api.ted.europa.eu/swagger-ui/index.html`.
-- **Exemple de corps — à vérifier dans le Swagger avant usage** :
-
-```json
-{
-  "query": "place-of-performance IN (FRA) AND classification-cpv IN (90910000 90911200 90919200) AND publication-date >= 20261101",
-  "fields": ["publication-number", "notice-title", "buyer-name", "classification-cpv",
-             "deadline-receipt-tender-date-lot", "links"],
-  "page": 1,
-  "limit": 100,
-  "paginationMode": "PAGE_NUMBER"
-}
-```
-
-- **À vérifier (ticket P3-INT-02)** : noms exacts des champs et opérateurs, filtre par pays/NUTS, champ contenant l'URL des documents (des champs du type `document-restricted-url-lot` existent).
+- **Endpoint** (vérifié) : `POST https://api.ted.europa.eu/v3/notices/search`, sans clé.
+- **Vérifié sur de vrais appels le 2026-11-08** (lecteur `apps/api/app/integrations/ted.py`, exemples réels dans `apps/api/tests/fixtures/ted_notices.json`) :
+  - requête : `place-of-performance IN (FRA) AND classification-cpv IN (90910000 …) AND publication-date >= 20261101`. **La recherche par CPV est hiérarchique** : 90910000 ramène aussi 90911200, 90911300, etc. (même total que la liste détaillée) ;
+  - un champ inconnu est refusé avec la liste complète des champs acceptés (1 830) ;
+  - pagination : `paginationMode: "ITERATION"`, 250 avis par page au plus, `iterationNextToken` jusqu'à `null` ;
+  - types d'avis : `cn-standard` (appel à concurrence), `can-standard` et `can-modif` (attribution) ; une procédure garde son `procedure-identifier` d'un avis à l'autre ; un avis de modification porte `change-notice-version-identifier` (= identifiant de l'avis d'origine + version) et `change-description`, et **répète l'avis entier** ;
+  - champs utilisés : `title-proc`, `description-proc`, `buyer-name`, `buyer-identifier` (parfois un SIRET, parfois un numéro interne), `buyer-post-code`, `place-of-performance` (NUTS), `place-of-performance-post-code-lot` / `-proc`, `classification-cpv`, `contract-nature-main-proc`, `procedure-type`, `estimated-value-proc` / `-cur-proc` / `-lot`, `deadline-receipt-tender-date-lot` + `-time-lot`, `identifier-lot`, `title-lot`, `document-url-lot`, `links.html.FRA` ;
+  - textes par langue (`{"fra": …}`, `{"mul": […]}`) ; dates avec un décalage parfois faux (« 2026-11-30+02:00 ») : une date limite française est lue en heure de Paris ; liens avec `&amp;`.
+- **Correspondance** : une annonce Pilao par procédure (`source_id = procedure-identifier`) ; chaque avis de modification est un rectificatif sous son propre numéro de publication ; une attribution est gardée sous son numéro (V2) ; le département vient du code postal du lieu d'exécution, sinon de l'acheteur.
+- **Mesure** (2026-11-08) : 14 jours d'avis France pour les CPV des métiers = 132 avis lus en 3 s.
 
 ## 3. API Recherche d'entreprises
 
 - **Base URL** (vérifié) : `https://recherche-entreprises.api.gouv.fr`
 - **Accès** (vérifié) : ouvert, limite de **7 appels par seconde** (peut être abaissée en cas de surcharge).
-- **Recherche** (à vérifier) : `GET /search?q={siren_ou_siret_ou_nom}&page=1&per_page=1`
-- **Champs attendus** (à vérifier sur un appel réel) : `nom_complet`, `siren`, `siege.siret`, `siege.adresse`, `siege.code_postal`, `siege.libelle_commune`, `activite_principale`, `nature_juridique`, `tranche_effectif_salarie`, `dirigeants[]`.
+- **Recherche** (vérifiée le 2026-11-08) : `GET /search?q={siret}&page=1&per_page=1` → `results[0]` avec `siren`, `nom_complet` (avec le sigle : « ENG-PRO (E.P.) »), `nom_raison_sociale`, `nature_juridique`, `activite_principale`, `tranche_effectif_salarie`, `etat_administratif`, `dirigeants[]` (`nom`, `prenoms`, `qualite`, `type_dirigeant`), `siege` et `matching_etablissements[]` (`siret`, `adresse`, `numero_voie`, `indice_repetition`, `type_voie`, `libelle_voie`, `complement_adresse`, `code_postal`, `libelle_commune`, `departement` — absent pour les établissements secondaires).
+- **Pièges vus sur la vraie réponse** : `adresse` contient déjà le code postal et la ville (la rue est reconstruite à partir de ses parties) ; un dirigeant peut figurer deux fois (« SAOUD » / « SAOUD (SAOUD) », prénoms avec ou sans trait d'union).
 - **Usage** : US-1.1 (pré-remplissage). Mettre en cache 24 h, gérer le 429 avec un délai.
-- **Implémentation** : `apps/api/app/integrations/recherche_entreprises.py` (3 tentatives, attente exponentielle, `Retry-After` respecté, cache 24 h en mémoire). Endpoint public `GET /companies/lookup?siret=` (limité à 20 appels/min/IP) ; à l'inscription, l'identité de l'organisation est complétée côté serveur, sans jamais bloquer si l'API est en panne.
-- **⚠ Non vérifié sur un appel réel** : le domaine était bloqué dans la session de développement. Le parseur est tolérant (tous les champs sont optionnels) et la fixture `tests/fixtures/recherche_entreprises_sample.json` est **écrite à la main** d'après la liste ci-dessus. À faire : appeler `GET /search?q=<siret>`, remplacer la fixture par la vraie réponse, corriger le parseur si besoin (noms de champs, `etat_administratif`, `departement`, code `tranche_effectif_salarie`).
+- **Implémentation** : `apps/api/app/integrations/recherche_entreprises.py` (3 tentatives, attente exponentielle, `Retry-After` respecté, cache 24 h en mémoire). Endpoint public `GET /companies/lookup?siret=` (limité à 20 appels/min/IP) ; à l'inscription, l'identité de l'organisation est complétée côté serveur, sans jamais bloquer si l'API est en panne. La fixture `tests/fixtures/recherche_entreprises_sample.json` garde la structure de la vraie réponse, avec des valeurs fictives.
 
 ## 4. DECP — Données essentielles de la commande publique (V2)
 

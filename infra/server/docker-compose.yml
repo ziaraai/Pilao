@@ -51,7 +51,7 @@ services:
     <<: *app
     command: ["sh", "-c", "exec rq worker -u \"$$REDIS_URL\" default"]
     healthcheck: { disable: true }
-  scheduler:  # hourly: alerts, digests, purges (ADR-024)
+  scheduler:  # hourly: alerts, digests, purges (ADR-024); every 2 h: notices (ADR-036)
     <<: *app
     command: ["sh", "-c", "exec rq cron app/workers/cron.py -u \"$$REDIS_URL\""]
     healthcheck: { disable: true }

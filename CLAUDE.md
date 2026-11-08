@@ -66,8 +66,8 @@ Ce fichier est le point d'entrée. Lis-le en entier au début de chaque session,
 
 ## 6. Phase en cours
 
-Phases 1 (socle) et 2 (mémoire, documents, export) faites ; Phase 3 (veille) faite sauf les lecteurs BOAMP et TED (voir `docs/10-roadmap-taches.md`).
-En attente : **Phase 0 — test des modèles d'IA** (clé OpenRouter, 3 vrais DCE + mémoires techniques + plan type envoyés par Abdraouf, à placer dans `samples/` — dossier **non versionné**, ajouté au `.gitignore`) et l'accès réseau aux API BOAMP, TED et Recherche d'entreprises (question Q14).
+Phases 1 (socle) et 2 (mémoire, documents, export) faites ; Phase 3 (veille) faite : TED importé toutes les 2 h ; BOAMP écrit, à vérifier depuis le serveur avant de l'activer (ADR-036, `docs/10-roadmap-taches.md`).
+En attente : **Phase 0 — test des modèles d'IA** (clé OpenRouter, 3 vrais DCE + mémoires techniques + plan type envoyés par Abdraouf, à placer dans `samples/` — dossier **non versionné**, ajouté au `.gitignore`) et la vérification de BOAMP depuis le serveur (P1-INT-01).
 
 ## 7. Commandes (à compléter quand le repo sera initialisé)
 
@@ -78,6 +78,7 @@ cd apps/api && uv sync && uv run alembic upgrade head && uv run fastapi dev app/
 cd apps/api && uv run rq worker -u $REDIS_URL        # worker (indexation, lecture IA, DCE, rédaction, exports, veille)
 cd apps/api && uv run rq cron app/workers/cron.py -u $REDIS_URL  # tâches planifiées (alertes quotidiennes)
 cd apps/api && uv run python -m app.cli load-tenders annonces.json  # charger des annonces au format normalisé
+cd apps/api && uv run python -m app.cli import-tenders --source ted [--since 2026-10-01] [--essai]  # importer TED / BOAMP maintenant
 cd apps/api && uv run python -m app.cli eval-models --models a,b,c  # phase 0 : comparer des modèles (docs/11, base *_eval)
 cd apps/api && uv run python -m app.cli feedback-report --days 30 --csv retours.csv  # avis des testeurs et temps gagné
 sudo apt-get install tesseract-ocr tesseract-ocr-fra libreoffice-writer-nogui fonts-liberation  # OCR et export PDF (worker)

@@ -35,7 +35,7 @@ Objectif : savoir si la génération est assez bonne, avec quel modèle, à quel
 - [x] P1-09 Dossiers (`bids`) + dépôt du DCE, décompression, typage, OCR (US-3.1)
 - [x] P1-10 Analyse du DCE + exigences + fiche d'analyse avec sources cliquables (US-3.2, 3.3)
 - [x] P1-11 Front : inscription, profil, coffre-fort, dossier, fiche d'analyse
-- [ ] P1-INT-01 Vérifier les champs BOAMP (voir `docs/07-integrations-api.md`)
+- [ ] P1-INT-01 Vérifier les champs BOAMP (voir `docs/07-integrations-api.md`) — l'hôte ne répond pas depuis la session de développement : à faire depuis le serveur avec `import-tenders --source boamp --essai` (ADR-036)
 
 ## Dette technique (revue complète du 2026-11-04)
 
@@ -66,9 +66,9 @@ Reste à faire :
 
 ## Phase 3 — Veille, score, alertes, tableau de bord (3 semaines)
 
-- [ ] P3-01 Import BOAMP planifié + upsert + rectificatifs (US-2.1) — upsert, rectificatifs, avis d'attribution, doublons BOAMP/TED et chargeur `python -m app.cli load-tenders` faits (ADR-023) ; reste le lecteur BOAMP et sa planification, en attente de l'accès réseau (P1-INT-01)
-- [ ] P3-02 Import TED filtré France
-- [ ] P3-INT-02 Vérifier la syntaxe de requête TED
+- [ ] P3-01 Import BOAMP planifié + upsert + rectificatifs (US-2.1) — upsert, rectificatifs, attributions, doublons BOAMP/TED (ADR-023), lecteur BOAMP et planification faits (ADR-036) ; reste à vérifier le format depuis le serveur, puis `BOAMP_IMPORT_ENABLED=true`
+- [x] P3-02 Import TED filtré France, toutes les 2 h (ADR-036)
+- [x] P3-INT-02 Vérifier la syntaxe de requête TED (docs/07 §2, 2026-11-08)
 - [x] P3-03 Pré-filtre déterministe + score IA (US-2.2)
 - [x] P3-04 Liste des annonces, filtres, actions (US-2.3)
 - [x] P3-05 E-mail quotidien (US-2.4) + alertes d'expiration (US-5.2)

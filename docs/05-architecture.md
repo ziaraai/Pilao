@@ -109,8 +109,11 @@ STORAGE_DIR=/data/files            # avec disk
 API_PUBLIC_URL=https://…/api       # avec disk : base des liens de téléchargement signés
 EMBEDDING_PRICE_USD_PER_MILLION=0.1  # quand le fournisseur ne renvoie pas le coût
 # Intégrations
-BOAMP_BASE_URL=https://boamp-datadila.opendatasoft.com/api/explore/v2.1
-TED_BASE_URL=https://api.ted.europa.eu/v3
+TED_API_URL=https://api.ted.europa.eu
+TED_IMPORT_ENABLED=true
+BOAMP_API_URL=https://boamp-datadila.opendatasoft.com/api/explore/v2.1
+BOAMP_IMPORT_ENABLED=false
+TENDER_IMPORT_BACKFILL_DAYS=14
 RECHERCHE_ENTREPRISES_BASE_URL=https://recherche-entreprises.api.gouv.fr
 # Export PDF (worker) : LibreOffice headless
 SOFFICE_PATH=soffice

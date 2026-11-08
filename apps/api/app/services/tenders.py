@@ -155,7 +155,9 @@ def _duplicate_of(db: Session, tender: Tender) -> uuid.UUID | None:
 def ingest(db: Session, items: Sequence[TenderIn], mailer: Mailer) -> IngestReport:
     """Upsert notices (unscoped session: notices are global). Commits."""
     report = IngestReport()
-    for item in items:
+    # Oldest first: a notice before the corrections that follow it.
+    ordered = sorted(items, key=lambda i: i.published_at or datetime.min.replace(tzinfo=UTC))
+    for item in ordered:
         if item.notice_type == "correction" and item.corrects:
             target = db.scalar(
                 select(Tender).where(
@@ -163,17 +165,28 @@ def ingest(db: Session, items: Sequence[TenderIn], mailer: Mailer) -> IngestRepo
                 )
             )
             if target is not None:
-                if _apply_correction(db, target, item, mailer):
+                if not _older(item, target) and _apply_correction(db, target, item, mailer):
                     report.corrected += 1
                     report.to_match.append(target.id)
                 else:
                     report.unchanged += 1
                 continue
+            if item.complete:  # the whole notice, as corrected: it stands for the original
+                item = item.model_copy(
+                    update={
+                        "notice_type": "contract_notice",
+                        "source_id": item.corrects,
+                        "corrects": None,
+                    }
+                )
         values = _values(item)
         existing = db.scalar(
             select(Tender).where(Tender.source == item.source, Tender.source_id == item.source_id)
         )
         if existing is not None:
+            if _older(item, existing):  # read again later (overlap): never undo a correction
+                report.unchanged += 1
+                continue
             changed = {k for k, v in values.items() if getattr(existing, k) != v and k != "raw"}
             if not changed:
                 report.unchanged += 1
@@ -198,6 +211,19 @@ def ingest(db: Session, items: Sequence[TenderIn], mailer: Mailer) -> IngestRepo
             report.to_match.append(tender.id)
     db.commit()
     return report
+
+
+def _older(item: TenderIn, existing: Tender) -> bool:
+    """``item`` was published before the newest publication already applied to ``existing``."""
+    if item.published_at is None:
+        return False
+    applied = [existing.published_at] + [
+        datetime.fromisoformat(c["published_at"])
+        for c in existing.corrections
+        if isinstance(c, dict) and c.get("published_at")
+    ]
+    newest = max((d for d in applied if d is not None), default=None)
+    return newest is not None and item.published_at < newest
 
 
 def _fmt(key: str, value: Any) -> str:

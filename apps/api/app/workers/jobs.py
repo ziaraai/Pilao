@@ -16,6 +16,7 @@ from app.services.exports import run_export
 from app.services.knowledge import run_index_document
 from app.services.memoir_drafting import run_conformity, run_draft_section
 from app.services.org_data import run_org_export
+from app.services.tender_import import run_all as import_tenders
 from app.services.tenders import match_tenders, rematch_org, score_org
 from app.services.vault import run_read_document
 from app.storage.antivirus import get_scanner
@@ -80,6 +81,12 @@ def rematch_org_job(org_id: str) -> None:
 def score_tenders_job(org_id: str) -> None:
     with get_sessionmaker()() as db:
         score_org(db, uuid.UUID(org_id), get_job_queue())
+
+
+def import_tenders_job() -> None:
+    """Every 2 hours (P3-01, P3-02): the enabled sources, since their last pass."""
+    with get_sessionmaker()() as db:  # unscoped: notices are global
+        import_tenders(db, get_mailer(), get_job_queue())
 
 
 def daily_alerts_job() -> None:

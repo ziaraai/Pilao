@@ -1,13 +1,15 @@
 import uuid
-from datetime import datetime
+from datetime import date, datetime
 from typing import Any
 
 from sqlalchemy import (
     BigInteger,
     CheckConstraint,
+    Date,
     DateTime,
     ForeignKey,
     Index,
+    Integer,
     SmallInteger,
     Text,
     UniqueConstraint,
@@ -104,3 +106,27 @@ class Notification(IdMixin, TimestampMixin, OrgScoped, Base):
     kind: Mapped[str] = mapped_column(Text, nullable=False)  # digest | vault_expiry | correction
     key: Mapped[str] = mapped_column(Text, nullable=False)  # e.g. "2026-11-05" or "<doc id>:30"
     recipients: Mapped[int] = mapped_column(SmallInteger, nullable=False, default=0)
+
+
+class TenderImport(IdMixin, TimestampMixin, Base):
+    """One pass of a notice reader (P3-01, P3-02). Global, like ``tenders``. The last run
+    that finished tells the next one where to start; failures stay visible here."""
+
+    __tablename__ = "tender_imports"
+    __table_args__ = (
+        CheckConstraint("source in ('boamp','ted')", name="source"),
+        CheckConstraint("status in ('running','done','error')", name="status"),
+        Index("ix_tender_imports_source_created_at", "source", "created_at"),
+    )
+
+    source: Mapped[str] = mapped_column(Text, nullable=False)
+    status: Mapped[str] = mapped_column(Text, nullable=False, default="running")
+    since: Mapped[date] = mapped_column(Date, nullable=False)  # publication date searched from
+    finished_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    fetched: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    skipped: Mapped[int] = mapped_column(Integer, nullable=False, default=0)  # unusable
+    created: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    updated: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    corrected: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    matched: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    error: Mapped[str | None] = mapped_column(Text)

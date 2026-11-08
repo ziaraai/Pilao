@@ -1,8 +1,10 @@
 """Client for the open "Recherche d'entreprises" API (data.gouv.fr).
 
-Status: written from the documented fields (docs/07-integrations-api.md §3). The session that
-wrote it could not reach the host, so the real response shape is still **to verify**: the
-parser is deliberately tolerant (every field optional) and the test fixture is hand-written.
+Checked on a real reply (2026-11-08, docs/07 §3): the fixture keeps its structure, with
+fictitious values. ``adresse`` already holds the postal code and the town, so the street is
+rebuilt from its parts; secondary establishments have no ``departement`` (it comes from the
+postal code); the legal name is ``nom_raison_sociale`` (``nom_complet`` adds the acronym);
+a manager may be listed twice (« DUPONT » and « DUPONT (DUPONT) »).
 """
 
 import logging
@@ -16,6 +18,7 @@ from typing import Any, Protocol
 import httpx
 
 from app.core.config import get_settings
+from app.domain.places import department_of
 
 logger = logging.getLogger("pilao.recherche_entreprises")
 
@@ -58,6 +61,20 @@ def _dicts(value: Any) -> list[dict[str, Any]]:
     return [v for v in items if isinstance(v, dict)]
 
 
+def _street(etab: dict[str, Any]) -> str | None:
+    """« 1 B RUE DE LA PAIX, BATIMENT A »: the street without postal code and town."""
+    parts = [_clean(etab.get(k)) for k in ("numero_voie", "indice_repetition", "type_voie")]
+    street = " ".join(filter(None, [*parts, _clean(etab.get("libelle_voie"))]))
+    if street:
+        extra = _clean(etab.get("complement_adresse"))
+        return f"{street}, {extra}" if extra else street
+    full = _clean(etab.get("adresse"))  # fallback: drop the « 42000 SAINT-ETIENNE » tail
+    postal = _clean(etab.get("code_postal"))
+    if full and postal and postal in full:
+        return full[: full.index(postal)].strip(" ,") or None
+    return full
+
+
 def parse_company(payload: dict[str, Any], siret: str) -> CompanyInfo | None:
     """Pick the establishment matching ``siret`` out of a /search response, if any."""
     for result in _dicts(payload.get("results")):
@@ -65,29 +82,33 @@ def parse_company(payload: dict[str, Any], siret: str) -> CompanyInfo | None:
         etab = next((e for e in etabs if e.get("siret") == siret), None)
         if etab is None:
             continue
-        managers = tuple(
-            " ".join(filter(None, [_clean(d.get("prenoms")), _clean(d.get("nom"))]))
-            for d in _dicts(result.get("dirigeants"))
-            if d.get("type_dirigeant", "personne physique") == "personne physique"
-        )
+        managers: dict[str, str] = {}  # one per person: « ABD RAOUF » = « ABD-RAOUF »
+        for d in _dicts(result.get("dirigeants")):
+            if d.get("type_dirigeant", "personne physique") != "personne physique":
+                continue
+            last = re.sub(r"\s*\(.*?\)", "", _clean(d.get("nom")) or "").strip()
+            name = " ".join(filter(None, [_clean(d.get("prenoms")), last or None]))
+            if name:
+                managers.setdefault(re.sub(r"[\s\-]", "", name.upper()), name)
         state = _clean(etab.get("etat_administratif"))
+        postal = _clean(etab.get("code_postal"))
         return CompanyInfo(
             siren=str(result.get("siren") or siret[:9]),
             siret=siret,
-            name=_clean(result.get("nom_complet"))
-            or _clean(result.get("nom_raison_sociale"))
+            name=_clean(result.get("nom_raison_sociale"))
+            or _clean(result.get("nom_complet"))
             or "",
             legal_form=_clean(result.get("nature_juridique")),
             naf_code=_clean(etab.get("activite_principale"))
             or _clean(result.get("activite_principale")),
-            address_line=_clean(etab.get("adresse")),
-            postal_code=_clean(etab.get("code_postal")),
+            address_line=_street(etab),
+            postal_code=postal,
             city=_clean(etab.get("libelle_commune")),
-            department=_clean(etab.get("departement")),
+            department=_clean(etab.get("departement")) or department_of(postal),
             headcount_range=_clean(etab.get("tranche_effectif_salarie"))
             or _clean(result.get("tranche_effectif_salarie")),
             is_active=None if state is None else state == "A",
-            managers=tuple(m for m in managers if m),
+            managers=tuple(managers.values()),
         )
     return None
 

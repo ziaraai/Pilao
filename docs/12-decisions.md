@@ -337,3 +337,28 @@ Format : numéro, date, décision, raison, statut. Ajouter une entrée pour chaq
   - **Un seul lanceur LibreOffice** pour ces conversions et pour l'export PDF du mémoire : un profil par conversion, une durée bornée, aucune macro exécutée.
 - **Conséquence** : l'image du serveur installe aussi Calc (`libreoffice-calc-nogui`). La CI vérifie qu'un tableur s'y convertit vraiment.
 - **Statut** : validé.
+
+## ADR-035 — Tableau de bord pour un chef d'entreprise
+- **Date** : 2026-11-08
+- **Contexte** : premier retour du pilote : le tableau de bord doit être clair et organisé pour un entrepreneur. L'ancienne version (5 chiffres de même poids, dossiers en 5 colonnes avec une liste déroulante par carte) ne disait pas quoi faire d'abord.
+- **Décision** : d'abord ce qu'il y a à faire, ensuite les occasions, puis le suivi (US-5.3, CA1 à CA5).
+  - « À faire » : une liste unique triée par urgence (rouge, orange, gris) puis par date, avec un bouton par ligne. Elle est calculée côté API (`app/domain/dashboard.py`, fonctions pures testées directement ; `app/services/dashboard.py` réunit les faits sur la session de l'entreprise).
+  - « Pour bien démarrer » remplace la liste vide d'un compte neuf : 4 étapes cochées par ce qu'elles demandent (profil à 80 %, attestations recommandées, un ancien mémoire, un premier dossier).
+  - La prochaine étape d'un dossier vient de sa dernière version du DCE, de sa dernière analyse et de son dernier mémoire (DCE › Analyse › Mémoire › Déposé). Le statut se change dans le dossier, plus sur le tableau de bord.
+  - Les résultats n'apparaissent qu'après la première offre déposée, le taux et le montant gagné qu'après le premier résultat : pas de « — ».
+- **Remplace** la partie « Tableau de bord » d'ADR-024.
+- **Statut** : validé.
+
+## ADR-036 — Import planifié des annonces TED et BOAMP
+- **Date** : 2026-11-08
+- **Contexte** : P3-01 et P3-02 attendaient l'accès réseau (Q14). TED et l'API Recherche d'entreprises répondent depuis la session de développement ; BOAMP non (l'hôte est autorisé mais ne répond pas à la poignée de main TLS).
+- **Décision** :
+  - Un lecteur par source (`app/integrations/ted.py`, `boamp.py`) convertit au format commun ; l'import (`app/services/tender_import.py`) est le même pour toutes : lecture, `ingest`, rapprochement avec les entreprises.
+  - Planificateur RQ toutes les 2 heures, à :20 (`20 */2 * * *`), pour que l'envoi des alertes de :05 voie les nouvelles correspondances.
+  - Chaque passe lit depuis le début de la dernière passe réussie moins un jour (14 jours la première fois). Le recouvrement est sans effet grâce à l'upsert. Un verrou Postgres (`pg_try_advisory_lock`) par source empêche deux passes simultanées. Chaque passe laisse une ligne `tender_imports` (lus, créés, mis à jour, rectifiés, ignorés, correspondances, erreur). Une passe en échec ne déplace pas le point de départ.
+  - TED : recherche France + codes CPV de tous les métiers et de tous les profils (recherche hiérarchique côté TED) ; une annonce Pilao par procédure TED ; chaque avis de modification est un rectificatif sous son propre numéro, et devient l'annonce si l'avis d'origine est inconnu (`TenderIn.complete`).
+  - `ingest` traite les avis du plus ancien au plus récent, et **une publication plus ancienne n'écrase jamais une plus récente**, rectificatifs compris : relire une période déjà lue ne fait jamais reculer une date limite.
+  - BOAMP : lecteur écrit d'après la documentation, import désactivé (`BOAMP_IMPORT_ENABLED=false`) jusqu'à la vérification depuis le serveur avec `import-tenders --source boamp --essai`, qui lit sans rien enregistrer.
+  - Commande `python -m app.cli import-tenders [--source ted|boamp] [--since AAAA-MM-JJ] [--essai] [--limit N]` pour une passe immédiate ou un rattrapage.
+- **Statut** : validé (TED) ; BOAMP en attente de la vérification depuis le serveur.
+

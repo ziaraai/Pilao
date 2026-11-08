@@ -29,18 +29,55 @@ def test_parse_headquarters() -> None:
     assert info is not None
     assert (info.siren, info.name, info.legal_form, info.naf_code) == (
         "123456789",
-        "NETTOYAGE EXEMPLE",
+        "NETTOYAGE EXEMPLE",  # the legal name, without « (N.E.) »
         "5710",
         "81.21Z",
     )
+    # the street alone: « adresse » repeats the postal code and the town
+    assert info.address_line == "1 B RUE DE LA PAIX, BATIMENT A"
     assert (info.postal_code, info.city, info.department) == ("75002", "PARIS", "75")
-    assert info.is_active is True
-    assert info.managers == ("Jeanne DUPONT",)  # legal entities are not listed as people
+    assert info.is_active is True and info.headcount_range == "12"
+    # listed twice by the registry, once here; legal entities are not people
+    assert info.managers == ("JEANNE DUPONT",)
+    twice = {
+        "results": [
+            {
+                "nom_complet": "X",
+                "siege": {"siret": SIRET},
+                "dirigeants": [
+                    {"nom": "MARTIN", "prenoms": "JEAN PIERRE"},
+                    {"nom": "MARTIN (MARTIN)", "prenoms": "JEAN-PIERRE"},
+                ],
+            }
+        ]
+    }
+    again = parse_company(twice, SIRET)
+    assert again is not None and again.managers == ("JEAN PIERRE MARTIN",)
 
 
 def test_parse_secondary_establishment() -> None:
     info = parse_company(SAMPLE, "12345678900027")
     assert info is not None and info.city == "LYON" and info.name == "NETTOYAGE EXEMPLE"
+    assert info.address_line == "5 AVENUE X"
+    assert info.department == "69"  # not given for an establishment: from the postal code
+
+
+def test_street_falls_back_to_the_full_address() -> None:
+    payload = {
+        "results": [
+            {
+                "nom_complet": "X",
+                "siege": {
+                    "siret": SIRET,
+                    "adresse": "20 BOULEVARD MARTIN BERNARD 42000 SAINT-ETIENNE",
+                    "code_postal": "42000",
+                },
+            }
+        ]
+    }
+    info = parse_company(payload, SIRET)
+    assert info is not None and info.address_line == "20 BOULEVARD MARTIN BERNARD"
+    assert info.name == "X" and info.department == "42"
 
 
 def test_parse_unknown_siret_and_empty_payload() -> None:

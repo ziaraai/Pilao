@@ -112,16 +112,23 @@ def test_attestations_are_announced_at_30_and_7_days_then_once_expired(
     assert subjects_on(31) == [renewed]
 
 
-def test_the_alerts_job_is_scheduled_every_hour() -> None:
+def test_the_alerts_and_the_notice_import_are_scheduled() -> None:
     from rq import cron
 
     module = importlib.import_module("app.workers.cron")
     cron._job_data_registry.clear()
     importlib.reload(module)  # what `rq cron app/workers/cron.py` loads
-    [job] = cron._job_data_registry
-    assert job["func"].__name__ == "daily_alerts_job" and job["queue_name"] == "default"
+    jobs = {job["func"].__name__: job for job in cron._job_data_registry}
+    assert set(jobs) == {"daily_alerts_job", "import_tenders_job"}
+    assert {job["queue_name"] for job in jobs.values()} == {"default"}
     start = datetime(2026, 11, 5, 7, 0)
-    assert croniter(job["cron"], start).get_next(datetime) == datetime(2026, 11, 5, 7, 5)
+    alerts = croniter(jobs["daily_alerts_job"]["cron"], start)
+    assert alerts.get_next(datetime) == datetime(2026, 11, 5, 7, 5)  # every hour, at :05
+    notices = croniter(jobs["import_tenders_job"]["cron"], start)
+    assert [notices.get_next(datetime) for _ in range(2)] == [
+        datetime(2026, 11, 5, 8, 20),  # every 2 hours, at :20
+        datetime(2026, 11, 5, 10, 20),
+    ]
 
 
 def test_dashboard_says_what_to_do_then_notices_bids_and_results(

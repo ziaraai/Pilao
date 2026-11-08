@@ -6,6 +6,9 @@
 * ``feedback-report [--days 30] [--csv retours.csv]``: what the testers wrote from the
   application, and the time saved per company (P4-02). Read-only, every company.
 * ``send-test-email you@example.fr``: checks the outgoing e-mail settings (SMTP).
+* ``import-tenders [--source ted|boamp] [--since 2026-10-01] [--essai]``: one pass of the
+  notice readers now (as the scheduler does every 2 hours). ``--essai`` reads and shows a
+  few notices without saving anything: the check of a reader from the server.
 * ``eval-models --models a,b,c`` runs the phase 0 comparison (docs/11) on ``samples/``:
   every DCE through the real pipeline with each model, then the anonymized memoirs, the
   rating grid and the cost report. Never on the production database.
@@ -14,7 +17,9 @@
 import argparse
 import json
 import sys
+from datetime import date
 from pathlib import Path
+from typing import cast
 from zoneinfo import ZoneInfo
 
 from sqlalchemy.engine import make_url
@@ -49,6 +54,11 @@ def main(argv: list[str] | None = None) -> int:
     fb.add_argument("--csv", type=Path, default=None, help="écrire aussi les avis en CSV")
     mail = commands.add_parser("send-test-email", help="vérifier l'envoi des e-mails (SMTP)")
     mail.add_argument("to")
+    imp = commands.add_parser("import-tenders", help="importer les annonces BOAMP / TED")
+    imp.add_argument("--source", choices=["ted", "boamp"], default=None)
+    imp.add_argument("--since", type=date.fromisoformat, default=None, help="AAAA-MM-JJ")
+    imp.add_argument("--essai", action="store_true", help="lire sans rien enregistrer")
+    imp.add_argument("--limit", type=int, default=None, help="nombre d'annonces lues au plus")
     args = parser.parse_args(argv)
     if args.command == "send-test-email":
         return send_test_email(args.to)
@@ -56,6 +66,8 @@ def main(argv: list[str] | None = None) -> int:
         return eval_models(args)
     if args.command == "feedback-report":
         return feedback_report(args)
+    if args.command == "import-tenders":
+        return import_tenders(args)
 
     items = [TenderIn.model_validate(x) for x in json.loads(args.path.read_text("utf-8"))]
     with get_sessionmaker()() as db:  # unscoped: notices are global
@@ -68,6 +80,56 @@ def main(argv: list[str] | None = None) -> int:
         f"{matched} correspondance(s) avec les entreprises."
     )
     return 0
+
+
+def import_tenders(args: argparse.Namespace) -> int:
+    from app.integrations.boamp import BoampReader
+    from app.integrations.ted import TedReader
+    from app.services.tender_import import Reader, Source, describe, next_since, run_import
+
+    sources = [args.source] if args.source else ["ted", "boamp"]
+    makers: dict[str, type[Reader]] = {"ted": TedReader, "boamp": BoampReader}
+    limit = args.limit if args.limit is not None else (3 if args.essai else None)
+    failed = False
+    with get_sessionmaker()() as db:  # unscoped: notices are global
+        for source in sources:
+            reader = makers[source]()
+            if args.essai and isinstance(reader, BoampReader):  # what the real data holds
+                since = args.since or next_since(db, source, date.today())
+                try:
+                    probe = reader.probe(since)
+                except Exception as exc:  # noqa: BLE001 - shown, the import below says more
+                    print(f"BOAMP : lecture impossible ({exc}).")
+                else:
+                    print("BOAMP, champs du jeu de données :", ", ".join(probe["fields"]))
+                    print("BOAMP, un avis réel :", probe["record"])
+                    print("BOAMP, début de « donnees » :", probe["donnees"])
+            result = run_import(
+                db,
+                cast(Source, source),
+                reader,
+                get_mailer(),
+                get_job_queue(),
+                since=args.since,
+                dry_run=args.essai,
+                limit=limit,
+            )
+            failed = failed or result.status == "error"
+            print(describe(result))
+            for t in result.samples:
+                print(_sample(t))
+    return 1 if failed else 0
+
+
+def _sample(t: TenderIn) -> str:
+    """One notice as read, for the server check of a reader (``--essai``)."""
+    deadline = f"{t.deadline_at:%d/%m/%Y %H:%M}" if t.deadline_at else "?"
+    return (
+        f"  - {t.title[:90]}\n"
+        f"    {t.buyer_name or 'acheteur ?'} · départements {', '.join(t.departments) or '?'}"
+        f" · date limite {deadline} · CPV {', '.join(t.cpv_codes[:3]) or '?'}\n"
+        f"    {t.notice_url or 'pas de lien'}"
+    )
 
 
 def send_test_email(to: str) -> int:

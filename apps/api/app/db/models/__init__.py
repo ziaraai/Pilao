@@ -18,7 +18,13 @@ from app.db.models.profile import (
     Equipment,
     HumanResource,
 )
-from app.db.models.tender import NOTICE_TYPES, Notification, Tender, TenderMatch
+from app.db.models.tender import (
+    NOTICE_TYPES,
+    Notification,
+    Tender,
+    TenderImport,
+    TenderMatch,
+)
 from app.db.models.user import PlatformAdmin, User
 from app.db.models.vault import ComplianceDocument
 
@@ -57,6 +63,7 @@ __all__ = [
     "PurgeLog",
     "Requirement",
     "Tender",
+    "TenderImport",
     "TenderMatch",
     "User",
     "UserSession",

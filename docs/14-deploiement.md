@@ -98,11 +98,12 @@ Les fichiers déposés sont stockés sur le disque du serveur, dans le volume `p
      - `Authentication failed` / `535` : la boîte `noreply@pilao.pro` n'existe pas, ou son mot de passe n'est pas celui du secret `PILAO_SMTP_PASSWORD`. Le corriger d'un côté ou de l'autre, puis relancer GitHub > Actions > Deploy (le secret n'est recopié qu'au déploiement).
      - `Relay access denied` / `Sender address rejected` : l'adresse d'envoi doit être la boîte elle-même (`SMTP_FROM` dans `app.env`).
    - Une inscription faite pendant la panne n'est pas perdue : le compte existe. Une fois les e-mails réparés, se connecter avec l'adresse et le mot de passe, puis « Renvoyer l'e-mail de confirmation ».
-10. **Sauvegarde nocturne** : Plesk > Tools & Settings > Scheduled Tasks > Add Task.
+10. **Annonces** : TED est importé toutes les 2 heures par le service `scheduler` (ADR-036). Pour une passe tout de suite : `/opt/pilao/pilao.sh exec api python -m app.cli import-tenders --source ted`. Pour vérifier BOAMP sans rien enregistrer : `/opt/pilao/pilao.sh exec api python -m app.cli import-tenders --source boamp --essai` (envoyer la capture), puis `BOAMP_IMPORT_ENABLED=true` dans `app.env` une fois le lecteur corrigé.
+11. **Sauvegarde nocturne** : Plesk > Tools & Settings > Scheduled Tasks > Add Task.
     - Commande : `/opt/pilao/backup.sh >> /var/log/pilao-backup.log 2>&1`.
     - Fréquence : tous les jours à 03:15, utilisateur root.
     - Les sauvegardes vont dans `/var/backups/pilao`. **Copier aussi ce dossier hors du serveur** (Plesk Backup Manager vers un stockage distant) : une sauvegarde qui reste sur le même disque ne protège pas d'une panne du serveur.
-11. **Sauvegarder `secrets.env`** dans un gestionnaire de mots de passe : sans lui, la base sauvegardée ne s'ouvre plus.
+12. **Sauvegarder `secrets.env`** dans un gestionnaire de mots de passe : sans lui, la base sauvegardée ne s'ouvre plus.
 
 ### Au quotidien
 
