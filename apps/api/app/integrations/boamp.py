@@ -23,7 +23,7 @@ import logging
 import re
 import time
 from collections.abc import Iterator
-from datetime import date, datetime
+from datetime import date, datetime, timedelta
 from typing import Any, Literal
 from zoneinfo import ZoneInfo
 
@@ -65,16 +65,31 @@ class BoampClient:
         data = self._get(f"/catalog/datasets/{DATASET}", {})
         return [str(f.get("name")) for f in data.get("fields", []) if isinstance(f, dict)]
 
-    def records(self, since: date, limit: int | None = None) -> Iterator[dict[str, Any]]:
-        """Notices published since ``since``, oldest first, page after page."""
-        offset, seen = 0, 0
+    def records(
+        self, since: date, limit: int | None = None, until: date | None = None
+    ) -> Iterator[dict[str, Any]]:
+        """Notices published from ``since`` to ``until`` (today), one day at a time: BOAMP
+        publishes more than a thousand a day, and /records stops at 10 000 per query."""
+        day, last, seen = since, until or date.today(), 0
+        while day <= last:
+            for record in self._day(day, None if limit is None else limit - seen):
+                yield record
+                seen += 1
+                if limit is not None and seen >= limit:
+                    return
+            day += timedelta(days=1)
+
+    def _day(self, day: date, limit: int | None) -> Iterator[dict[str, Any]]:
+        offset = 0
         while offset < MAX_OFFSET:
-            size = PAGE_SIZE if limit is None else min(PAGE_SIZE, limit - seen)
+            size = PAGE_SIZE if limit is None else min(PAGE_SIZE, limit - offset)
+            if size <= 0:
+                return
             page = self._get(
                 f"/catalog/datasets/{DATASET}/records",
                 {
-                    "where": f"dateparution >= date'{since.isoformat()}'",
-                    "order_by": "dateparution asc",
+                    "where": f"dateparution = date'{day.isoformat()}'",
+                    "order_by": "idweb asc",
                     "limit": size,
                     "offset": offset,
                 },
@@ -82,16 +97,11 @@ class BoampClient:
             results = page.get("results")
             if not isinstance(results, list):
                 raise BoampUnavailable("reply without results")
-            for record in results:
-                if isinstance(record, dict):
-                    yield record
-                    seen += 1
-                    if limit is not None and seen >= limit:
-                        return
+            yield from (r for r in results if isinstance(r, dict))
             if len(results) < size:
                 return
             offset += size
-        logger.warning("BOAMP: more than %d notices since %s, the rest waits", MAX_OFFSET, since)
+        logger.warning("BOAMP: more than %d notices on %s, the rest is not read", MAX_OFFSET, day)
 
     def _get(self, path: str, params: dict[str, Any]) -> dict[str, Any]:
         last: Exception | None = None
@@ -184,10 +194,12 @@ def to_tender(record: dict[str, Any]) -> TenderIn | None:
     kind = _notice_type(record)
     donnees = _donnees(record)
     corrects = _str(record.get("annonce_lie")) or _str(record.get("annonces_anterieures"))
+    # where the work is done first, else the buyer's department
+    places = _list(record.get("code_departement_prestation")) or _list(
+        record.get("code_departement")
+    )
     departments = [
-        d
-        for d in (str(x).strip().upper() for x in _list(record.get("code_departement")))
-        if re.fullmatch(r"\d{2,3}|2[AB]", d)
+        d for d in (str(x).strip().upper() for x in places) if re.fullmatch(r"\d{2,3}|2[AB]", d)
     ]
     nature = _nature(record)
     url = _str(record.get("url_avis")) or f"https://www.boamp.fr/pages/avis/?q=idweb:{idweb}"

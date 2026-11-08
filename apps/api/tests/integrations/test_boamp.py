@@ -67,25 +67,40 @@ def test_corrections_awards_and_odd_records() -> None:
     assert to_tender({"objet": "sans numéro"}) is None and to_tender({"idweb": "x"}) is None
 
 
-def test_the_reader_pages_by_publication_date() -> None:
+def test_the_reader_reads_day_by_day_and_page_by_page() -> None:
     asked: list[dict[str, str]] = []
 
     def handler(request: httpx.Request) -> httpx.Response:
         params = dict(request.url.params)
         asked.append(params)
-        offset = int(params["offset"])
-        page = [RECORD] * (100 if offset == 0 else 30)
-        return httpx.Response(200, json={"total_count": 130, "results": page})
+        day, offset = params["where"][-11:-1], int(params["offset"])
+        size = {"2026-11-06": 130, "2026-11-07": 0, "2026-11-08": 5}[day]
+        page = [RECORD] * max(0, min(100, size - offset))
+        return httpx.Response(200, json={"total_count": size, "results": page})
 
     client = BoampClient("https://boamp.test", httpx.Client(transport=httpx.MockTransport(handler)))
-    got = list(BoampReader(client).fetch([], date(2026, 11, 7)))
-    assert len(got) == 130 and [a["offset"] for a in asked] == ["0", "100"]
-    assert asked[0]["where"] == "dateparution >= date'2026-11-07'"
+    got = list(client.records(date(2026, 11, 6), until=date(2026, 11, 8)))
+    assert len(got) == 135
+    assert [(a["where"], a["offset"]) for a in asked] == [
+        ("dateparution = date'2026-11-06'", "0"),
+        ("dateparution = date'2026-11-06'", "100"),
+        ("dateparution = date'2026-11-07'", "0"),
+        ("dateparution = date'2026-11-08'", "0"),
+    ]
+    assert len(list(client.records(date(2026, 11, 6), 3, until=date(2026, 11, 8)))) == 3
+    sleeps: list[float] = []
+    down = BoampClient(
+        "https://boamp.test",
+        httpx.Client(transport=httpx.MockTransport(lambda r: httpx.Response(503))),
+        sleep=sleeps.append,
+    )
     with pytest.raises(BoampUnavailable):
-        sleeps: list[float] = []
-        down = BoampClient(
-            "https://boamp.test",
-            httpx.Client(transport=httpx.MockTransport(lambda r: httpx.Response(503))),
-            sleep=sleeps.append,
-        )
         list(BoampReader(down).fetch([], date(2026, 11, 7)))
+    assert len(sleeps) == 3
+
+
+def test_the_place_of_work_comes_first() -> None:
+    t = to_tender({**RECORD, "code_departement": ["33"], "code_departement_prestation": ["2B"]})
+    assert t is not None and t.departments == ["2B"]
+    buyer_only = to_tender({**RECORD, "code_departement_prestation": None})
+    assert buyer_only is not None and buyer_only.departments == ["42"]
