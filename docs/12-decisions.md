@@ -364,3 +364,11 @@ Format : numéro, date, décision, raison, statut. Ajouter une entrée pour chaq
   - BOAMP (vérifié depuis le serveur le 2026-11-08) : lecture d'un jour de parution après l'autre, en deux temps : une liste légère, puis l'avis complet (avec `donnees`, d'où viennent les CPV) seulement pour les avis encore ouverts, pas encore en base (ni comme annonce, ni comme rectificatif appliqué) et qui ne sont pas des attributions. Les attributions BOAMP ne sont donc pas gardées pour la V2 : trop nombreuses pour leur utilité actuelle.
 - **Statut** : validé.
 
+## ADR-037 — Titres d'un mémoire modèle sans styles de titres
+- **Date** : 2026-11-08
+- **Contexte** : le mémoire 2017 d'ENG PRO, tapé dans LibreOffice, n'a aucun style de titre (tout est « Normal ») : son plan était ignoré et le plan type du secteur servait à sa place. Son plan est un sommaire tapé en tête (« 1 – PRESENTATION » … « 12 – Nos interventions ») ; dans le corps, des sous-titres numérotés (« 2.1 - … ») ou en gras.
+- **Décision** :
+  - À l'extraction d'un document Word de la base documentaire, une ligne est un titre si elle a un style de titre, ou si elle est courte (120 caractères au plus) et numérotée avec un séparateur (« 1 – », « 2.1 - », « II. »), ou courte (80 caractères au plus) et entièrement en gras. Jamais une phrase (fin en « . », « ; », « , »). « 3 auto laveuses » (un nombre sans séparateur) reste du texte.
+  - Le plan modèle garde les chapitres de premier niveau, **sans leur numéro** : les chapitres sont réordonnés selon les critères du RC, un ancien numéro serait faux. Un chapitre vu deux fois (sommaire, puis titre dans le corps) compte une fois.
+- **Statut** : validé.
+

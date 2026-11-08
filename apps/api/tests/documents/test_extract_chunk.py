@@ -70,6 +70,39 @@ def test_docx_headings_paragraphs_and_tables() -> None:
     assert any(b.text == "Autolaveuse | 3" for b in blocks)
 
 
+def test_docx_titles_without_heading_styles() -> None:
+    """As in a real memoir (ENG PRO, 2017, written in LibreOffice): every paragraph is
+    « Normal »; the titles are numbered with a dash, or in bold."""
+    from docx import Document
+
+    doc = Document()
+    for text in (
+        "MEMOIRE TECHNIQUE",
+        "1 – PRESENTATION",
+        "2 - Moyens en Matériel",
+        "2.1 -  Description du matériel de l 'entreprise",
+        "3 auto porter de marque TENANTE 7300",  # a list: a number, no dash
+        "42000 SAINT ETIENNE",
+        "1. Le titulaire assure le nettoyage quotidien des bureaux avant 8 heures.",
+        "II. Annexes",
+    ):
+        doc.add_paragraph(text)
+    para = doc.add_paragraph()
+    para.add_run("Définir les fréquences").bold = True
+    long = doc.add_paragraph()
+    long.add_run("Une phrase entière en gras ne fait pas un titre, même courte.").bold = True
+    out = io.BytesIO()
+    doc.save(out)
+    kinds = {b.text: b.kind for b in extract_docx(io.BytesIO(out.getvalue()))}
+    assert [t for t, k in kinds.items() if k == "heading"] == [
+        "1 – PRESENTATION",
+        "2 - Moyens en Matériel",
+        "2.1 -  Description du matériel de l 'entreprise",
+        "II. Annexes",
+        "Définir les fréquences",
+    ]
+
+
 def test_docx_empty_and_corrupt() -> None:
     with pytest.raises(ExtractionError, match="aucun texte"):
         extract_docx(io.BytesIO(make_docx([])))

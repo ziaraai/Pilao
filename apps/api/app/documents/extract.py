@@ -103,6 +103,30 @@ def _join(lines: list[str]) -> str:
     return re.sub(r"(\w)- (?=[a-zàâçéèêëîïôûù])", r"\1", text)
 
 
+# « 1 – PRESENTATION », « 2.1 - Description », « II. Annexes »: a number, then a separator.
+# « 3 auto laveuses » (a number, no separator) is a list item, not a title.
+NUMBERED_TITLE = re.compile(r"^(?:\d{1,2}(?:\.\d{1,2})*|[IVX]{1,5})\s*[-–—.)]\s*\S")
+
+
+def _bold(para: Paragraph) -> bool:
+    runs = [r for r in para.runs if r.text.strip()]
+    style_bold = bool(para.style is not None and para.style.font.bold)
+    return bool(runs) and all(
+        r.bold or (r.bold is None and (style_bold or bool(r.style and r.style.font.bold)))
+        for r in runs
+    )
+
+
+def _looks_like_title(para: Paragraph, text: str) -> bool:
+    """A title written without a heading style (memoirs typed in LibreOffice, ADR-037): a
+    short numbered line, or a short line all in bold. Never a sentence."""
+    if len(text) > 120 or text.endswith((".", ";", ",")):
+        return False
+    if NUMBERED_TITLE.match(text):
+        return True
+    return len(text) <= 80 and _bold(para)
+
+
 def extract_docx(fileobj: BinaryIO) -> list[Block]:
     try:
         doc = Document(fileobj)
@@ -119,6 +143,7 @@ def extract_docx(fileobj: BinaryIO) -> list[Block]:
                 continue
             style = (para.style.name if para.style is not None else "") or ""
             is_heading = style.lower().startswith(("heading", "titre")) or style == "Title"
+            is_heading = is_heading or _looks_like_title(para, text)
             blocks.append(Block("heading" if is_heading else "paragraph", text, None))
             total += len(text)
         elif child.tag.endswith("}tbl"):

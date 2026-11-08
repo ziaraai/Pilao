@@ -47,7 +47,7 @@ Reste à faire :
 - [ ] Limiteur de débit public (`/companies/lookup`) en mémoire par processus → Redis quand l'API aura plusieurs instances.
 - [ ] Code de suivi des jobs dupliqué entre `services/knowledge.py` et `services/vault.py` ; deux écritures de `ai_calls` (`ai/calls.py`, `ai/llm.py`) → factoriser.
 - [ ] « Relire » une attestation pendant qu'une relance automatique RQ est programmée peut lancer deux lectures.
-- [ ] Mémoire modèle sans styles de titres (celui d'Abdraouf : « 1- PRESENTATION DE L'ENTREPRISE » en simple gras) : son plan n'est pas repris, c'est le plan type du secteur qui sert. Reconnaître les titres numérotés ou en gras.
+- [x] Mémoire modèle sans styles de titres : les titres numérotés (« 1 – … », « 2.1 - … ») ou courts en gras sont reconnus (ADR-037). Sur le mémoire 2017 d'Abdraouf : ses 11 chapitres, dans son ordre.
 - [ ] Détection des titres dans les PDF : une ligne comme « 2 Agents de propreté… » est prise pour un titre (à régler sur de vrais mémoires).
 - [ ] `EMBEDDING_DIM` paraît réglable, mais la colonne est fixée à 1024 par la migration : le changer impose une migration et un ré-embedding.
 - [ ] Les embeddings appellent LiteLLM depuis `app/ai/embeddings.py` et non `app/ai/llm.py` (reste dans la couche IA, mais deux points d'entrée).

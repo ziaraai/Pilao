@@ -76,15 +76,33 @@ def test_template_headings_keep_top_level_chapters() -> None:
         "2.1 Équipe",
         "II. Annexes",
     ]
-    assert template_outline(headings) == [
-        "1. Présentation",
-        "2. Moyens",
-        "II. Annexes",
-    ]  # sub-titles left out
+    # sub-titles left out; the number goes (the chapters follow the RC's criteria order)
+    assert template_outline(headings) == ["Présentation", "Moyens", "Annexes"]
     assert template_outline(["Introduction", "Moyens"]) == [
         "Introduction",
         "Moyens",
     ]  # no numbering: all
+
+
+def test_the_outline_of_a_real_memoir_without_heading_styles() -> None:
+    """ENG PRO's 2017 memoir: a hand-written table of contents (« 1 – PRESENTATION » …),
+    then the same chapters again in the body, numbered sub-titles and bold labels."""
+    headings = [
+        "1 – PRESENTATION",
+        "2 - Moyens en Matériel",
+        "3 – PLANS DE PREVENTIONS",
+        "10 – Partenaire",
+        "2.1 -  Description du matériel de l 'entreprise",
+        "Définir les fréquences",  # bold label: a sub-title
+        "1 - Présentation",  # the body repeats a chapter of the table of contents
+        "Intervention de nuit",
+    ]
+    assert template_outline(headings) == [
+        "PRESENTATION",
+        "Moyens en Matériel",
+        "PLANS DE PREVENTIONS",
+        "Partenaire",
+    ]
 
 
 def test_requirements_go_to_the_chapter_that_answers_them() -> None:

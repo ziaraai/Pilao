@@ -116,15 +116,30 @@ def _float(v: object) -> float | None:
     return float(v) if isinstance(v, int | float) and not isinstance(v, bool) else None
 
 
+# A chapter: « 1. », « 1 – », « 10) », « II. », « Chapitre 3 : »; not « 2.1 » (a sub-title).
+TOP_LEVEL = re.compile(
+    r"^\s*(?:chapitre\s+)?(?:\d{1,2}(?![.,]\d)|[IVX]{1,5}(?=[\s.)\-–—:]))\s*[-–—.):]?\s+\S",
+    re.IGNORECASE,
+)
+NUMBER = re.compile(
+    r"^\s*(?:chapitre\s+)?(?:\d{1,2}|[IVX]{1,5}(?=[\s.)\-–—:]))\s*[-–—.):]?\s*",
+    re.IGNORECASE,
+)
+
+
 def template_outline(headings: list[str]) -> list[str]:
-    """Top-level chapter titles of the company's template memoir, in order."""
-    unique = list(dict.fromkeys(h.strip() for h in headings if h and h.strip()))
-    top = [
-        h
-        for h in unique
-        if re.match(r"^(\d{1,2}[\.\)]?\s|[IVX]+[\.\)]\s|chapitre\s)", h, re.IGNORECASE)
-    ]
-    return top or unique
+    """Chapter titles of the company's template memoir, in order, without their number:
+    the chapters are reordered by the RC's criteria. A chapter met twice (a table of
+    contents typed at the top, then the title again in the body) counts once."""
+    titles = [h.strip() for h in headings if h and h.strip()]
+    top = [h for h in titles if TOP_LEVEL.match(h)]
+    chosen = top or titles
+    out: dict[str, str] = {}
+    for title in chosen:
+        bare = NUMBER.sub("", title).strip() if top else title
+        if bare:
+            out.setdefault(normalize(re.sub(r"\W+", " ", bare)).strip(), bare)
+    return list(out.values())
 
 
 def build_outline(

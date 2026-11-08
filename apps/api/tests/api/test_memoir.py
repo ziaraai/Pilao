@@ -112,10 +112,11 @@ def test_company_template_outline_ordered_by_criteria(
     queue.drain()
     m = c.post(f"/bids/{analyzed_bid(c, queue)}/memoir").json()
     assert m["outline_source"] == "org_template"
+    # reordered by the RC's criteria: the template's old numbers are dropped (ADR-037)
     assert [s["title"] for s in m["sections"]] == [
-        "3. Méthodologie",
-        "2. Moyens humains",
-        "1. Présentation de la société",
+        "Méthodologie",
+        "Moyens humains",
+        "Présentation de la société",
     ]
     assert [s["criterion_ref"] for s in m["sections"]] == ["Méthodologie", "Moyens humains", None]
 
