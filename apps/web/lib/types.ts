@@ -423,17 +423,46 @@ export type TenderList = {
   departments: string[];
   procedures: string[];
 };
+export type DashboardAction = {
+  level: "urgent" | "soon" | "todo";
+  title: string;
+  detail: string | null;
+  href: string;
+  button: string;
+  due: string | null;
+};
+export type DashboardStep = {
+  key: string;
+  title: string;
+  detail: string;
+  href: string;
+  done: boolean;
+};
+export type BidStage = "dce" | "analysis" | "memoir" | "submitted";
+export type BidProgress = {
+  id: string;
+  title: string;
+  buyer_name: string | null;
+  deadline_at: string | null;
+  status: string;
+  done: BidStage[];
+  next_step: string | null;
+  waiting: boolean;
+};
 export type Dashboard = {
+  actions: DashboardAction[];
+  getting_started: DashboardStep[];
   new_tenders: number;
   best_tenders: TenderMatch[];
-  bids_by_status: Record<string, Bid[]>;
-  deadlines_soon: Bid[];
-  documents_to_renew: ComplianceDoc[];
+  tenders_connected: boolean;
+  bids: BidProgress[];
   results: {
+    deposited: number;
     won: number;
     lost: number;
     submitted: number;
     success_rate: number | null;
+    amount_won_cents: number;
   };
   time_saved: {
     bids: number;

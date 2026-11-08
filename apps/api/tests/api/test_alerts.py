@@ -124,7 +124,7 @@ def test_the_alerts_job_is_scheduled_every_hour() -> None:
     assert croniter(job["cron"], start).get_next(datetime) == datetime(2026, 11, 5, 7, 5)
 
 
-def test_dashboard_shows_notices_bids_deadlines_documents_and_results(
+def test_dashboard_says_what_to_do_then_notices_bids_and_results(
     make_client: Factory,
     outbox: Outbox,
     queue: FakeQueue,
@@ -132,6 +132,7 @@ def test_dashboard_shows_notices_bids_deadlines_documents_and_results(
     db: Session,
 ) -> None:
     c = company(make_client, outbox, queue)
+    assert c.get("/dashboard").json()["tenders_connected"] is False  # no notice loaded yet
     scorer.scores = {"Nettoyage A": 90, "Nettoyage B": 50}
     load(db, queue, outbox, notice("A"), notice("B"), notice("C"), notice("D"))
     soon = c.post(
@@ -148,9 +149,14 @@ def test_dashboard_shows_notices_bids_deadlines_documents_and_results(
             "deadline_at": (datetime.now(PARIS) + timedelta(days=30)).isoformat(),
         },
     ).json()
-    for title, status in (("Écoles", "won"), ("Crèche", "lost"), ("Mairie", "won")):
+    for title, status, amount in (
+        ("Écoles", "won", 4_500_000),
+        ("Crèche", "lost", None),
+        ("Mairie", "won", None),
+    ):
         bid = c.post("/bids", json={"title": title}).json()
-        assert c.patch(f"/bids/{bid['id']}", json={"status": status}).status_code == 200
+        change = {"status": status, "submitted_amount_cents": amount}
+        assert c.patch(f"/bids/{bid['id']}", json=change).status_code == 200
     result = c.patch(
         f"/bids/{later['id']}",
         json={
@@ -164,14 +170,36 @@ def test_dashboard_shows_notices_bids_deadlines_documents_and_results(
     confirm(c, urssaf, valid_until=day(12))
 
     board = c.get("/dashboard").json()
-    assert board["new_tenders"] == 4
+    assert board["new_tenders"] == 4 and board["tenders_connected"] is True
     best = board["best_tenders"]
     assert [t["score"] for t in best] == [90, 70, 70] and best[0]["title"] == "Nettoyage A"
-    assert [b["title"] for b in board["bids_by_status"]["won"]] == ["Écoles", "Mairie"]
-    assert [b["title"] for b in board["bids_by_status"]["to_review"]] == ["Gymnase"]
-    assert [b["id"] for b in board["deadlines_soon"]] == [soon["id"]]
-    assert [d["id"] for d in board["documents_to_renew"]] == [urssaf]
-    assert board["results"] == {"won": 2, "lost": 1, "submitted": 1, "success_rate": 0.67}
+    # what to do now: the near deadline first, then the attestation to renew
+    assert [(a["level"], a["title"], a["href"]) for a in board["actions"]] == [
+        ("soon", "Date limite dans 4 jours — Gymnase", f"/dossiers/{soon['id']}"),
+        ("soon", "Document à renouveler — Attestation de vigilance URSSAF", "/coffre-fort"),
+    ]
+    assert board["actions"][0]["detail"] == "Prochaine étape : déposer le DCE."
+    # the bids followed: in progress, then the offer awaiting its result
+    assert [(b["title"], b["done"], b["next_step"]) for b in board["bids"]] == [
+        ("Gymnase", [], "Déposer le DCE"),
+        ("Piscine", ["submitted"], None),
+    ]
+    steps = {s["key"]: s["done"] for s in board["getting_started"]}
+    assert steps["vault"] is False and steps["knowledge"] is False and steps["bid"] is True
+    assert board["results"] == {
+        "deposited": 4,
+        "won": 2,
+        "lost": 1,
+        "submitted": 1,
+        "success_rate": 0.67,
+        "amount_won_cents": 4_500_000,
+    }
+
+    # another company sees none of it
+    other = company(make_client, outbox, queue, 2).get("/dashboard").json()
+    assert other["actions"] == [] and other["bids"] == []
+    assert other["results"]["deposited"] == 0 and other["results"]["amount_won_cents"] == 0
+    assert [s["done"] for s in other["getting_started"]] == [False, False, False, False]
 
 
 def test_dashboard_requires_authentication(make_client: Factory) -> None:

@@ -535,22 +535,38 @@ let current; // the page, for a screenshot when a step fails
     .click();
   await page.waitForURL(`${WEB}/tableau-de-bord`);
   await page.reload();
-  await page.getByText("Nouvelles annonces (7 jours)").waitFor();
+  await page.getByRole("heading", { name: /^Bonjour/ }).waitFor();
   await page
+    .getByRole("heading", { name: "Nouvelles annonces pour vous" })
+    .waitFor();
+  // the followed notice is now a dossier whose offer awaits its result
+  const followed = page.getByRole("listitem").filter({
+    has: page.getByRole("link", { name: media }),
+  });
+  await followed.getByText("Résultat attendu").first().waitFor();
+  // the first dossier, analysed and drafted earlier, says what is left to do
+  await page
+    .getByRole("listitem")
+    .filter({ has: page.getByRole("link", { name: "Nettoyage mairie E2E" }) })
+    .getByText("Prochaine étape : relire, exporter puis déposer l'offre.")
+    .waitFor();
+  const results = page.locator("section", {
+    has: page.getByRole("heading", { name: "Vos résultats" }),
+  });
+  await results
     .locator("div", { has: page.getByText("Temps gagné", { exact: true }) })
     .getByText("5 h 30", { exact: true })
-    .first()
     .waitFor();
-  const submitted = page.locator("div", {
-    has: page.getByRole("heading", { name: /^Déposé \(/ }),
-  });
-  await submitted.getByRole("link", { name: media }).first().waitFor();
+  await results
+    .locator("div", { has: page.getByText("Offres déposées", { exact: true }) })
+    .getByText("1", { exact: true })
+    .waitFor();
   await page.screenshot({
     path: `${S}/10-tableau-de-bord.png`,
     fullPage: true,
   });
   step(
-    "result and time saved recorded, idea sent; dashboard shows the bid and 5 h 30 saved",
+    "result and time saved recorded, idea sent; dashboard: dossier awaiting its result, 1 offer, 5 h 30 saved",
   );
 
   // 11. GDPR: full export, then a deletion scheduled and cancelled (ADR-026)
