@@ -169,3 +169,15 @@ def test_the_reader_is_told_what_is_already_stored(
     assert reader.known is not None
     # the notice itself, and a correction already applied to it: no need to read them again
     assert reader.known([ALES, CHANGE_1, CHANGE_2, "inconnu"]) == {ALES, CHANGE_1}
+
+
+def test_reread_and_the_coverage_of_a_dry_run(
+    db: Session, outbox: Outbox, queue: FakeQueue
+) -> None:
+    run_import(db, "ted", Reader(ORIGINAL), outbox, queue, since=date(2026, 6, 1))
+    again = Reader(ORIGINAL)
+    run_import(db, "ted", again, outbox, queue, since=date(2026, 6, 1), reread=True)
+    assert again.known is None  # read again, stored or not
+    dry = run_import(db, "ted", Reader(ORIGINAL, "738785-2026"), outbox, queue, dry_run=True)
+    # [read, with a description, an amount, a documents link], per notice family
+    assert dry.coverage == {"TED": [2, 2, 1, 2]}

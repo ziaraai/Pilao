@@ -59,6 +59,9 @@ def main(argv: list[str] | None = None) -> int:
     imp.add_argument("--since", type=date.fromisoformat, default=None, help="AAAA-MM-JJ")
     imp.add_argument("--essai", action="store_true", help="lire sans rien enregistrer")
     imp.add_argument("--limit", type=int, default=None, help="nombre d'annonces lues au plus")
+    imp.add_argument(
+        "--relire", action="store_true", help="relire aussi les annonces déjà enregistrées"
+    )
     args = parser.parse_args(argv)
     if args.command == "send-test-email":
         return send_test_email(args.to)
@@ -113,11 +116,17 @@ def import_tenders(args: argparse.Namespace) -> int:
                 since=args.since,
                 dry_run=args.essai,
                 limit=limit,
+                reread=args.relire,
             )
             failed = failed or result.status == "error"
             print(describe(result))
             for t in result.samples:
                 print(_sample(t))
+            for family, (n, described, priced, linked) in sorted(result.coverage.items()):
+                print(
+                    f"  {family} : {n} avis, description {described}, montant {priced}, "
+                    f"lien du dossier {linked}"
+                )
     return 1 if failed else 0
 
 
@@ -125,10 +134,16 @@ def _sample(t: TenderIn) -> str:
     """One notice as read, for the server check of a reader (``--essai``)."""
     when = t.deadline_at.astimezone(PARIS) if t.deadline_at else None
     deadline = f"{when:%d/%m/%Y %H:%M}" if when else "?"
+    amount = (
+        f"{t.estimated_amount_eur:,.0f} € HT".replace(",", " ") if t.estimated_amount_eur else "?"
+    )
+    lots = f" · {len(t.lots)} lots" if t.lots else ""
     return (
         f"  - {t.title[:90]}\n"
         f"    {t.buyer_name or 'acheteur ?'} · départements {', '.join(t.departments) or '?'}"
         f" · date limite {deadline} · CPV {', '.join(t.cpv_codes[:3]) or '?'}\n"
+        f"    montant {amount}{lots} · dossier {t.documents_url or '?'}\n"
+        f"    description : {(t.description or '?')[:110]}\n"
         f"    {t.notice_url or 'pas de lien'}"
     )
 

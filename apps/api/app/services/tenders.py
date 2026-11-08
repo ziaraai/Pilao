@@ -349,26 +349,36 @@ def match_tenders(
         rules = company_filter(profile)
         if not rules.watches_something:
             continue
-        known = set(
-            db.scalars(
-                select(TenderMatch.tender_id).where(
+        existing = {
+            m.tender_id: m
+            for m in db.scalars(
+                select(TenderMatch).where(
                     TenderMatch.org_id == profile.org_id,
                     TenderMatch.tender_id.in_([t.id for t in tenders]),
                 )
             )
-        )
+        }
         for tender in tenders:
-            if tender.id in known:
-                continue
             decision = prefilter(rules, facts(tender), now)
-            if decision.passed:
-                db.add(
-                    TenderMatch(
-                        org_id=profile.org_id, tender_id=tender.id, reasons=decision.reasons
+            match = existing.get(tender.id)
+            if match is None:
+                if decision.passed:
+                    db.add(
+                        TenderMatch(
+                            org_id=profile.org_id, tender_id=tender.id, reasons=decision.reasons
+                        )
                     )
-                )
-                created += 1
-                to_score.add(profile.org_id)
+                    created += 1
+                    to_score.add(profile.org_id)
+            elif match.status == "new":  # the notice changed: filter and score it again
+                if not decision.passed:
+                    db.delete(match)
+                else:
+                    match.reasons = decision.reasons
+                    match.score = match.explanation = match.score_error = None
+                    match.scored_at = None
+                    match.relevant_lots = []
+                    to_score.add(profile.org_id)
     db.commit()
     for org_id in to_score:
         _enqueue_score(queue, org_id)

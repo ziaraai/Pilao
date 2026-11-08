@@ -271,6 +271,30 @@ def test_a_notice_published_again_is_updated_not_duplicated(
     assert len(db.scalars(select(TenderMatch)).all()) == 1
 
 
+def test_a_notice_completed_later_is_scored_again(
+    make_client: Factory, outbox: Outbox, queue: FakeQueue, scorer: ScoreModel, db: Session
+) -> None:
+    """A notice read again with more details (description, amount) gets a new score; one
+    that no longer fits leaves the list; a followed one is left alone."""
+    c = company(make_client, outbox, queue)
+    load(db, queue, outbox, notice("A"), notice("B"), notice("T"))
+    c.post(f"/tenders/{tender_id(db, 'T')}/track")
+    first = len(scorer.prompts)
+    scorer.scores = {"Nettoyage A": 91}
+    load(
+        db,
+        queue,
+        outbox,
+        notice("A", description="Nettoyage quotidien de 12 écoles"),
+        notice("B", departments=["75"]),  # moved out of the company's area
+        notice("T", description="Plus de détails"),
+    )
+    assert c.get(f"/tenders/{tender_id(db, 'A')}").json()["score"] == 91
+    assert len(scorer.prompts) == first + 1  # A only: B left, T is followed
+    assert "Nettoyage quotidien de 12 écoles" in scorer.prompts[-1]
+    assert titles(c) == ["Nettoyage A"] and titles(c, status="tracked") == ["Nettoyage T"]
+
+
 def test_a_profile_change_filters_and_scores_again(
     make_client: Factory, outbox: Outbox, queue: FakeQueue, scorer: ScoreModel, db: Session
 ) -> None:

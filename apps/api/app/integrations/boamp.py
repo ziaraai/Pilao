@@ -31,7 +31,8 @@ import httpx
 from pydantic import ValidationError
 
 from app.core.config import get_settings
-from app.schemas.tenders import NoticeType, TenderIn
+from app.integrations.boamp_donnees import parse as parse_donnees
+from app.schemas.tenders import LotIn, NoticeType, TenderIn
 
 logger = logging.getLogger("pilao.boamp")
 PARIS = ZoneInfo("Europe/Paris")
@@ -237,12 +238,14 @@ def to_tender(record: dict[str, Any]) -> TenderIn | None:
     departments = [d for d in (_department(x) for x in places) if d]
     nature = _nature(record)
     url = _str(record.get("url_avis")) or f"https://www.boamp.fr/pages/avis/?q=idweb:{idweb}"
+    details = parse_donnees(record.get("donnees"))
     return TenderIn(
         source="boamp",
         source_id=idweb,
         notice_type=kind if kind != "correction" or corrects else "contract_notice",
         corrects=corrects if kind == "correction" else None,
         title=title[:2000],
+        description=details.description[:20_000] if details.description else None,
         buyer_name=_str(record.get("nomacheteur")),
         procedure=_str(record.get("procedure_libelle")),
         contract_nature=nature,
@@ -251,6 +254,12 @@ def to_tender(record: dict[str, Any]) -> TenderIn | None:
         published_at=_when(record.get("dateparution")),
         deadline_at=_when(record.get("datelimitereponse"), end_of_day=True),
         notice_url=url,
+        documents_url=details.documents_url,
+        estimated_amount_eur=details.amount_eur,
+        lots=[
+            LotIn(number=lot.number, title=lot.title, estimated_amount_eur=lot.amount_eur)
+            for lot in details.lots
+        ],
         raw={"idweb": idweb, "nature": record.get("nature"), "famille": record.get("famille")},
     )
 

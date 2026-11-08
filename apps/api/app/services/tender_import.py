@@ -59,6 +59,8 @@ class ImportResult:
     matched: int = 0
     error: str | None = None
     samples: list[TenderIn] = field(default_factory=list)  # dry run only
+    # dry run: per notice family, [read, with a description, an amount, a documents link]
+    coverage: dict[str, list[int]] = field(default_factory=dict)
 
 
 def watched_cpv_codes(db: Session) -> list[str]:
@@ -98,8 +100,11 @@ def run_import(
     dry_run: bool = False,
     limit: int | None = None,
     now: Callable[[], datetime] = lambda: datetime.now(UTC),
+    reread: bool = False,
 ) -> ImportResult:
-    """One pass. ``dry_run``: read and convert only, nothing is written (server checks)."""
+    """One pass. ``dry_run``: read and convert only, nothing is written (server checks).
+    ``reread``: read again the notices already stored (to complete them after a reader
+    improvement); otherwise the reader skips them."""
     today = now().date()
     start = since or next_since(db, source, today)
     result = ImportResult(source=source, since=start)
@@ -109,8 +114,20 @@ def run_import(
             result.fetched += 1
             if item is None:
                 result.skipped += 1
-            elif len(result.samples) < 5:
+                continue
+            if len(result.samples) < 5:
                 result.samples.append(item)
+            family = str(item.raw.get("famille") or source.upper())
+            counts = result.coverage.setdefault(family, [0, 0, 0, 0])
+            for i, present in enumerate(
+                (
+                    True,
+                    bool(item.description),
+                    item.estimated_amount_eur is not None,
+                    bool(item.documents_url),
+                )
+            ):
+                counts[i] += present
         return result
 
     key = _lock_key(source)
@@ -123,7 +140,8 @@ def run_import(
     db.commit()
     try:
         batch: list[TenderIn] = []
-        for item in reader.fetch(cpv, start, limit, known=_known(db, source)):
+        known = None if reread else _known(db, source)
+        for item in reader.fetch(cpv, start, limit, known=known):
             result.fetched += 1
             if item is None:
                 result.skipped += 1
