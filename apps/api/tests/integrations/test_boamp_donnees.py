@@ -111,3 +111,16 @@ def test_odd_donnees_give_nothing() -> None:
     for raw in (None, "", "pas du json", "[1, 2]", json.dumps({"EFORMS": {"X": "y"}})):
         d = parse(raw)
         assert (d.description, d.amount_eur, d.documents_url, d.lots) == (None, None, None, [])
+
+
+def test_links_are_decoded() -> None:
+    """Seen on the server (26-106841): « …dematEnt.login&amp;type=DCE&amp;IDM=1897167 »."""
+    raw = "https://www.marches-publics.info/mpiaws/index.cfm?fuseaction=dematEnt.login&amp;type=DCE&amp;IDM=1897167"
+    notice = json.loads(json.dumps(EFORMS))
+    lot = notice["EFORMS"]["ContractNotice"]["cac:ProcurementProjectLot"][0]
+    lot["cac:TenderingTerms"]["cac:CallForTendersDocumentReference"]["cac:Attachment"][
+        "cac:ExternalReference"
+    ]["cbc:URI"] = raw
+    decoded = raw.replace("&amp;", "&")
+    assert parse(json.dumps(notice)).documents_url == decoded
+    assert parse(json.dumps({"FNSimple": {"urlDocConsul": raw}})).documents_url == decoded

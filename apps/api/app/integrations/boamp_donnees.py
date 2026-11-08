@@ -13,6 +13,7 @@ Two shapes are met (docs/07 §1):
 Nothing here raises: an odd notice gives empty details, never a failed import.
 """
 
+import html
 import json
 import re
 from collections.abc import Iterator
@@ -98,7 +99,13 @@ def _amount(value: Any) -> float | None:
 
 def _url(value: Any) -> str | None:
     raw = _text(value)
-    return raw if raw and URL.match(raw) else None
+    return _link(raw) if raw else None
+
+
+def _link(raw: str) -> str | None:
+    """A web link as written in the notice, « &amp; » decoded (seen on the server)."""
+    url = html.unescape(raw).strip()
+    return url if URL.match(url) else None
 
 
 def _eforms(root: dict[str, Any]) -> Details:
@@ -166,9 +173,9 @@ def _by_names(data: dict[str, Any]) -> Details:
         text = str(value).strip()
         if URL.match(text):
             if documents is None and re.search(r"doc|consult|dce", last):
-                documents = text
+                documents = _link(text)
             elif profile is None and re.search(r"profil|acheteur|buyer", last):
-                profile = text
+                profile = _link(text)
             continue
         if re.search(r"description|objet", last) and len(text) > len(description or ""):
             description = text
