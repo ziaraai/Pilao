@@ -22,8 +22,8 @@ import json
 import logging
 import re
 import time
-from collections.abc import Iterator
-from datetime import date, datetime, timedelta
+from collections.abc import Callable, Iterator
+from datetime import UTC, date, datetime, timedelta
 from typing import Any, Literal
 from zoneinfo import ZoneInfo
 
@@ -39,6 +39,8 @@ DATASET = "boamp"
 PAGE_SIZE = 100  # Opendatasoft maximum for /records
 MAX_OFFSET = 10_000  # /records refuses offset + limit beyond this
 MAX_ATTEMPTS = 4
+LISTING = "idweb,datelimitereponse,nature,nature_libelle"
+BY_IDS = 40  # numbers per query (the URL stays short)
 CPV_NEAR_KEY = re.compile(
     r"(?:cpv|classprincipale|classsupplementaire|itemclassificationcode)[^0-9]{0,120}?(\d{8})",
     re.IGNORECASE,
@@ -79,21 +81,41 @@ class BoampClient:
                     return
             day += timedelta(days=1)
 
-    def _day(self, day: date, limit: int | None) -> Iterator[dict[str, Any]]:
+    def listing(self, day: date) -> Iterator[dict[str, Any]]:
+        """The day's notices, light: number, deadline and nature only (no « donnees »)."""
+        yield from self._day(day, None, select=LISTING)
+
+    def by_ids(self, ids: list[str]) -> Iterator[dict[str, Any]]:
+        """Whole notices, by number, a few dozen per query."""
+        safe = [i for i in ids if re.fullmatch(r"[\w-]{1,40}", i)]
+        for start in range(0, len(safe), BY_IDS):
+            chunk = safe[start : start + BY_IDS]
+            page = self._get(
+                f"/catalog/datasets/{DATASET}/records",
+                {"where": " OR ".join(f'idweb = "{i}"' for i in chunk), "limit": PAGE_SIZE},
+            )
+            results = page.get("results")
+            if not isinstance(results, list):
+                raise BoampUnavailable("reply without results")
+            yield from (r for r in results if isinstance(r, dict))
+
+    def _day(
+        self, day: date, limit: int | None, select: str | None = None
+    ) -> Iterator[dict[str, Any]]:
         offset = 0
         while offset < MAX_OFFSET:
             size = PAGE_SIZE if limit is None else min(PAGE_SIZE, limit - offset)
             if size <= 0:
                 return
-            page = self._get(
-                f"/catalog/datasets/{DATASET}/records",
-                {
-                    "where": f"dateparution = date'{day.isoformat()}'",
-                    "order_by": "idweb asc",
-                    "limit": size,
-                    "offset": offset,
-                },
-            )
+            params: dict[str, Any] = {
+                "where": f"dateparution = date'{day.isoformat()}'",
+                "order_by": "idweb asc",
+                "limit": size,
+                "offset": offset,
+            }
+            if select:
+                params["select"] = select
+            page = self._get(f"/catalog/datasets/{DATASET}/records", params)
             results = page.get("results")
             if not isinstance(results, list):
                 raise BoampUnavailable("reply without results")
@@ -155,11 +177,25 @@ def _when(value: Any, end_of_day: bool = False) -> datetime | None:
     return parsed if parsed.tzinfo else parsed.replace(tzinfo=PARIS)
 
 
+def _closed(row: dict[str, Any], now: datetime) -> bool:
+    deadline = _when(row.get("datelimitereponse"), end_of_day=True)
+    return deadline is not None and deadline < now
+
+
 def _donnees(record: dict[str, Any]) -> str:
     raw = record.get("donnees")
     if isinstance(raw, dict | list):
         return json.dumps(raw, ensure_ascii=False)
     return str(raw) if raw else ""
+
+
+def _department(raw: Any) -> str | None:
+    """« 42 », « 2A » as the profiles write them; BOAMP writes Corsica « 20A » / « 20B »."""
+    code = str(raw).strip().upper()
+    code = {"20A": "2A", "20B": "2B"}.get(code, code)
+    if re.fullmatch(r"\d", code):
+        code = f"0{code}"
+    return code if re.fullmatch(r"\d{2,3}|2[AB]", code) else None
 
 
 def _notice_type(record: dict[str, Any]) -> NoticeType:
@@ -198,9 +234,7 @@ def to_tender(record: dict[str, Any]) -> TenderIn | None:
     places = _list(record.get("code_departement_prestation")) or _list(
         record.get("code_departement")
     )
-    departments = [
-        d for d in (str(x).strip().upper() for x in places) if re.fullmatch(r"\d{2,3}|2[AB]", d)
-    ]
+    departments = [d for d in (_department(x) for x in places) if d]
     nature = _nature(record)
     url = _str(record.get("url_avis")) or f"https://www.boamp.fr/pages/avis/?q=idweb:{idweb}"
     return TenderIn(
@@ -223,21 +257,45 @@ def to_tender(record: dict[str, Any]) -> TenderIn | None:
 
 class BoampReader:
     """The BOAMP source for ``services/tender_import.py``. BOAMP cannot be searched by CPV
-    code (they are inside ``donnees``): every notice of the period is read, and the
-    pre-filter of each company does the sorting."""
+    code (they are inside ``donnees``) and publishes over a thousand notices a day, each
+    20 to 80 KB with ``donnees``. So each day is first listed light (number, deadline,
+    nature); then only the notices still open, not yet stored and that are not awards
+    (useless to answer, many) are read in full."""
 
     def __init__(self, client: BoampClient | None = None) -> None:
         self._client = client or BoampClient()
 
     def fetch(
-        self, cpv_codes: list[str], since: date, limit: int | None = None
+        self,
+        cpv_codes: list[str],
+        since: date,
+        limit: int | None = None,
+        known: Callable[[list[str]], set[str]] | None = None,
+        now: datetime | None = None,
     ) -> Iterator[TenderIn | None]:
-        for record in self._client.records(since, limit):
-            try:
-                yield to_tender(record)
-            except ValidationError as exc:
-                logger.warning("BOAMP notice %s not converted: %s", record.get("idweb"), exc)
-                yield None
+        moment = now or datetime.now(UTC)
+        day, last, seen = since, moment.date(), 0
+        while day <= last:
+            wanted = [
+                idweb
+                for row in self._client.listing(day)
+                if (idweb := _str(row.get("idweb")))
+                and _notice_type(row) != "award"
+                and not _closed(row, moment)
+            ]
+            if known and wanted:
+                stored = known(wanted)
+                wanted = [i for i in wanted if i not in stored]
+            for record in self._client.by_ids(wanted):
+                try:
+                    yield to_tender(record)
+                except ValidationError as exc:
+                    logger.warning("BOAMP notice %s not converted: %s", record.get("idweb"), exc)
+                    yield None
+                seen += 1
+                if limit is not None and seen >= limit:
+                    return
+            day += timedelta(days=1)
 
     def probe(self, since: date) -> dict[str, Any]:
         """For ``--essai``: the real field list and the keys of one real record."""

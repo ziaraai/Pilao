@@ -17,7 +17,7 @@ import html
 import logging
 import re
 import time
-from collections.abc import Iterator
+from collections.abc import Callable, Iterator
 from datetime import date, datetime
 from typing import Any, Literal
 from zoneinfo import ZoneInfo
@@ -341,7 +341,11 @@ class TedReader:
         self._client = client or TedClient()
 
     def fetch(
-        self, cpv_codes: list[str], since: date, limit: int | None = None
+        self,
+        cpv_codes: list[str],
+        since: date,
+        limit: int | None = None,
+        known: Callable[[list[str]], set[str]] | None = None,  # TED reads little: unused
     ) -> Iterator[TenderIn | None]:
         for notice in self._client.search(build_query(cpv_codes, since), limit):
             try:

@@ -4,6 +4,7 @@ documentation: the real format is still to be checked from the server
 a missing or odd field never breaks the import."""
 
 import json
+import re
 from datetime import date, datetime
 from typing import Any
 from zoneinfo import ZoneInfo
@@ -67,7 +68,7 @@ def test_corrections_awards_and_odd_records() -> None:
     assert to_tender({"objet": "sans numéro"}) is None and to_tender({"idweb": "x"}) is None
 
 
-def test_the_reader_reads_day_by_day_and_page_by_page() -> None:
+def test_records_are_read_day_by_day_and_page_by_page() -> None:
     asked: list[dict[str, str]] = []
 
     def handler(request: httpx.Request) -> httpx.Response:
@@ -88,6 +89,51 @@ def test_the_reader_reads_day_by_day_and_page_by_page() -> None:
         ("dateparution = date'2026-11-08'", "0"),
     ]
     assert len(list(client.records(date(2026, 11, 6), 3, until=date(2026, 11, 8)))) == 3
+
+
+def test_the_reader_fetches_only_new_open_notices_in_full() -> None:
+    """A light list of each day, then the whole notice only when it is worth it."""
+    listing = [
+        {
+            "idweb": "26-1",
+            "datelimitereponse": "2026-12-01T11:00:00+00:00",
+            "nature": "APPEL_OFFRE",
+        },
+        {
+            "idweb": "26-2",
+            "datelimitereponse": "2026-11-01T11:00:00+00:00",
+            "nature": "APPEL_OFFRE",
+        },
+        {"idweb": "26-3", "datelimitereponse": None, "nature": "ATTRIBUTION"},
+        {"idweb": "26-4", "datelimitereponse": None, "nature": "RECTIFICATIF"},
+        {
+            "idweb": "26-5",
+            "datelimitereponse": "2026-12-05T11:00:00+00:00",
+            "nature": "APPEL_OFFRE",
+        },
+    ]
+    full: list[str] = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        params = dict(request.url.params)
+        if params.get("select"):  # the light list of the day
+            assert params["select"] == "idweb,datelimitereponse,nature,nature_libelle"
+            rows = listing if params["where"] == "dateparution = date'2026-11-08'" else []
+            return httpx.Response(200, json={"results": rows})
+        ids = re.findall(r'idweb = "([^"]+)"', params["where"])
+        full.extend(ids)
+        return httpx.Response(200, json={"results": [{**RECORD, "idweb": i} for i in ids]})
+
+    client = BoampClient("https://boamp.test", httpx.Client(transport=httpx.MockTransport(handler)))
+    now = datetime(2026, 11, 8, 10, 0, tzinfo=PARIS)
+    got = list(
+        BoampReader(client).fetch([], date(2026, 11, 7), known=lambda ids: {"26-5"}, now=now)
+    )
+    # closed (26-2), award (26-3) and already stored (26-5): never read in full
+    assert full == ["26-1", "26-4"] and [t.source_id for t in got if t] == ["26-1", "26-4"]
+
+
+def test_a_failing_boamp_is_reported() -> None:
     sleeps: list[float] = []
     down = BoampClient(
         "https://boamp.test",
@@ -104,3 +150,18 @@ def test_the_place_of_work_comes_first() -> None:
     assert t is not None and t.departments == ["2B"]
     buyer_only = to_tender({**RECORD, "code_departement_prestation": None})
     assert buyer_only is not None and buyer_only.departments == ["42"]
+    # seen on the server: BOAMP writes Corsica « 20A » / « 20B » (SYVADEC, 26-103246)
+    corsica = to_tender({**RECORD, "code_departement": ["20B", "20A"]})
+    assert corsica is not None and corsica.departments == ["2B", "2A"]
+    assert to_tender({**RECORD, "code_departement": ["1", "971", "XX"]}).departments == [  # type: ignore[union-attr]
+        "01",
+        "971",
+    ]
+
+
+def test_deadlines_are_kept_as_the_instant_boamp_gives() -> None:
+    """Seen on the server: « 2026-11-30T11:00:00+00:00 » is the « 12:00:00+01:00 » of the
+    notice itself (donnees): noon in Paris."""
+    t = to_tender({**RECORD, "datelimitereponse": "2026-11-30T11:00:00+00:00"})
+    assert t is not None and t.deadline_at is not None
+    assert t.deadline_at.astimezone(PARIS) == datetime(2026, 11, 30, 12, 0, tzinfo=PARIS)

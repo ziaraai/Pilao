@@ -41,9 +41,14 @@ class Reader:
         self.calls: list[tuple[list[str], date]] = []
 
     def fetch(
-        self, cpv_codes: list[str], since: date, limit: int | None = None
+        self,
+        cpv_codes: list[str],
+        since: date,
+        limit: int | None = None,
+        known: Callable[[list[str]], set[str]] | None = None,
     ) -> Iterator[TenderIn | None]:
         self.calls.append((cpv_codes, since))
+        self.known = known
         for i, n in enumerate(self.notices):
             if self.fail_after is not None and i >= self.fail_after:
                 raise TedUnavailable("HTTP 503")
@@ -154,3 +159,13 @@ def test_a_dry_run_reads_and_writes_nothing(db: Session, outbox: Outbox, queue: 
     assert (result.fetched, result.skipped, len(result.samples)) == (3, 1, 2)
     assert result.samples[0].title.startswith("Opération de travaux courants")
     assert db.scalars(select(Tender)).all() == [] and db.scalars(select(TenderImport)).all() == []
+
+
+def test_the_reader_is_told_what_is_already_stored(
+    db: Session, outbox: Outbox, queue: FakeQueue
+) -> None:
+    reader = Reader(ORIGINAL, CHANGE_1)
+    run_import(db, "ted", reader, outbox, queue, since=date(2026, 6, 1))
+    assert reader.known is not None
+    # the notice itself, and a correction already applied to it: no need to read them again
+    assert reader.known([ALES, CHANGE_1, CHANGE_2, "inconnu"]) == {ALES, CHANGE_1}

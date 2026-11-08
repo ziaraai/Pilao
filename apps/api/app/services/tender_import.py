@@ -21,7 +21,7 @@ from sqlalchemy.orm import Session
 
 from app.core.config import get_settings
 from app.core.email import Mailer
-from app.db.models import CompanyProfile, TenderImport
+from app.db.models import CompanyProfile, Tender, TenderImport
 from app.domain.trades import TRADES
 from app.schemas.tenders import TenderIn
 from app.services.tenders import ingest, match_tenders
@@ -38,7 +38,11 @@ class Reader(Protocol):
     converted (None for a notice it could not use)."""
 
     def fetch(
-        self, cpv_codes: list[str], since: date, limit: int | None = None
+        self,
+        cpv_codes: list[str],
+        since: date,
+        limit: int | None = None,
+        known: Callable[[list[str]], set[str]] | None = None,
     ) -> Iterable[TenderIn | None]: ...
 
 
@@ -119,7 +123,7 @@ def run_import(
     db.commit()
     try:
         batch: list[TenderIn] = []
-        for item in reader.fetch(cpv, start, limit):
+        for item in reader.fetch(cpv, start, limit, known=_known(db, source)):
             result.fetched += 1
             if item is None:
                 result.skipped += 1
@@ -139,6 +143,27 @@ def run_import(
         db.commit()
     logger.info("%s import: %s", source, _summary(result))
     return result
+
+
+def _known(db: Session, source: str) -> Callable[[list[str]], set[str]]:
+    """The numbers among ``ids`` already stored: as a notice, or as a correction applied."""
+
+    def known(ids: list[str]) -> set[str]:
+        stored = set(
+            db.scalars(
+                select(Tender.source_id).where(Tender.source == source, Tender.source_id.in_(ids))
+            )
+        )
+        applied = db.execute(
+            text(
+                "select c->>'source_id' from tenders t, jsonb_array_elements(t.corrections) c "
+                "where t.source = :source and c->>'source_id' = any(:ids)"
+            ),
+            {"source": source, "ids": ids},
+        ).scalars()
+        return stored | set(applied)
+
+    return known
 
 
 def _ingest(

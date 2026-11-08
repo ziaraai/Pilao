@@ -6,7 +6,7 @@ Légende : **Vérifié** = confirmé sur la documentation officielle (novembre 2
 
 | API | Usage | Accès | Statut |
 |---|---|---|---|
-| BOAMP (DILA, Opendatasoft) | Annonces françaises | Gratuit, Licence Ouverte | Vérifié (existence, licence, fréquence) / champs à vérifier depuis le serveur |
+| BOAMP (DILA, Opendatasoft) | Annonces françaises | Gratuit, Licence Ouverte | Vérifié depuis le serveur (2026-11-08), importé toutes les 2 h |
 | TED (UE) | Annonces au-dessus des seuils européens | Gratuit, recherche sans clé | Vérifié sur de vrais appels (2026-11-08), importé toutes les 2 h |
 | Recherche d'entreprises (data.gouv) | Profil à partir du SIRET | Ouvert, 7 appels/s | Vérifié sur une vraie réponse (2026-11-08) |
 | DECP (data.gouv) | Marchés attribués (V2) | Fichiers ouverts, quotidiens | Vérifié |
@@ -26,11 +26,14 @@ Légende : **Vérifié** = confirmé sur la documentation officielle (novembre 2
   - Enregistrements : `GET {BOAMP_API_URL}/catalog/datasets/boamp/records?where=...&order_by=...&limit=100&offset=0`
   - Export complet : `GET {BOAMP_API_URL}/catalog/datasets/boamp/exports/json?where=...`
 - **Historique et schémas XML** : `https://echanges.dila.gouv.fr/OPENDATA/BOAMP/`
-- **Lecteur** : `apps/api/app/integrations/boamp.py` (un jour de parution après l'autre, pages de 100 : BOAMP publie plus de mille avis par jour et `/records` s'arrête à 10 000 ; conversion au format commun, tolérante). Import **désactivé** (`BOAMP_IMPORT_ENABLED=false`) tant que le format n'est pas vérifié.
+- **Lecteur** : `apps/api/app/integrations/boamp.py` (un jour de parution après l'autre, pages de 100 : `/records` s'arrête à 10 000 ; conversion au format commun, tolérante). Import activé sur le serveur le 2026-11-08 (`BOAMP_IMPORT_ENABLED=true` dans `infra/server/app.env`), désactivé par défaut ailleurs.
 - **Lu depuis le serveur le 2026-11-08** (`import-tenders --source boamp --essai`), l'hôte ne répondant pas depuis la session de développement. Champs réels du jeu de données : `idweb`, `id`, `contractfolderid`, `objet`, `filename`, `famille`, `famille_libelle`, `code_departement`, `code_departement_prestation`, `dateparution`, `datefindiffusion`, `datelimitereponse`, `nomacheteur`, `titulaire`, `perimetre`, `type_procedure`, `soustype_procedure`, `procedure_libelle`, `procedure_categorise`, `nature` (ex. `APPEL_OFFRE`), `sousnature`, `nature_libelle` (« Avis de marché »), `sousnature_libelle`, `nature_categorise` (`appeloffre/standard`), `nature_categorise_libelle`, `criteres`, `marche_public_simplifie`, `marche_public_simplifie_label`, `etat` (`INITIAL`), `descripteur_code`, `dc`, `descripteur_libelle` (thésaurus BOAMP, pas des CPV), `type_marche` (liste : `FOURNITURES`, `SERVICES`, `TRAVAUX`), `type_marche_facette`, `type_avis`, `annonce_lie`, `annonces_anterieures`, `source_schema`, `gestion`, `donnees`, `url_avis`.
   - `donnees` est l'avis complet en JSON ; pour un avis européen, au format eForms (`{"EFORMS": {"ContractNotice": …}}`). Les codes CPV y sont lus (`cbc:ItemClassificationCode`) : vérifié sur 3 avis réels (39000000, 50532400…).
   - Le lieu d'exécution est dans `code_departement_prestation`, le département de l'acheteur dans `code_departement`.
-- **Reste à vérifier** : le fuseau de `datelimitereponse` (heure de Paris ou temps universel), et le format de `annonce_lie` sur un rectificatif.
+  - `datelimitereponse` est l'instant exact en temps universel (« 2026-11-30T11:00:00+00:00 » = « 12:00:00+01:00 » dans `donnees`) : gardé tel quel, affiché en heure de Paris. Vérifié sur 3 avis le 2026-11-08.
+  - La Corse est écrite `20A` / `20B` (Pilao et les profils : `2A` / `2B`, converti) ; `code_departement_prestation` était vide sur les 3 avis vus.
+- **Lecture en deux temps** (BOAMP publie plus de mille avis par jour, de 20 à 80 Ko chacun avec `donnees`) : pour chaque jour de parution, une liste légère (`select=idweb,datelimitereponse,nature,nature_libelle`), puis l'avis complet seulement pour ceux encore ouverts, pas encore en base et qui ne sont pas des attributions (`where=idweb = "…" OR …`, 40 par requête). Relire deux jours toutes les 2 heures ne retélécharge donc rien.
+- **Reste à vérifier** : le format de `annonce_lie` sur un vrai rectificatif.
 - **Vérification depuis le serveur** : `/opt/pilao/pilao.sh exec api python -m app.cli import-tenders --source boamp --essai` affiche la vraie liste des champs, les clés d'un vrai avis, le début de `donnees` et 3 avis tels que Pilao les lit, sans rien enregistrer. Corriger `boamp.py` d'après ce résultat, enregistrer un exemple dans `apps/api/tests/fixtures/boamp_record.json`, puis passer `BOAMP_IMPORT_ENABLED=true` dans `infra/server/app.env`.
 - **Points ouverts** : quotas Opendatasoft (anonyme), lien du DCE / profil acheteur dans `donnees`, volume par jour (BOAMP ne se filtre pas par CPV côté serveur : tous les avis de la période sont lus, le pré-filtre de chaque entreprise trie).
 - **Stratégie d'import** : celle de TED (ci-dessous) : depuis la dernière passe réussie moins un jour, upsert sur `(source='boamp', source_id=idweb)`.

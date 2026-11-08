@@ -358,7 +358,8 @@ Format : numéro, date, décision, raison, statut. Ajouter une entrée pour chaq
   - Chaque passe lit depuis le début de la dernière passe réussie moins un jour (14 jours la première fois). Le recouvrement est sans effet grâce à l'upsert. Un verrou Postgres (`pg_try_advisory_lock`) par source empêche deux passes simultanées. Chaque passe laisse une ligne `tender_imports` (lus, créés, mis à jour, rectifiés, ignorés, correspondances, erreur). Une passe en échec ne déplace pas le point de départ.
   - TED : recherche France + codes CPV de tous les métiers et de tous les profils (recherche hiérarchique côté TED) ; une annonce Pilao par procédure TED ; chaque avis de modification est un rectificatif sous son propre numéro, et devient l'annonce si l'avis d'origine est inconnu (`TenderIn.complete`).
   - `ingest` traite les avis du plus ancien au plus récent, et **une publication plus ancienne n'écrase jamais une plus récente**, rectificatifs compris : relire une période déjà lue ne fait jamais reculer une date limite.
-  - BOAMP : lecteur écrit d'après la documentation, import désactivé (`BOAMP_IMPORT_ENABLED=false`) jusqu'à la vérification depuis le serveur avec `import-tenders --source boamp --essai`, qui lit sans rien enregistrer.
+  - BOAMP : lecteur écrit d'après la documentation, puis corrigé d'après `import-tenders --source boamp --essai` lancé sur le serveur (l'hôte ne répond pas depuis la session de développement).
   - Commande `python -m app.cli import-tenders [--source ted|boamp] [--since AAAA-MM-JJ] [--essai] [--limit N]` pour une passe immédiate ou un rattrapage.
-- **Statut** : validé (TED) ; BOAMP en attente de la vérification depuis le serveur.
+  - BOAMP (vérifié depuis le serveur le 2026-11-08) : lecture d'un jour de parution après l'autre, en deux temps : une liste légère, puis l'avis complet (avec `donnees`, d'où viennent les CPV) seulement pour les avis encore ouverts, pas encore en base (ni comme annonce, ni comme rectificatif appliqué) et qui ne sont pas des attributions. Les attributions BOAMP ne sont donc pas gardées pour la V2 : trop nombreuses pour leur utilité actuelle.
+- **Statut** : validé.
 

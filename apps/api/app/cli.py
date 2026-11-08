@@ -123,7 +123,8 @@ def import_tenders(args: argparse.Namespace) -> int:
 
 def _sample(t: TenderIn) -> str:
     """One notice as read, for the server check of a reader (``--essai``)."""
-    deadline = f"{t.deadline_at:%d/%m/%Y %H:%M}" if t.deadline_at else "?"
+    when = t.deadline_at.astimezone(PARIS) if t.deadline_at else None
+    deadline = f"{when:%d/%m/%Y %H:%M}" if when else "?"
     return (
         f"  - {t.title[:90]}\n"
         f"    {t.buyer_name or 'acheteur ?'} · départements {', '.join(t.departments) or '?'}"

@@ -66,8 +66,8 @@ Ce fichier est le point d'entrée. Lis-le en entier au début de chaque session,
 
 ## 6. Phase en cours
 
-Phases 1 (socle) et 2 (mémoire, documents, export) faites ; Phase 3 (veille) faite : TED importé toutes les 2 h ; BOAMP écrit, à vérifier depuis le serveur avant de l'activer (ADR-036, `docs/10-roadmap-taches.md`).
-En attente : **Phase 0 — test des modèles d'IA** (clé OpenRouter, 3 vrais DCE + mémoires techniques + plan type envoyés par Abdraouf, à placer dans `samples/` — dossier **non versionné**, ajouté au `.gitignore`) et la vérification de BOAMP depuis le serveur (P1-INT-01).
+Phases 1 (socle) et 2 (mémoire, documents, export) faites ; Phase 3 (veille) faite : TED et BOAMP importés toutes les 2 h (ADR-036, `docs/10-roadmap-taches.md`).
+En attente : **Phase 0 — test des modèles d'IA** (clé OpenRouter, 3 vrais DCE + mémoires techniques + plan type envoyés par Abdraouf, à placer dans `samples/` — dossier **non versionné**, ajouté au `.gitignore`).
 
 ## 7. Commandes (à compléter quand le repo sera initialisé)
 
