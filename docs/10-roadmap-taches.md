@@ -66,7 +66,7 @@ Reste à faire :
 
 ## Phase 3 — Veille, score, alertes, tableau de bord (3 semaines)
 
-- [x] P3-01 Import BOAMP planifié + upsert + rectificatifs (US-2.1) — toutes les 2 h, lecture en deux temps (ADR-023, ADR-036) ; reste à voir un vrai rectificatif BOAMP (`annonce_lie`)
+- [x] P3-01 Import BOAMP planifié + upsert + rectificatifs (US-2.1) — toutes les 2 h, lecture en deux temps (ADR-023, ADR-036) ; première passe sur le serveur : 3 396 avis, 28 rectificatifs appliqués
 - [x] P3-02 Import TED filtré France, toutes les 2 h (ADR-036)
 - [x] P3-INT-02 Vérifier la syntaxe de requête TED (docs/07 §2, 2026-11-08)
 - [x] P3-03 Pré-filtre déterministe + score IA (US-2.2)
