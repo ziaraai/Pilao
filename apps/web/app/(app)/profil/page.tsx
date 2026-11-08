@@ -133,7 +133,7 @@ function ProfileTabs() {
       <div
         role="tablist"
         aria-label="Parties du profil"
-        className="-mx-4 flex gap-1 overflow-x-auto border-b border-slate-200 px-4 lg:mx-0 lg:px-0"
+        className="-mx-4 flex gap-1 overflow-x-auto overflow-y-hidden border-b border-slate-200 px-4 lg:mx-0 lg:px-0"
       >
         {TABS.map((t, i) => {
           const selected = t.id === current;
