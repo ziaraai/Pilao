@@ -50,7 +50,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
 
   return (
     <AuthContext.Provider value={{ me: me.data, refresh: me.reload }}>
-      <div className="min-h-screen bg-slate-50 lg:flex">
+      <div className="min-h-screen bg-slate-100 lg:flex">
         <Sidebar orgName={me.data.org.name} onLogout={logout} />
         <div className="flex min-w-0 flex-1 flex-col">
           <DeletionBanner />

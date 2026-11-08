@@ -147,9 +147,10 @@ E-mail à J-30 et J-7, et bandeau dans l'application. Les documents expirés son
 
 **US-5.3 Tableau de bord**
 Pour un chef d'entreprise : d'abord ce qu'il y a à faire, ensuite les occasions, puis le suivi.
+- CA0 En haut, quatre compteurs cliquables : urgences, nouvelles annonces, dossiers en cours, attestations à renouveler. Chaque bloc a sa couleur, la même que son compteur (ADR-038).
 - CA1 « À faire » : une liste triée par urgence, avec un bouton par ligne. Rouge : date limite à 3 jours ou moins, attestation expirée ou au nom d'un autre SIREN. Orange : date limite à 10 jours ou moins, attestation qui expire dans les 30 jours. Gris : prochaine étape d'un dossier, attestation à vérifier, date limite passée, résultat à indiquer 30 jours après la date limite. 6 lignes, puis « Voir tout ».
 - CA2 « Pour bien démarrer » (tant que tout n'est pas fait) : profil complet à 80 %, attestations recommandées présentes, un ancien mémoire déposé, un premier dossier. Chaque étape se coche toute seule.
-- CA3 Nouvelles annonces : les 3 meilleures de la semaine (score, acheteur, date limite). Tant qu'aucune annonce n'a jamais été chargée, le bloc le dit au lieu d'une liste vide.
+- CA3 Nouvelles annonces : les 3 meilleures de la semaine (score, acheteur, département, montant, source, date limite), avec « Voir » et « Suivre ». Tant qu'aucune annonce n'a jamais été chargée, le bloc le dit au lieu d'une liste vide.
 - CA4 Dossiers en cours (en préparation, puis en attente du résultat) : J-x, étapes DCE › Analyse › Mémoire › Déposé, prochaine étape calculée. Le statut se change dans le dossier.
 - CA5 Résultats (dès la première offre déposée) : offres déposées, gagnées, taux de réussite et montant des marchés gagnés une fois un résultat connu, temps gagné.
 

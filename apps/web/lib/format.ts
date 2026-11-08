@@ -61,6 +61,21 @@ export function formatDateTime(iso: string | null | undefined): string {
   }).format(new Date(iso));
 }
 
+/** "24/11/2026 12:00", Paris time: compact, as on the public tender platforms. */
+export function formatDateTimeShort(iso: string | null | undefined): string {
+  if (!iso) return "—";
+  return new Intl.DateTimeFormat("fr-FR", {
+    day: "2-digit",
+    month: "2-digit",
+    year: "numeric",
+    hour: "2-digit",
+    minute: "2-digit",
+    timeZone: PARIS,
+  })
+    .format(new Date(iso))
+    .replace(",", "");
+}
+
 export function formatDate(iso: string | null | undefined): string {
   if (!iso) return "—";
   // A plain date ("2027-04-15") is a calendar day: never shift it through a time zone.

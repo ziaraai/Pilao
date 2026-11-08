@@ -55,7 +55,7 @@ let current; // the page, for a screenshot when a step fails
   const email = `e2e${n}@example.fr`;
   const siret = luhnSiret(`8${String(n).padStart(6, "0")}123456`.slice(0, 13));
 
-  // 1. Sign-up (registry is unreachable from this sandbox: manual entry path)
+  // 1. Sign-up (the registry points to a closed port, README: manual entry path)
   await page.goto(`${WEB}/inscription`);
   await page.getByLabel("SIRET de votre entreprise").fill(siret);
   await page.getByLabel("Raison sociale").click();
@@ -172,7 +172,7 @@ let current; // the page, for a screenshot when a step fails
   await page.screenshot({ path: `${S}/01-profil.png`, fullPage: true });
 
   // 5. Vault: upload, AI reading not configured -> manual confirmation
-  await page.getByRole("link", { name: "Coffre-fort" }).click();
+  await page.getByRole("link", { name: "Coffre-fort", exact: true }).click();
   await page.waitForURL(`${WEB}/coffre-fort`);
   await page.reload(); // hidden routes stay in the DOM (Activity): start from a clean page
   await page.getByLabel("Type de document").selectOption("urssaf_vigilance");
@@ -188,7 +188,7 @@ let current; // the page, for a screenshot when a step fails
   step("vault: manual confirmation after unavailable AI reading");
 
   // 6. Bid + DCE deposit + processing + AI analysis (fake OpenAI-compatible model)
-  await page.getByRole("link", { name: "Dossiers" }).click();
+  await page.getByRole("link", { name: "Dossiers", exact: true }).click();
   await page.waitForURL(`${WEB}/dossiers`);
   await page.reload(); // hidden routes stay in the DOM (Activity): start from a clean page
   await page.getByLabel("Intitulé").fill("Nettoyage mairie E2E");
@@ -410,7 +410,9 @@ let current; // the page, for a screenshot when a step fails
   step("bid pre-filled from the DCE: " + subtitle);
 
   // 7. Knowledge base: upload, indexing, search
-  await page.getByRole("link", { name: "Base documentaire" }).click();
+  await page
+    .getByRole("link", { name: "Base documentaire", exact: true })
+    .click();
   await page.waitForURL(`${WEB}/documents`);
   await page.reload(); // hidden routes stay in the DOM (Activity): start from a clean page
   await page.setInputFiles("#kb-upload", `${S}/memoire_2025.docx`);

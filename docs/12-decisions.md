@@ -372,3 +372,14 @@ Format : numéro, date, décision, raison, statut. Ajouter une entrée pour chaq
   - Le plan modèle garde les chapitres de premier niveau, **sans leur numéro** : les chapitres sont réordonnés selon les critères du RC, un ancien numéro serait faux. Un chapitre vu deux fois (sommaire, puis titre dans le corps) compte une fois.
 - **Statut** : validé.
 
+
+## ADR-038 — Tableau de bord en couleurs claires, une couleur par bloc
+- **Date** : 2026-11-08
+- **Contexte** : retour du pilote : l'écran moderne « tout d'une couleur » déroute des utilisateurs habitués aux plateformes publiques (profils acheteurs, BOAMP), où chaque partie a sa couleur, ses lignes de séparation et des boutons bien visibles. Deux maquettes montrées ; choisie : « bandeaux de couleur », éclaircie (la première version était jugée trop foncée).
+- **Décision** :
+  - En haut, quatre compteurs cliquables : urgences (→ À faire), nouvelles annonces, dossiers en cours, attestations à renouveler. Un compteur d'alerte à zéro reste blanc.
+  - Chaque bloc a un bandeau de titre teinté et un trait de couleur, la même couleur que son compteur : rouge À faire, vert Annonces, bleu Dossiers, ambre Coffre-fort ; vert Pilao pour « Pour bien démarrer », violet pour les résultats.
+  - Teintes claires et texte foncé (contraste suffisant), jamais de grand aplat sombre ; boutons d'action pleins bleu marine.
+  - Listes avec une ligne de titres de colonnes, un trait entre chaque ligne et une ligne sur deux grisée ; sur téléphone, les lignes s'empilent.
+  - Barre de gauche bleu clair, page actuelle en vert Pilao. Dates courtes « 24/11/2026 12:00 », comme sur les plateformes publiques.
+- **Statut** : validé.

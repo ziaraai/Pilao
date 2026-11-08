@@ -5,6 +5,8 @@
   --foreground: #011844;
   --brand-navy: #011844;
   --brand-green: #0bdea5;
+  --sidebar: #e6eef8; /* light blue: the menu stands out without a dark block */
+  --sidebar-line: #c9d6e6;
 }
 
 @theme inline {
@@ -12,6 +14,8 @@
   --color-foreground: var(--foreground);
   --color-brand-navy: var(--brand-navy);
   --color-brand-green: var(--brand-green);
+  --color-sidebar: var(--sidebar);
+  --color-sidebar-line: var(--sidebar-line);
   --font-sans: var(--font-geist-sans);
   --font-mono: var(--font-geist-mono);
 }

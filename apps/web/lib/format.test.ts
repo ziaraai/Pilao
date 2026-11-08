@@ -7,6 +7,7 @@ import {
   centsToInput,
   formatCents,
   formatDate,
+  formatDateTimeShort,
   formatDuration,
   minutesToHours,
   parseHours,
@@ -36,6 +37,15 @@ describe("money", () => {
 describe("dates in Paris time", () => {
   it("keeps calendar days as they are", () => {
     expect(formatDate("2027-04-15")).toBe("15 avril 2027");
+  });
+  it("writes a short date and time, as the public platforms do", () => {
+    expect(formatDateTimeShort("2026-11-24T11:00:00Z")).toBe(
+      "24/11/2026 12:00",
+    );
+    expect(formatDateTimeShort("2027-07-01T07:30:00Z")).toBe(
+      "01/07/2027 09:30",
+    );
+    expect(formatDateTimeShort(null)).toBe("—");
   });
   it("round-trips datetime-local values in winter and summer", () => {
     for (const local of ["2026-12-15T12:00", "2027-07-01T09:30"]) {
