@@ -310,3 +310,48 @@ def test_reading_again_after_adding_everything_has_no_misleading_note(
     again = read(c, queue)
     assert again["items"] == []
     assert again["job"]["notes"] == []  # the document has lines: all already decided
+
+
+def test_an_unexpected_failure_ends_the_reading(
+    make_client: Factory,
+    outbox: Outbox,
+    queue: FakeQueue,
+    model: FakeModel,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    from app.services import profile_prefill
+
+    def broken(*_: Any) -> None:
+        raise RuntimeError("disk unplugged")
+
+    c = signed_in_client(make_client, outbox)
+    ready_doc(c, queue, MEMOIR)
+    monkeypatch.setattr(profile_prefill, "document_blocks", broken)
+    assert c.post("/profile/suggestions/read").status_code == 202
+    with pytest.raises(RuntimeError):
+        queue.drain_profile_prefill()  # RQ logs it and may retry
+    job = c.get("/profile/suggestions").json()["job"]
+    assert job["status"] == "error"
+    assert job["error"] == "La lecture s'est interrompue. Relancez-la."
+    assert c.post("/profile/suggestions/read").status_code == 202  # not blocked
+
+
+def test_a_stuck_reading_is_reported_and_can_be_restarted(
+    make_client: Factory, outbox: Outbox, queue: FakeQueue, db: Session, model: FakeModel
+) -> None:
+    c = signed_in_client(make_client, outbox)
+    ready_doc(c, queue, MEMOIR)
+    org = db.scalars(select(Organization)).one()
+    db.add(
+        Job(
+            kind="profile_prefill",
+            ref_id=org.id,
+            org_id=org.id,
+            status="running",
+            created_at=datetime.now(UTC) - timedelta(minutes=40),
+        )
+    )
+    db.commit()
+    job = c.get("/profile/suggestions").json()["job"]
+    assert job["status"] == "error"  # the worker died: the screen must not wait forever
+    assert job["error"] == "La lecture s'est interrompue. Relancez-la."

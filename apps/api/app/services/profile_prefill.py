@@ -70,6 +70,7 @@ JOB_KIND = "profile_prefill"
 STALE = timedelta(minutes=30)  # a reading older than this no longer blocks a new one
 EMPTY_NOTE = "{title} : aucun passage sur vos moyens ou vos références."
 FAILED_NOTE = "{title} : lecture impossible, réessayez plus tard."
+INTERRUPTED = "La lecture s'est interrompue. Relancez-la."
 TOPICS = (
     "moyen",
     "personnel",
@@ -330,12 +331,26 @@ def run_profile_prefill(db: Session, org_id: uuid.UUID, storage: ObjectStorage) 
         set_job_status(db, JOB_KIND, org_id, "error", str(exc))
         db.commit()
         return
+    except Exception:  # never leave the screen waiting on a reading that died
+        db.rollback()
+        set_job_status(db, JOB_KIND, org_id, "error", INTERRUPTED)
+        db.commit()
+        raise
     set_job_status(db, JOB_KIND, org_id, "done", "\n".join(notes) or None)
     db.commit()
 
 
 def job_out(job: Job) -> ReadJobOut:
     done = job.status == "done"
+    if job.status in ("pending", "running") and job.created_at < datetime.now(UTC) - STALE:
+        # the worker died without a word (out of memory, redeploy): say so, allow a new one
+        return ReadJobOut(
+            status="error",
+            progress=job.progress,
+            error=INTERRUPTED,
+            notes=[],
+            finished_at=None,
+        )
     return ReadJobOut(
         status=job.status,
         progress=job.progress,
