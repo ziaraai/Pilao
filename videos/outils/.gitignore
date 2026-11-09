@@ -1,0 +1,12 @@
+# Generated while filming: demo documents, ids, recordings, voices, fonts and logos copied by prepare.sh
+docs/
+state.json
+logs/
+final/
+out/
+preview/
+voice/audio/
+fonts/
+cards/*.png
+cards/*.woff2
+__pycache__/
