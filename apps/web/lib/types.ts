@@ -501,3 +501,33 @@ export type Invitation = {
   org_name: string;
   role: string;
 };
+
+// US-1.6: profile lines proposed from the company's documents.
+export type SuggestionKind =
+  "human_resource" | "equipment" | "certification" | "reference";
+export type ProfileSuggestion = {
+  id: string;
+  kind: SuggestionKind;
+  data: Record<string, string | number | null>;
+  missing: string[];
+  document_title: string;
+  page: number | null;
+  heading: string | null;
+  excerpt: string;
+};
+export type ReadJob = {
+  status: "pending" | "running" | "done" | "error";
+  progress: number;
+  error: string | null;
+  notes: string[];
+  finished_at: string | null;
+};
+export type ProfileSuggestions = {
+  job: ReadJob | null;
+  documents_ready: number;
+  items: ProfileSuggestion[];
+};
+export type AcceptResult = {
+  created: number;
+  errors: { id: string; message: string }[];
+};

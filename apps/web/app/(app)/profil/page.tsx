@@ -1,10 +1,11 @@
 "use client";
 
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
-import { Suspense, useRef } from "react";
+import { Suspense, useRef, useState } from "react";
 
 import { CompanyIdentity } from "@/components/profile/company-identity";
 import { DataRights } from "@/components/profile/data-rights";
+import { ProfilePrefill } from "@/components/profile/prefill";
 import { Members } from "@/components/profile/members";
 import { References } from "@/components/profile/references";
 import { SimpleList } from "@/components/profile/simple-list";
@@ -56,6 +57,7 @@ function ProfileTabs() {
   const trades = useApi<Trade[]>("/profile/trades");
   const completeness = useApi<Completeness>("/profile/completeness");
   const tabs = useRef<(HTMLButtonElement | null)[]>([]);
+  const [version, setVersion] = useState(0); // lines added from the documents: reload the lists
 
   const asked = params.get("onglet");
   const current: TabId = TABS.some((t) => t.id === asked)
@@ -132,6 +134,13 @@ function ProfileTabs() {
         </p>
       </Card>
 
+      <ProfilePrefill
+        onAdded={() => {
+          completeness.reload();
+          setVersion((v) => v + 1);
+        }}
+      />
+
       <div
         role="tablist"
         aria-label="Parties du profil"
@@ -171,6 +180,7 @@ function ProfileTabs() {
       </div>
 
       <div
+        key={`${current}-${version}`}
         role="tabpanel"
         id={`panel-${current}`}
         aria-labelledby={`tab-${current}`}
