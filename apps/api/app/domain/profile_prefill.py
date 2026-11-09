@@ -158,9 +158,11 @@ def clean(kind: str, raw: dict[str, Any], excerpt: str) -> Clean | None:
             "client_type": _client_type(raw.get("client_type")),
             "title": title if _written(title, seen) else None,
             "location": location if _written(location, seen) else None,
-            "department": department
-            if department and _DEPARTMENT.match(department) and _norm(department) in seen
-            else None,
+            "department": (
+                department
+                if department and _DEPARTMENT.match(department) and _norm(department) in seen
+                else None
+            ),
             "amount_cents": euros * 100 if euros is not None else None,
             "year": _int(raw.get("year"), 1950, 2100, nums),
             "duration_months": _int(raw.get("duration_months"), 0, 1200, nums),
