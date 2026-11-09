@@ -12,7 +12,7 @@ from sqlalchemy.orm import Session
 
 from app.ai import llm
 from app.core.config import get_settings
-from app.db.models import AiCall, Job, Organization, ProfileSuggestion
+from app.db.models import AiCall, AuditLog, Job, Organization, ProfileSuggestion
 from tests.api.helpers import signed_in_client
 from tests.api.test_knowledge import ready_doc
 from tests.conftest import FakeQueue, Outbox
@@ -217,3 +217,84 @@ def test_another_company_sees_nothing(
     b = signed_in_client(make_client, outbox, n=2)
     body = b.get("/profile/suggestions").json()
     assert body == {"job": None, "documents_ready": 0, "items": []}
+
+
+def accept(c: TestClient, *items: tuple[dict[str, Any], dict[str, Any]]) -> dict[str, Any]:
+    res = c.post(
+        "/profile/suggestions/accept",
+        json={"items": [{"id": s["id"], "data": {**s["data"], **edit}} for s, edit in items]},
+    )
+    assert res.status_code == 200, res.text
+    body: dict[str, Any] = res.json()
+    return body
+
+
+def test_accepting_adds_to_the_profile(
+    make_client: Factory, outbox: Outbox, queue: FakeQueue, db: Session, model: FakeModel
+) -> None:
+    c = signed_in_client(make_client, outbox)
+    ready_doc(c, queue, MEMOIR)
+    items = by_name(read(c, queue))
+    before = c.get("/profile/completeness").json()["pct"]
+    mercialys = {"client_type": "private", "title": "Nettoyage de la galerie", "year": 2016}
+    result = accept(c, (items["Auto laveuse Tenante 5400"], {}), (items["MERCIALYS"], mercialys))
+    assert result == {"created": 2, "errors": []}
+    equipment = c.get("/profile/equipment").json()
+    assert [(e["name"], e["quantity"]) for e in equipment] == [("Auto laveuse Tenante 5400", 6)]
+    [ref] = c.get("/profile/references").json()
+    assert (ref["client_name"], ref["title"], ref["year"]) == (
+        "MERCIALYS",
+        "Nettoyage de la galerie",
+        2016,
+    )
+    logs = db.scalars(select(AuditLog).where(AuditLog.action == "create")).all()
+    assert {log.entity for log in logs} >= {"equipment", "company_references"}
+    assert all("from_suggestion" in log.meta for log in logs if log.entity == "equipment")
+    assert c.get("/profile/completeness").json()["pct"] > before
+    left = by_name(c.get("/profile/suggestions").json())
+    assert set(left) == {"Agent de service", "Mono-brosses Nilfisk"}
+
+
+def test_an_incomplete_line_is_refused_and_the_others_pass(
+    make_client: Factory, outbox: Outbox, queue: FakeQueue, model: FakeModel
+) -> None:
+    c = signed_in_client(make_client, outbox)
+    ready_doc(c, queue, MEMOIR)
+    items = by_name(read(c, queue))
+    agent = items["Agent de service"]
+    result = accept(c, (agent, {}), (items["Mono-brosses Nilfisk"], {}))
+    assert result["created"] == 1
+    assert result["errors"] == [{"id": agent["id"], "message": "À compléter : Nombre"}]
+    assert "Agent de service" in by_name(c.get("/profile/suggestions").json())  # still pending
+    assert accept(c, (agent, {"count": 8}))["created"] == 1
+    [hr] = c.get("/profile/human-resources").json()
+    assert (hr["qualification"], hr["count"]) == ("Agent de service", 8)
+
+
+def test_accepting_twice_creates_one_line(
+    make_client: Factory, outbox: Outbox, queue: FakeQueue, db: Session, model: FakeModel
+) -> None:
+    c = signed_in_client(make_client, outbox)
+    ready_doc(c, queue, MEMOIR)
+    laveuse = by_name(read(c, queue))["Auto laveuse Tenante 5400"]
+    assert accept(c, (laveuse, {}))["created"] == 1
+    again = accept(c, (laveuse, {}))
+    assert again == {
+        "created": 0,
+        "errors": [{"id": laveuse["id"], "message": "Proposition introuvable ou déjà traitée."}],
+    }
+    assert len(c.get("/profile/equipment").json()) == 1
+
+
+def test_dismiss(make_client: Factory, outbox: Outbox, queue: FakeQueue, model: FakeModel) -> None:
+    a = signed_in_client(make_client, outbox)
+    ready_doc(a, queue, MEMOIR)
+    mercialys = by_name(read(a, queue))["MERCIALYS"]
+    b = signed_in_client(make_client, outbox, n=2)
+    assert b.post(f"/profile/suggestions/{mercialys['id']}/dismiss").status_code == 404
+    other = accept(b, (mercialys, {"client_type": "private", "title": "Galerie"}))
+    assert other["created"] == 0 and b.get("/profile/references").json() == []
+    assert a.post(f"/profile/suggestions/{mercialys['id']}/dismiss").status_code == 204
+    assert a.post(f"/profile/suggestions/{mercialys['id']}/dismiss").status_code == 404
+    assert "MERCIALYS" not in by_name(a.get("/profile/suggestions").json())
+    assert "MERCIALYS" not in by_name(read(a, queue))  # not proposed again

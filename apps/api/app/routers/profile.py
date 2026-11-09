@@ -29,7 +29,7 @@ from app.schemas.profile import (
     ReferenceOut,
     TradeOut,
 )
-from app.schemas.profile_prefill import ReadJobOut, SuggestionsOut
+from app.schemas.profile_prefill import AcceptIn, AcceptOut, ReadJobOut, SuggestionsOut
 from app.services import profile as svc
 from app.services import profile_prefill as prefill
 from app.services import reference_import as xl
@@ -179,6 +179,18 @@ def read_documents(
     """US-1.6: read the knowledge base in the background to propose profile lines."""
     job = prefill.request_read(db, ctx.org, queue)
     return prefill.job_out(job)
+
+
+@router.post("/suggestions/accept")
+def accept_suggestions(data: AcceptIn, ctx: CurrentAuth, db: ScopedDb) -> AcceptOut:
+    """US-1.6: the lines the user checked (and completed) join the profile."""
+    return prefill.accept(db, ctx.org, ctx.user.id, data.items)
+
+
+@router.post("/suggestions/{suggestion_id}/dismiss", status_code=204)
+def dismiss_suggestion(suggestion_id: uuid.UUID, db: ScopedDb) -> Response:
+    prefill.dismiss(db, suggestion_id)
+    return Response(status_code=204)
 
 
 add_crud("human-resources", HumanResource, HumanResourceIn, HumanResourceOut)

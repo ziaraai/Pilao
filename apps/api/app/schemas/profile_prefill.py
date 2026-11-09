@@ -79,3 +79,22 @@ class SuggestionsOut(BaseModel):
     job: ReadJobOut | None
     documents_ready: int
     items: list[SuggestionOut]
+
+
+class AcceptItem(BaseModel):
+    id: uuid.UUID
+    data: dict[str, Any]  # the line as the user completed it
+
+
+class AcceptIn(BaseModel):
+    items: list[AcceptItem] = Field(min_length=1, max_length=200)
+
+
+class AcceptErrorOut(BaseModel):
+    id: uuid.UUID
+    message: str
+
+
+class AcceptOut(BaseModel):
+    created: int
+    errors: list[AcceptErrorOut]

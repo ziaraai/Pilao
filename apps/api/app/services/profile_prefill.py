@@ -12,6 +12,7 @@ import uuid
 from datetime import UTC, datetime, timedelta
 from typing import Any
 
+from pydantic import BaseModel, ValidationError
 from sqlalchemy import delete, func, select
 from sqlalchemy.orm import Session
 
@@ -19,6 +20,7 @@ from app.ai import llm
 from app.ai.prompts import load_prompt
 from app.core.errors import ApiError
 from app.core.tenancy import scope_session
+from app.db.base import Base
 from app.db.models import (
     Certification,
     CompanyReference,
@@ -42,12 +44,17 @@ from app.domain.profile_prefill import (
     key_of,
     locate,
 )
+from app.schemas.profile import CertificationIn, EquipmentIn, HumanResourceIn, ReferenceIn
 from app.schemas.profile_prefill import (
+    AcceptErrorOut,
+    AcceptItem,
+    AcceptOut,
     ProfileExtraction,
     ReadJobOut,
     SuggestionOut,
     SuggestionsOut,
 )
+from app.services import profile as profile_svc
 from app.services.jobs import set_job_status
 from app.services.knowledge import document_blocks
 from app.storage.objects import ObjectStorage
@@ -369,3 +376,96 @@ def list_suggestions(db: Session, org: Organization) -> SuggestionsOut:
             for s, title in ordered
         ],
     )
+
+
+# What a proposal becomes once accepted: the same checks as a line typed by hand.
+MODELS: dict[str, tuple[type[BaseModel], type[Base]]] = {
+    "human_resource": (HumanResourceIn, HumanResource),
+    "equipment": (EquipmentIn, Equipment),
+    "certification": (CertificationIn, Certification),
+    "reference": (ReferenceIn, CompanyReference),
+}
+LABELS = {
+    "qualification": "Qualification",
+    "count": "Nombre",
+    "description": "Précisions",
+    "name": "Nom",
+    "category": "Catégorie",
+    "quantity": "Quantité",
+    "number": "Numéro",
+    "valid_until": "Valable jusqu'au",
+    "client_name": "Client",
+    "client_type": "Type de client",
+    "title": "Objet",
+    "location": "Lieu",
+    "year": "Année",
+    "amount_cents": "Montant",
+    "department": "Département",
+    "duration_months": "Durée",
+}
+GONE = "Proposition introuvable ou déjà traitée."
+
+
+def _to_complete(exc: ValidationError) -> str:
+    labels: list[str] = []
+    for err in exc.errors():
+        field = str(err["loc"][0]) if err["loc"] else ""
+        label = LABELS.get(field, field)
+        if label not in labels:
+            labels.append(label)
+    return "À compléter : " + ", ".join(labels)
+
+
+def _file_ids(data: BaseModel) -> list[uuid.UUID | None]:
+    ids: list[uuid.UUID | None] = []
+    for field in ("spec_file_id", "file_id"):
+        ids.append(getattr(data, field, None))
+    ids.extend(getattr(data, "photo_file_ids", []))
+    return ids
+
+
+def accept(
+    db: Session, org: Organization, user_id: uuid.UUID, items: list[AcceptItem]
+) -> AcceptOut:
+    """Add the accepted lines to the profile; a line that fails the profile's checks stays
+    proposed with its message, the others pass."""
+    created = 0
+    errors: list[AcceptErrorOut] = []
+    for item in items:
+        suggestion = db.get(ProfileSuggestion, item.id, with_for_update=True)
+        if suggestion is None or suggestion.status != "pending":
+            errors.append(AcceptErrorOut(id=item.id, message=GONE))
+            continue
+        schema, model = MODELS[suggestion.kind]
+        try:
+            data = schema.model_validate(item.data)
+        except ValidationError as exc:
+            errors.append(AcceptErrorOut(id=item.id, message=_to_complete(exc)))
+            continue
+        profile_svc.ensure_files_belong_to_org(db, *_file_ids(data))
+        row = model(**data.model_dump())
+        db.add(row)
+        db.flush()
+        profile_svc.audit(
+            db,
+            user_id,
+            "create",
+            model.__tablename__,
+            row.id,  # type: ignore[attr-defined]
+            {"from_suggestion": str(suggestion.id)},
+        )
+        suggestion.status = "accepted"
+        suggestion.data = data.model_dump(mode="json")
+        created += 1
+    if created:
+        profile_svc.refresh_completeness(db, org)
+    db.commit()
+    return AcceptOut(created=created, errors=errors)
+
+
+def dismiss(db: Session, suggestion_id: uuid.UUID) -> None:
+    suggestion = db.get(ProfileSuggestion, suggestion_id, with_for_update=True)
+    if suggestion is None or suggestion.status != "pending":
+        raise ApiError(404, "not_found", GONE)
+    suggestion.status = "dismissed"
+    db.commit()
