@@ -2,9 +2,16 @@
 
 from app.ai import llm
 from app.ai.prompts import load_prompt
-from app.domain.profile_prefill import Passage
+from app.documents.extract import Block
+from app.domain.profile_prefill import Located, Passage, locate
 from app.schemas.profile_prefill import ProfileExtraction
-from app.services.profile_prefill import PROMPT, TASK, render_passages, select_passages
+from app.services.profile_prefill import (
+    PROMPT,
+    TASK,
+    blocks_to_passages,
+    render_passages,
+    select_passages,
+)
 
 
 def test_prompt_rules() -> None:
@@ -63,3 +70,19 @@ def test_extraction_schema_is_lenient() -> None:
     )
     assert data.equipment[0].quantity == 14
     assert data.human_resources == [] and data.references == [] and data.certifications == []
+
+
+def test_short_lines_read_as_headings_stay_in_the_text() -> None:
+    """The memoir's organigram: consecutive short lines are taken for headings."""
+    passages = blocks_to_passages(
+        [
+            Block("heading", "ORGANIGRAMME", 2),
+            Block("heading", "AGENTS DE SERVICES", 2),
+            Block("paragraph", "Nos clients : MERCIALYS", 2),
+        ]
+    )
+    text = render_passages(passages)
+    assert text.count("ORGANIGRAMME") == 1 and text.count("AGENTS DE SERVICES") == 1
+    assert "Nos clients : MERCIALYS" in text
+    assert locate("AGENTS DE SERVICES", passages) == Located(2, "AGENTS DE SERVICES")
+    assert passages[2].heading == "AGENTS DE SERVICES"

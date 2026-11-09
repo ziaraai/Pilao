@@ -14,6 +14,7 @@ ANALYSIS_JOB_TIMEOUT_SECONDS = 1800
 DRAFT_JOB_TIMEOUT_SECONDS = 900
 INDEX_JOB_TIMEOUT_SECONDS = 900
 TENDER_JOB_TIMEOUT_SECONDS = 1800
+PREFILL_JOB_TIMEOUT_SECONDS = 900
 
 
 class JobQueue(Protocol):
@@ -28,6 +29,7 @@ class JobQueue(Protocol):
     def enqueue_rematch_org(self, org_id: uuid.UUID) -> None: ...
     def enqueue_score_tenders(self, org_id: uuid.UUID) -> None: ...
     def enqueue_org_export(self, request_id: uuid.UUID) -> None: ...
+    def enqueue_profile_prefill(self, org_id: uuid.UUID) -> None: ...
 
 
 class RqJobQueue:
@@ -144,6 +146,17 @@ class RqJobQueue:
             result_ttl=3600,
             failure_ttl=7 * 24 * 3600,
             retry=Retry(max=2, interval=[60, 300]),
+        )
+
+    def enqueue_profile_prefill(self, org_id: uuid.UUID) -> None:
+        # One model call per document of the knowledge base (US-1.6).
+        self._q.enqueue(
+            "app.workers.jobs.profile_prefill_job",
+            str(org_id),
+            job_timeout=PREFILL_JOB_TIMEOUT_SECONDS,
+            result_ttl=3600,
+            failure_ttl=7 * 24 * 3600,
+            retry=Retry(max=1, interval=[120]),
         )
 
 

@@ -17,7 +17,7 @@ from openpyxl import Workbook
 from app.core.config import get_settings
 from app.documents.pages import extract_pages
 from app.domain.filetypes import DOC, ODS, ODT, XLS, ZIP, detect
-from app.services.knowledge import _blocks
+from app.services.knowledge import document_blocks
 from tests.api.helpers import signed_in_client
 from tests.api.test_bids import deposit as deposit_dce
 from tests.api.test_bids import new_bid, zipped
@@ -112,9 +112,9 @@ def test_a_dce_piece_keeps_its_pages_and_a_sheet_its_rows(files: dict[str, bytes
 
 
 def test_a_knowledge_document_keeps_its_headings(files: dict[str, bytes]) -> None:
-    blocks = _blocks(io.BytesIO(files["odt"]), ODT.mime)
+    blocks = document_blocks(io.BytesIO(files["odt"]), ODT.mime)
     assert ("heading", "Méthodologie") in [(b.kind, b.text) for b in blocks]  # read as a DOCX
-    assert any("vitrerie" in b.text for b in _blocks(io.BytesIO(files["doc"]), DOC.mime))
+    assert any("vitrerie" in b.text for b in document_blocks(io.BytesIO(files["doc"]), DOC.mime))
 
 
 def test_without_libreoffice_the_piece_says_why(

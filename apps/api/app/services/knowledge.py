@@ -40,7 +40,7 @@ JOB_KIND = "index_knowledge_document"
 ALLOWED_MIMES = frozenset({PDF.mime, DOCX.mime, ODT.mime, DOC.mime})
 
 
-def _blocks(fileobj: BinaryIO, mime: str) -> list[Block]:
+def document_blocks(fileobj: BinaryIO, mime: str) -> list[Block]:
     """PDF and DOCX directly; ODT and DOC through a DOCX, which keeps the headings."""
     if mime == PDF.mime:
         return extract_pdf(fileobj)
@@ -198,7 +198,7 @@ def run_index_document(
     try:
         fileobj = storage.get(record.storage_key)
         try:
-            blocks = _blocks(fileobj, record.mime)
+            blocks = document_blocks(fileobj, record.mime)
         finally:
             fileobj.close()
         chunks = chunk_blocks(blocks)

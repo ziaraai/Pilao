@@ -170,6 +170,9 @@ class InlineQueue:
     def enqueue_org_export(self, request_id: uuid.UUID) -> None:
         pass
 
+    def enqueue_profile_prefill(self, org_id: uuid.UUID) -> None:
+        pass  # the model comparison does not pre-fill profiles
+
     def drain(self) -> None:
         embedder = get_embedder()
         while self.jobs:

@@ -16,6 +16,7 @@ from app.services.exports import run_export
 from app.services.knowledge import run_index_document
 from app.services.memoir_drafting import run_conformity, run_draft_section
 from app.services.org_data import run_org_export
+from app.services.profile_prefill import run_profile_prefill
 from app.services.tender_import import run_all as import_tenders
 from app.services.tenders import match_tenders, rematch_org, score_org
 from app.services.vault import run_read_document
@@ -97,3 +98,8 @@ def daily_alerts_job() -> None:
 def org_export_job(request_id: str) -> None:
     with get_sessionmaker()() as db:
         run_org_export(db, uuid.UUID(request_id), get_storage())
+
+
+def profile_prefill_job(org_id: str) -> None:
+    with get_sessionmaker()() as db:
+        run_profile_prefill(db, uuid.UUID(org_id), get_storage())

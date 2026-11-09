@@ -1,5 +1,9 @@
 """Pre-filling the profile: what the model answers, and what the API exchanges."""
 
+import uuid
+from datetime import datetime
+from typing import Any
+
 from pydantic import BaseModel, ConfigDict, Field
 
 
@@ -48,3 +52,30 @@ class ProfileExtraction(BaseModel):
     equipment: list[ExtractedEquipment] = Field(default_factory=list)
     certifications: list[ExtractedCertification] = Field(default_factory=list)
     references: list[ExtractedReference] = Field(default_factory=list)
+
+
+class ReadJobOut(BaseModel):
+    """The last reading of the documents. ``notes``: the documents it could not use."""
+
+    status: str
+    progress: int
+    error: str | None
+    notes: list[str]
+    finished_at: datetime | None
+
+
+class SuggestionOut(BaseModel):
+    id: uuid.UUID
+    kind: str
+    data: dict[str, Any]
+    missing: list[str]
+    document_title: str
+    page: int | None
+    heading: str | None
+    excerpt: str
+
+
+class SuggestionsOut(BaseModel):
+    job: ReadJobOut | None
+    documents_ready: int
+    items: list[SuggestionOut]

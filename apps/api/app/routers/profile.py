@@ -29,7 +29,9 @@ from app.schemas.profile import (
     ReferenceOut,
     TradeOut,
 )
+from app.schemas.profile_prefill import ReadJobOut, SuggestionsOut
 from app.services import profile as svc
+from app.services import profile_prefill as prefill
 from app.services import reference_import as xl
 from app.workers.queue import JobQueue, get_job_queue
 
@@ -160,6 +162,23 @@ def add_crud(
         svc.refresh_completeness(db, ctx.org)
         db.commit()
         return Response(status_code=204)
+
+
+@router.get("/suggestions")
+def get_suggestions(ctx: CurrentAuth, db: ScopedDb) -> SuggestionsOut:
+    """US-1.6: the last reading of the documents and the lines it proposes."""
+    return prefill.list_suggestions(db, ctx.org)
+
+
+@router.post("/suggestions/read", status_code=202)
+def read_documents(
+    ctx: CurrentAuth,
+    db: ScopedDb,
+    queue: Annotated[JobQueue, Depends(get_job_queue)],
+) -> ReadJobOut:
+    """US-1.6: read the knowledge base in the background to propose profile lines."""
+    job = prefill.request_read(db, ctx.org, queue)
+    return prefill.job_out(job)
 
 
 add_crud("human-resources", HumanResource, HumanResourceIn, HumanResourceOut)

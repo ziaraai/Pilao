@@ -18,6 +18,7 @@ from app.db.models.profile import (
     Equipment,
     HumanResource,
 )
+from app.db.models.profile_suggestion import ProfileSuggestion
 from app.db.models.tender import (
     NOTICE_TYPES,
     Notification,
@@ -60,6 +61,7 @@ __all__ = [
     "Notification",
     "Organization",
     "PlatformAdmin",
+    "ProfileSuggestion",
     "PurgeLog",
     "Requirement",
     "Tender",

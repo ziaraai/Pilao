@@ -178,6 +178,7 @@ class FakeQueue:
         self.pending_rematch: list[uuid.UUID] = []
         self.pending_score: list[uuid.UUID] = []
         self.pending_org_exports: list[uuid.UUID] = []
+        self.pending_prefill: list[uuid.UUID] = []
         self.ocr = None  # set to an OCR engine to exercise scanned pages
         self.down = False
 
@@ -310,6 +311,19 @@ class FakeQueue:
             request_id = self.pending_org_exports.pop(0)
             with _new_session(self._conn) as session:
                 run_org_export(session, request_id, self._storage)
+
+    def enqueue_profile_prefill(self, org_id: uuid.UUID) -> None:
+        if self.down:
+            raise ConnectionError("redis down")
+        self.pending_prefill.append(org_id)
+
+    def drain_profile_prefill(self) -> None:
+        from app.services.profile_prefill import run_profile_prefill
+
+        while self.pending_prefill:
+            org_id = self.pending_prefill.pop(0)
+            with _new_session(self._conn) as session:
+                run_profile_prefill(session, org_id, self._storage)
 
     def drain(self) -> None:
         from app.services.knowledge import run_index_document
