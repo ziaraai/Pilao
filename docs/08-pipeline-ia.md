@@ -18,6 +18,7 @@
 | Rédaction d'un chapitre | `prompts/generation_memoire_chapitre.md` | **Meilleur modèle en français** | Markdown + sources + flags |
 | Matrice de conformité | `prompts/matrice_conformite.md` | Modèle intermédiaire | liste `{requirement_ref, status, excerpt}` |
 | Lecture d'une attestation | `prompts/lecture_attestation.md` | Petit modèle avec vision | `{kind, siren, issued_at, valid_until}` |
+| Pré-remplissage du profil | `prompts/extraction_profil.md` | Modèle d'extraction (`LLM_MODEL_EXTRACTION`) | `{human_resources, equipment, certifications, references}`, chaque ligne avec sa phrase source (`excerpt`), vérifiée ensuite par `app/domain/profile_prefill.py` |
 | Embeddings | — | Modèle d'embeddings multilingue | vecteurs |
 
 ## 1. Ingestion des documents

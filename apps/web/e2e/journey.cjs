@@ -425,6 +425,37 @@ let current; // the page, for a screenshot when a step fails
     .waitFor();
   step("knowledge base: indexed and searchable");
 
+  // 7b. Profile pre-filled from the memoir, after review (US-1.6)
+  await page.goto(`${WEB}/profil?onglet=moyens`);
+  await page.getByRole("button", { name: "Lire mes documents" }).click();
+  const tennant = page.getByLabel("Matériel — Autolaveuse Tennant T5");
+  await tennant.waitFor({ timeout: 60000 });
+  if ((await page.getByLabel("Qualification — Agent de service").count()) > 0)
+    throw new Error("a staff line already in the profile was proposed again");
+  await page.getByLabel("Nombre — Chef d'équipe").fill("2");
+  await page.getByLabel("Retenir Chef d'équipe").check();
+  for (const [group, row] of [
+    ["Moyens humains", page.getByLabel("Nombre — Chef d'équipe")],
+    ["Matériel", tennant],
+  ]) {
+    await page
+      .getByRole("region", { name: group })
+      .getByRole("button", { name: /Ajouter les lignes cochées/ })
+      .click();
+    await row.waitFor({ state: "detached" });
+  }
+  await page.getByText("1 ligne ajoutée au profil.").waitFor();
+  const panel = page.getByRole("tabpanel");
+  await panel.getByText("Autolaveuse Tennant T5").waitFor();
+  await panel.getByText("Chef d'équipe").waitFor();
+  await page.screenshot({
+    path: `${S}/07b-pre-remplissage.png`,
+    fullPage: true,
+  });
+  step(
+    "profile pre-filled from the memoir: equipment and staff added after review",
+  );
+
   // 9. Watch: notices through the importer path, pre-filtered and scored (P3-01..P3-04)
   const inDays = (d) => new Date(Date.now() + d * 86400000).toISOString();
   const notice = (id, title, cpv, dep, amount) => ({

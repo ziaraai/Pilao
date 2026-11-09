@@ -384,3 +384,14 @@ Format : numéro, date, décision, raison, statut. Ajouter une entrée pour chaq
   - Barre de gauche bleu clair, page actuelle en vert Pilao. Dates courtes « 24/11/2026 12:00 », comme sur les plateformes publiques.
   - Étendu à toutes les pages (2026-11-09) par le composant commun `Card` (`color`, `icon`, `accent`) et `PageTitle` (carré de couleur avec l'icône de la page) : Annonces vert, Dossiers bleu, Coffre-fort ambre, Base documentaire bleu ciel, Profil vert Pilao. Dans un dossier, la couleur dit le rôle du bloc : bleu ce qui vient du DCE, vert / ambre / rouge l'avis Go / No-Go selon son verdict, ambre les pièces à fournir, rouge les points de vigilance, violet la notation, les documents, l'export et le résultat, vert Pilao ce que Pilao rédige. Une annonce a un trait à gauche selon son score, une attestation selon son état. Les listes du profil et des dossiers sont des tableaux avec titres de colonnes.
 - **Statut** : validé.
+
+## ADR-039 — Pré-remplissage du profil : propositions sourcées, validées par l'utilisateur
+- **Date** : 2026-11-09
+- **Contexte** : remplir le profil à la main est long ; le mémoire 2017 d'ENG PRO contient déjà son matériel (« 6 auto laveuses marque TENANTE 5400 »…), son organigramme (sans effectifs) et ses clients (sans prestation). Spécification : `docs/superpowers/specs/2026-11-09-preremplissage-profil-design.md`.
+- **Décision** :
+  - Une lecture en arrière-plan (`jobs.kind = profile_prefill`) relit chaque document prêt de la base documentaire, **depuis son fichier** (pas depuis les passages indexés : le découpage perd un titre dont la partie est vide, et les lignes courtes d'un mémoire — organigramme, liste de machines — sont souvent prises pour des titres).
+  - Un appel au modèle par document (`prompts/extraction_profil.md`) ; au-delà de 60 000 caractères, seuls les passages qui parlent de moyens, matériel, clients, références ou certifications sont envoyés.
+  - Contrôles après le modèle (`app/domain/profile_prefill.py`) : la phrase source doit être dans le document ; le nom de la ligne doit y être écrit ; un nombre (effectif, quantité, année, montant) n'est gardé que s'il y est écrit, sinon le champ est à compléter ; pas de noms de personnes ; doublons (profil, propositions déjà ajoutées ou ignorées, répétitions) écartés.
+  - Les propositions vont dans `profile_suggestions` ; rien n'entre dans le profil sans que l'utilisateur coche et ajoute, avec les mêmes contrôles qu'une saisie à la main et une entrée d'audit.
+  - Les notes d'une lecture réussie (documents sans ligne trouvée) sont gardées dans `jobs.error`, faute de colonne dédiée.
+- **Statut** : validé.

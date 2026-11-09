@@ -40,6 +40,13 @@ Je dépose mon mémoire modèle, mes anciens mémoires et mes documents qualité
 - CA2 : chaque document est découpé et indexé (voir `docs/08-pipeline-ia.md`). Statut visible : en cours / prêt / erreur.
 - CA3 : je peux supprimer un document, ce qui supprime aussi son index.
 
+**US-1.6 Pré-remplir le profil depuis mes documents**
+Pilao lit les documents de ma base documentaire et me propose mes moyens humains, mon matériel, mes certifications et mes références ; je valide.
+- CA1 : un bouton « Lire mes documents » dans le Profil ; la lecture se fait en arrière-plan, je peux quitter la page.
+- CA2 : chaque proposition montre sa source (document, page ou partie, phrase recopiée) ; une valeur non écrite dans la phrase (effectif, quantité, année, montant) reste vide, en orange, à compléter.
+- CA3 : rien n'entre dans le profil sans que je coche et ajoute la ligne ; une ligne incomplète est refusée avec son message, les autres passent.
+- CA4 : ce qui est déjà dans le profil, déjà ajouté ou ignoré n'est pas reproposé ; les noms de personnes ne sont pas repris (fonctions seulement).
+
 **US-1.5 Utilisateurs**
 L'administrateur invite des collaborateurs par e-mail.
 - CA1 : l'invité reçoit un lien valable 7 jours ; il choisit son nom et son mot de passe, accepte les conditions, et arrive dans l'espace de l'entreprise.

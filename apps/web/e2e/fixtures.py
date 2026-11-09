@@ -14,7 +14,7 @@ with zipfile.ZipFile(buf, "w") as zf:
     zf.writestr("DCE/RC.pdf", rc); zf.writestr("DCE/CCTP.pdf", cctp)
 open(f"{out}/DCE_mairie.zip", "wb").write(buf.getvalue())
 open(f"{out}/attestation_urssaf.pdf", "wb").write(make_pdf([["ATTESTATION DE VIGILANCE", "URSSAF Rhone-Alpes"]]))
-open(f"{out}/memoire_2025.docx", "wb").write(make_docx([("Heading 1", "Moyens materiels"), ("Normal", "Nous utilisons des autolaveuses et des monobrosses professionnelles.")]))
+open(f"{out}/memoire_2025.docx", "wb").write(make_docx([("Heading 1", "Moyens materiels"), ("Normal", "Nous utilisons des autolaveuses et des monobrosses professionnelles."), ("Normal", "Nous disposons de 3 autolaveuses Tennant T5 pour les grandes surfaces."), ("Normal", "Equipe : agents de service et 2 chefs d'equipe.")]))
 wb = Workbook(); ws = wb.active
 ws.append(["Client", "Type de client (public / privé)", "Objet du marché", "Lieu", "Département", "Montant (€ HT)", "Année"])
 ws.append(["Mairie de Villeurbanne", "public", "Nettoyage des écoles", "Villeurbanne", 69, "85 000", 2024])

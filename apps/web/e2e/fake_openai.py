@@ -60,6 +60,16 @@ def matrix(prompt):
     return {"items": items}
 
 
+def profile(prompt):
+    # US-1.6: lines written in the e2e memoir (fixtures.py); the staff line already in the
+    # profile must not be proposed again.
+    return {"equipment": [{"name": "Autolaveuse Tennant T5", "category": "Autolaveuses",
+                           "quantity": 3, "excerpt": "3 autolaveuses Tennant T5"}],
+            "human_resources": [
+                {"qualification": "Chef d'équipe", "count": None, "excerpt": "2 chefs d'equipe"},
+                {"qualification": "Agent de service", "count": None, "excerpt": "agents de service"}]}
+
+
 def score(prompt):
     core = "médiathèque" in prompt
     return {"score": 82 if core else 64,
@@ -71,7 +81,8 @@ class H(BaseHTTPRequestHandler):
     def do_POST(self):
         request = json.loads(self.rfile.read(int(self.headers.get("content-length", 0))) or b"{}")
         prompt = request["messages"][1]["content"] if len(request.get("messages", [])) > 1 else ""
-        answer = (chapter(prompt) if "Chapitre à rédiger" in prompt
+        answer = (profile(prompt) if "<profile_document" in prompt
+                  else chapter(prompt) if "Chapitre à rédiger" in prompt
                   else matrix(prompt) if "<memoir>" in prompt
                   else score(prompt) if "<tender>" in prompt else ANSWER)
         body = {"id": "x", "object": "chat.completion", "created": 0, "model": "fake",

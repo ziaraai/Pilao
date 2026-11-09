@@ -47,6 +47,17 @@ company_references (                    -- "references" est un mot réservé SQL
   year int, duration_months int, description text, cpv_codes text[],
   photo_file_ids uuid[], embedding vector(?)  -- dimension selon le modèle choisi
 )
+
+profile_suggestions (                   -- US-1.6 : lignes proposées depuis les documents
+  id, org_id, kind text check (kind in ('human_resource','equipment','certification','reference')),
+  data jsonb,                           -- les champs, au format de la saisie du profil
+  missing text[],                       -- champs obligatoires encore vides
+  document_id uuid references knowledge_documents on delete cascade,
+  page smallint null, heading text null, excerpt text,  -- la source : phrase recopiée
+  key text,                             -- clé normalisée (doublons)
+  status text check (status in ('pending','accepted','dismissed'))
+)
+-- index (org_id, status) ; la lecture est suivie par jobs (kind = 'profile_prefill', ref_id = org_id)
 ```
 
 ## Base documentaire (RAG)

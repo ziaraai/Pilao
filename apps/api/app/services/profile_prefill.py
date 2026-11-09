@@ -294,7 +294,8 @@ def _read_document(
                     key=line.key,
                 )
             )
-    return rows, None if rows else EMPTY_NOTE.format(title=doc.title)
+    # Lines found but all already in the profile or decided: nothing to report.
+    return rows, None if found else EMPTY_NOTE.format(title=doc.title)
 
 
 def run_profile_prefill(db: Session, org_id: uuid.UUID, storage: ObjectStorage) -> None:

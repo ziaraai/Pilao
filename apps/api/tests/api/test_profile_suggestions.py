@@ -298,3 +298,15 @@ def test_dismiss(make_client: Factory, outbox: Outbox, queue: FakeQueue, model: 
     assert a.post(f"/profile/suggestions/{mercialys['id']}/dismiss").status_code == 404
     assert "MERCIALYS" not in by_name(a.get("/profile/suggestions").json())
     assert "MERCIALYS" not in by_name(read(a, queue))  # not proposed again
+
+
+def test_reading_again_after_adding_everything_has_no_misleading_note(
+    make_client: Factory, outbox: Outbox, queue: FakeQueue, model: FakeModel
+) -> None:
+    c = signed_in_client(make_client, outbox)
+    ready_doc(c, queue, MEMOIR)
+    for s in read(c, queue)["items"]:
+        assert c.post(f"/profile/suggestions/{s['id']}/dismiss").status_code == 204
+    again = read(c, queue)
+    assert again["items"] == []
+    assert again["job"]["notes"] == []  # the document has lines: all already decided
