@@ -32,6 +32,7 @@ TASK_MODELS = {
     "compliance_reading": "llm_model_vision",
     "dce_extraction": "llm_model_extraction",
     "memoir_generation": "llm_model_generation",
+    "profile_extraction": "llm_model_extraction",
     "tender_scoring": "llm_model_scoring",
 }
 
