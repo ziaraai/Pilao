@@ -2,7 +2,16 @@
 
 import { useState, type ReactNode } from "react";
 
-import { Alert, Button, Card, Empty, Field, Input } from "@/components/ui";
+import {
+  Alert,
+  Button,
+  Card,
+  Empty,
+  Field,
+  Input,
+  tableHead,
+  tableRow,
+} from "@/components/ui";
 import { api } from "@/lib/api";
 import { useAction, useApi } from "@/lib/hooks";
 
@@ -54,43 +63,60 @@ export function SimpleList<T extends { id: string }>({
   }
 
   return (
-    <Card title={title}>
+    <Card title={title} color="brand">
       {list.error && <Alert tone="danger">{list.error}</Alert>}
       {list.data && list.data.length === 0 && <Empty>{emptyText}</Empty>}
       {list.data && list.data.length > 0 && (
-        <ul className="divide-y divide-slate-100">
-          {list.data.map((item) => (
-            <li
-              key={item.id}
-              className="flex items-center justify-between gap-3 py-2 text-sm"
-            >
-              <span className="text-slate-800">
-                {columns.map((c) => {
-                  const v = (item as Record<string, unknown>)[c.key];
-                  return v == null || v === "" ? null : (
-                    <span key={c.key} className="mr-3">
-                      {c.render ? c.render(v) : String(v)}
-                    </span>
-                  );
-                })}
-              </span>
-              <Button
-                variant="ghost"
-                busy={remove.busy}
-                aria-label={`Supprimer ${columns.map((c) => (item as Record<string, unknown>)[c.key]).filter(Boolean)[0] ?? ""}`}
-                onClick={async () => {
-                  await remove.run(() =>
-                    api(`${path}/${item.id}`, { method: "DELETE" }),
-                  );
-                  list.reload();
-                  onChange();
-                }}
-              >
-                Supprimer
-              </Button>
-            </li>
-          ))}
-        </ul>
+        <div className="-mx-5 -mt-5 overflow-x-auto">
+          <table className="w-full text-left text-sm">
+            <thead className={tableHead}>
+              <tr>
+                {columns.map((c) => (
+                  <th key={c.key} className="px-5 py-2">
+                    {c.label}
+                  </th>
+                ))}
+                <th className="px-5 py-2">
+                  <span className="sr-only">Actions</span>
+                </th>
+              </tr>
+            </thead>
+            <tbody>
+              {list.data.map((item) => (
+                <tr key={item.id} className={tableRow}>
+                  {columns.map((c) => {
+                    const v = (item as Record<string, unknown>)[c.key];
+                    return (
+                      <td key={c.key} className="px-5 py-2 text-slate-800">
+                        {v == null || v === ""
+                          ? "—"
+                          : c.render
+                            ? c.render(v)
+                            : String(v)}
+                      </td>
+                    );
+                  })}
+                  <td className="px-5 py-1 text-right">
+                    <Button
+                      variant="ghost"
+                      busy={remove.busy}
+                      aria-label={`Supprimer ${columns.map((c) => (item as Record<string, unknown>)[c.key]).filter(Boolean)[0] ?? ""}`}
+                      onClick={async () => {
+                        await remove.run(() =>
+                          api(`${path}/${item.id}`, { method: "DELETE" }),
+                        );
+                        list.reload();
+                        onChange();
+                      }}
+                    >
+                      Supprimer
+                    </Button>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
       )}
       <form
         onSubmit={onAdd}

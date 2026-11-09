@@ -28,7 +28,7 @@ export function ResultSection({
   const save = useAction();
   if (!["submitted", "won", "lost"].includes(bid.status)) return null;
   return (
-    <Card title="Résultat">
+    <Card title="Résultat" color="violet" icon="results">
       <form
         className="grid gap-3 sm:grid-cols-[1fr_1fr_2fr]"
         onSubmit={async (e) => {

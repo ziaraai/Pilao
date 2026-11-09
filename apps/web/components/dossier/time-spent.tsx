@@ -30,7 +30,7 @@ export function TimeSpent({
       : null;
 
   return (
-    <Card title="Temps passé sur ce dossier">
+    <Card title="Temps passé sur ce dossier" color="violet">
       <form
         className="grid gap-3 sm:grid-cols-[1fr_1fr_auto] sm:items-end"
         onSubmit={async (e) => {

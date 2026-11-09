@@ -12,6 +12,8 @@ import {
   Field,
   Input,
   Select,
+  tableHead,
+  tableRow,
 } from "@/components/ui";
 import { api, API_URL } from "@/lib/api";
 import { formatCents, parseEuros } from "@/lib/format";
@@ -73,6 +75,7 @@ export function References({ onChange }: { onChange: () => void }) {
   return (
     <Card
       title="Références de chantiers"
+      color="brand"
       actions={
         <a
           href={`${API_URL}/profile/references/template.xlsx`}
@@ -122,30 +125,32 @@ export function References({ onChange }: { onChange: () => void }) {
       {list.data && list.data.length > 0 && (
         <div className="overflow-x-auto">
           <table className="w-full text-left text-sm">
-            <thead className="text-xs uppercase text-slate-500">
+            <thead className={tableHead}>
               <tr>
-                <th className="py-2 pr-3">Client</th>
-                <th className="pr-3">Objet</th>
-                <th className="pr-3">Dépt</th>
-                <th className="pr-3">Montant</th>
-                <th className="pr-3">Année</th>
-                <th />
+                <th className="px-3 py-2">Client</th>
+                <th className="px-3 py-2">Objet</th>
+                <th className="px-3 py-2">Dépt</th>
+                <th className="px-3 py-2">Montant</th>
+                <th className="px-3 py-2">Année</th>
+                <th className="px-3 py-2">
+                  <span className="sr-only">Actions</span>
+                </th>
               </tr>
             </thead>
-            <tbody className="divide-y divide-slate-100">
+            <tbody>
               {list.data.map((r) => (
-                <tr key={r.id}>
-                  <td className="py-2 pr-3">
+                <tr key={r.id} className={tableRow}>
+                  <td className="px-3 py-2">
                     {r.client_name}{" "}
                     <span className="text-xs text-slate-500">
                       ({r.client_type === "public" ? "public" : "privé"})
                     </span>
                   </td>
-                  <td className="pr-3">{r.title}</td>
-                  <td className="pr-3">{r.department ?? "—"}</td>
-                  <td className="pr-3">{formatCents(r.amount_cents)}</td>
-                  <td className="pr-3">{r.year ?? "—"}</td>
-                  <td className="text-right">
+                  <td className="px-3 py-2">{r.title}</td>
+                  <td className="px-3 py-2">{r.department ?? "—"}</td>
+                  <td className="px-3 py-2">{formatCents(r.amount_cents)}</td>
+                  <td className="px-3 py-2">{r.year ?? "—"}</td>
+                  <td className="px-3 py-1 text-right">
                     <Button
                       variant="ghost"
                       onClick={async () => {

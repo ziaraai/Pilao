@@ -27,7 +27,7 @@ export function DataRights() {
   const due = deletion.data?.due_at;
 
   return (
-    <Card title="Vos données">
+    <Card title="Vos données" color="slate">
       <div className="space-y-5">
         <section className="space-y-2">
           <h3 className="text-sm font-semibold text-slate-900">

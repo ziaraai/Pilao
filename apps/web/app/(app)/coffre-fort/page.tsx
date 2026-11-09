@@ -8,6 +8,7 @@ import {
   Badge,
   Button,
   Card,
+  type Color,
   Empty,
   Field,
   Input,
@@ -18,8 +19,17 @@ import {
 import { api } from "@/lib/api";
 import { formatDate } from "@/lib/format";
 import { useAction, useApi } from "@/lib/hooks";
-import { JOB_STATUS, VAULT_KINDS, VAULT_STATUS } from "@/lib/labels";
+import { JOB_STATUS, type Tone, VAULT_KINDS, VAULT_STATUS } from "@/lib/labels";
 import type { ComplianceDoc, HelpLink, VaultSummary } from "@/lib/types";
+
+/** The stripe on the left of an attestation: green valid, amber to renew, red unusable. */
+const TONE_ACCENT: Record<Tone, Color> = {
+  ok: "green",
+  warning: "amber",
+  danger: "red",
+  info: "blue",
+  neutral: "slate",
+};
 
 const busyReading = (docs: ComplianceDoc[]) =>
   docs.some(
@@ -52,11 +62,13 @@ export default function VaultPage() {
       <PageTitle
         title="Coffre-fort"
         subtitle="Vos attestations, lues automatiquement puis confirmées par vous. Un document non confirmé ou expiré n'est jamais utilisé."
+        icon="vault"
+        color="amber"
       />
       {summary.data &&
         (summary.data.attention.length > 0 ||
           summary.data.missing.length > 0) && (
-          <Card title="À traiter">
+          <Card title="À traiter" color="red" icon="todo">
             {summary.data.attention.length > 0 && (
               <ul className="mb-3 space-y-1 text-sm">
                 {summary.data.attention.map((d) => (
@@ -109,7 +121,7 @@ export default function VaultPage() {
             )}
           </Card>
         )}
-      <Card title="Déposer une attestation">
+      <Card title="Déposer une attestation" color="amber" icon="vault">
         <UploadButton
           id="vault-upload"
           label="Déposer"
@@ -209,6 +221,8 @@ function VaultItem({
   return (
     <Card
       title={VAULT_KINDS[doc.kind] ?? doc.kind}
+      color="amber"
+      accent={TONE_ACCENT[status?.tone ?? "neutral"]}
       actions={<Badge tone={status?.tone}>{status?.label ?? doc.status}</Badge>}
     >
       {reading && <Alert tone="info">Lecture automatique en cours…</Alert>}

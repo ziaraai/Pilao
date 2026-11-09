@@ -4,8 +4,14 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 
-import { Icon, type IconName } from "@/components/icon";
-import { Alert, Badge, Loading } from "@/components/ui";
+import {
+  Alert,
+  Badge,
+  Card,
+  type Color,
+  Loading,
+  tableHead,
+} from "@/components/ui";
 import { api } from "@/lib/api";
 import { useMe } from "@/lib/auth";
 import { formatCents, formatDateTimeShort, formatDuration } from "@/lib/format";
@@ -34,25 +40,8 @@ const LEVEL = {
   todo: { dot: "bg-slate-400", label: "À faire" },
 } as const;
 
-/**
- * One colour per block, repeated on its counter: red what to do, green the notices, blue
- * the dossiers, amber the attestations. Light tints with dark text: coloured without dark
- * blocks (the users know the public platforms, where each part has its colour).
- */
-type Tone = "red" | "green" | "blue" | "amber" | "brand" | "violet" | "slate";
-const HEAD: Record<Tone, string> = {
-  red: "border-t-red-500 border-b-red-200 bg-red-100 text-red-900",
-  green:
-    "border-t-emerald-500 border-b-emerald-200 bg-emerald-100 text-emerald-900",
-  blue: "border-t-blue-500 border-b-blue-200 bg-blue-100 text-blue-900",
-  amber: "border-t-amber-500 border-b-amber-200 bg-amber-100 text-amber-900",
-  brand:
-    "border-t-brand-green border-b-emerald-200 bg-[#dcfbf1] text-brand-navy",
-  violet:
-    "border-t-violet-500 border-b-violet-200 bg-violet-100 text-violet-900",
-  slate: "border-t-slate-400 border-b-slate-200 bg-slate-100 text-slate-800",
-};
-const TILE: Record<Tone, string> = {
+/** The counters take the colour of their block (ADR-038). */
+const TILE: Record<Color, string> = {
   red: "border-red-300 border-l-red-500 bg-red-100 text-red-700 hover:bg-red-200/70",
   green:
     "border-emerald-300 border-l-emerald-500 bg-emerald-100 text-emerald-700 hover:bg-emerald-200/70",
@@ -61,10 +50,11 @@ const TILE: Record<Tone, string> = {
     "border-amber-300 border-l-amber-500 bg-amber-100 text-amber-700 hover:bg-amber-200/70",
   brand: "border-emerald-300 border-l-brand-green bg-[#dcfbf1] text-brand-navy",
   violet: "border-violet-300 border-l-violet-500 bg-violet-100 text-violet-700",
+  sky: "border-sky-300 border-l-sky-500 bg-sky-100 text-sky-700",
   slate:
     "border-slate-300 border-l-slate-400 bg-white text-slate-600 hover:bg-slate-50",
 };
-const ROW = "px-4 py-3 even:bg-slate-50";
+const ROW = "px-5 py-3 even:bg-slate-50";
 
 const today = new Intl.DateTimeFormat("fr-FR", {
   weekday: "long",
@@ -104,25 +94,25 @@ export default function DashboardPage() {
       <div className="grid grid-cols-2 gap-3 lg:grid-cols-4 lg:gap-4">
         <Tile
           href="#a-faire"
-          tone={urgent ? "red" : "slate"}
+          color={urgent ? "red" : "slate"}
           count={urgent}
           label={urgent > 1 ? "urgences à traiter" : "urgence à traiter"}
         />
         <Tile
           href="/annonces"
-          tone="green"
+          color="green"
           count={d.new_tenders}
           label={d.new_tenders > 1 ? "nouvelles annonces" : "nouvelle annonce"}
         />
         <Tile
           href="/dossiers"
-          tone="blue"
+          color="blue"
           count={inProgress}
           label={inProgress > 1 ? "dossiers en cours" : "dossier en cours"}
         />
         <Tile
           href="/coffre-fort"
-          tone={toRenew ? "amber" : "slate"}
+          color={toRenew ? "amber" : "slate"}
           count={toRenew}
           label={
             toRenew > 1
@@ -147,19 +137,19 @@ function capitalize(text: string): string {
 
 function Tile({
   href,
-  tone,
+  color,
   count,
   label,
 }: {
   href: string;
-  tone: Tone;
+  color: Color;
   count: number;
   label: string;
 }) {
   return (
     <Link
       href={href}
-      className={`flex items-center justify-between gap-2 rounded-lg border border-l-[6px] px-4 py-3 shadow-sm ${TILE[tone]}`}
+      className={`flex items-center justify-between gap-2 rounded-lg border border-l-[6px] px-4 py-3 shadow-sm ${TILE[color]}`}
     >
       <span className="min-w-0">
         <span className="block text-3xl font-bold leading-tight">{count}</span>
@@ -174,51 +164,12 @@ function Tile({
   );
 }
 
-/** A block with a coloured title bar: the parts of the page are told apart at a glance. */
-function Panel({
-  id,
-  tone,
-  icon,
-  title,
-  extra,
-  children,
-}: {
-  id: string;
-  tone: Tone;
-  icon: IconName;
-  title: string;
-  extra?: React.ReactNode;
-  children: React.ReactNode;
-}) {
-  return (
-    <section
-      id={id}
-      aria-labelledby={`${id}-titre`}
-      className="scroll-mt-20 overflow-hidden rounded-lg border border-slate-300 bg-white shadow-sm"
-    >
-      <div
-        className={`flex flex-wrap items-center justify-between gap-x-4 gap-y-1 border-b border-t-4 px-4 py-2.5 ${HEAD[tone]}`}
-      >
-        <h2
-          id={`${id}-titre`}
-          className="flex items-center gap-2 text-base font-bold"
-        >
-          <Icon name={icon} />
-          {title}
-        </h2>
-        {extra}
-      </div>
-      {children}
-    </section>
-  );
-}
-
 /** Column titles above a list: the look of a table, the rows still stack on a phone. */
 function Heads({ grid, labels }: { grid: string; labels: string[] }) {
   return (
     <div
       aria-hidden="true"
-      className={`hidden gap-x-4 border-b border-slate-300 bg-slate-100 px-4 py-2 text-xs font-semibold uppercase tracking-wide text-slate-600 ${grid}`}
+      className={`hidden gap-x-4 px-5 py-2 ${tableHead} ${grid}`}
     >
       {labels.map((l, i) => (
         <span key={i}>{l}</span>
@@ -236,7 +187,7 @@ function PanelLink({ href, children }: { href: string; children: string }) {
 }
 
 function Note({ children }: { children: React.ReactNode }) {
-  return <p className="px-4 py-3 text-sm text-slate-600">{children}</p>;
+  return <p className="px-5 py-3 text-sm text-slate-600">{children}</p>;
 }
 
 function ButtonLink({
@@ -266,12 +217,13 @@ function Actions({ actions }: { actions: DashboardAction[] }) {
   const [all, setAll] = useState(false);
   const shown = all ? actions : actions.slice(0, SHOWN);
   return (
-    <Panel
+    <Card
+      flush
       id="a-faire"
-      tone="red"
+      color="red"
       icon="todo"
       title="À faire"
-      extra={
+      actions={
         actions.length > SHOWN && (
           <button
             type="button"
@@ -284,7 +236,7 @@ function Actions({ actions }: { actions: DashboardAction[] }) {
       }
     >
       {actions.length === 0 ? (
-        <p className="flex items-center gap-2 px-4 py-3 text-sm font-medium text-emerald-800">
+        <p className="flex items-center gap-2 px-5 py-3 text-sm font-medium text-emerald-800">
           <span aria-hidden="true">✓</span> Rien d&apos;urgent aujourd&apos;hui.
         </p>
       ) : (
@@ -314,19 +266,20 @@ function Actions({ actions }: { actions: DashboardAction[] }) {
           ))}
         </ul>
       )}
-    </Panel>
+    </Card>
   );
 }
 
 function GettingStarted({ steps }: { steps: DashboardStep[] }) {
   const done = steps.filter((s) => s.done).length;
   return (
-    <Panel
+    <Card
+      flush
       id="demarrer"
-      tone="brand"
+      color="brand"
       icon="start"
       title="Pour bien démarrer"
-      extra={
+      actions={
         <span className="text-sm font-semibold">
           {done} sur {steps.length}
         </span>
@@ -361,7 +314,7 @@ function GettingStarted({ steps }: { steps: DashboardStep[] }) {
           </li>
         ))}
       </ol>
-    </Panel>
+    </Card>
   );
 }
 
@@ -370,12 +323,13 @@ const TENDER_GRID = "md:grid md:grid-cols-[4.5rem_minmax(0,1fr)_9.5rem_9.5rem]";
 
 function Tenders({ d }: { d: Dashboard }) {
   return (
-    <Panel
+    <Card
+      flush
       id="annonces"
-      tone="green"
+      color="green"
       icon="tenders"
       title="Nouvelles annonces pour vous"
-      extra={
+      actions={
         d.tenders_connected && (
           <span className="flex flex-wrap items-center gap-x-4 gap-y-1">
             {d.new_tenders > 0 && (
@@ -417,7 +371,7 @@ function Tenders({ d }: { d: Dashboard }) {
           </ul>
         </>
       )}
-    </Panel>
+    </Card>
   );
 }
 
@@ -494,12 +448,13 @@ const BID_GRID = "xl:grid xl:grid-cols-[minmax(0,1fr)_9rem_20rem_7.5rem]";
 
 function Bids({ bids }: { bids: BidProgress[] }) {
   return (
-    <Panel
+    <Card
+      flush
       id="dossiers"
-      tone="blue"
+      color="blue"
       icon="bids"
       title="Mes dossiers en cours"
-      extra={<PanelLink href="/dossiers">Tous les dossiers</PanelLink>}
+      actions={<PanelLink href="/dossiers">Tous les dossiers</PanelLink>}
     >
       {bids.length === 0 ? (
         <Note>
@@ -524,7 +479,7 @@ function Bids({ bids }: { bids: BidProgress[] }) {
           </ul>
         </>
       )}
-    </Panel>
+    </Card>
   );
 }
 
@@ -641,8 +596,14 @@ function Results({ d }: { d: Dashboard }) {
   if (t.bids > 0 && t.minutes_saved > 0)
     items.push(["Temps gagné", formatDuration(t.minutes_saved)]);
   return (
-    <Panel id="resultats" tone="violet" icon="results" title="Vos résultats">
-      <dl className="grid grid-cols-2 gap-3 p-4 sm:grid-cols-3 lg:grid-cols-5">
+    <Card
+      flush
+      id="resultats"
+      color="violet"
+      icon="results"
+      title="Vos résultats"
+    >
+      <dl className="grid grid-cols-2 gap-3 p-5 sm:grid-cols-3 lg:grid-cols-5">
         {items.map(([label, value]) => (
           <div
             key={label}
@@ -654,11 +615,11 @@ function Results({ d }: { d: Dashboard }) {
         ))}
       </dl>
       {t.bids > 0 && (
-        <p className="px-4 pb-3 text-xs text-slate-600">
+        <p className="px-5 pb-3 text-xs text-slate-600">
           Temps gagné calculé sur {plural(t.bids, "dossier")} où vous
           l&apos;avez renseigné.
         </p>
       )}
-    </Panel>
+    </Card>
   );
 }

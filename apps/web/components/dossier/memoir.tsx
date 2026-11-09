@@ -77,7 +77,7 @@ export function MemoirSection({ bidId }: { bidId: string }) {
   const ready = analysis.data?.status === "ready";
   if (!memoir.data) {
     return (
-      <Card title="Mémoire technique">
+      <Card title="Mémoire technique" color="brand">
         {memoir.loading ? (
           <Loading />
         ) : (
@@ -202,6 +202,7 @@ function OutlineEditor({
     <div className="space-y-6">
       <Card
         title={`Plan du mémoire — version ${memoir.version}`}
+        color="brand"
         actions={
           <div className="flex gap-2">
             {editable && (
@@ -418,7 +419,7 @@ function OutlineEditor({
           </div>
         )}
       </Card>
-      <Card title="Références citées dans le mémoire">
+      <Card title="Références citées dans le mémoire" color="brand">
         {memoir.references.length === 0 ? (
           <Empty>
             Aucune référence dans votre profil : ajoutez vos chantiers dans
@@ -480,7 +481,7 @@ function OutlineEditor({
         </p>
       </Card>
       {editable ? (
-        <Card title="Rédaction">
+        <Card title="Rédaction" color="brand">
           <div className="space-y-3">
             <p className="text-sm text-slate-600">
               Chaque chapitre est rédigé à partir de ce plan, des exigences du
@@ -540,7 +541,7 @@ function Drafting({
     (s) => s.status === "ready" || s.status === "error",
   ).length;
   return (
-    <Card title="Mémoire rédigé">
+    <Card title="Mémoire rédigé" color="brand">
       <div className="space-y-4">
         <p className="text-sm text-slate-700" aria-live="polite">
           {memoir.status === "generating"
@@ -588,6 +589,7 @@ function ConformityCard({
   return (
     <Card
       title="Matrice de conformité"
+      color="brand"
       actions={
         canRun && (
           <Button

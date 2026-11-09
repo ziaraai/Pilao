@@ -14,6 +14,7 @@ import {
   Loading,
   PageTitle,
   Select,
+  tableRow,
 } from "@/components/ui";
 import { api } from "@/lib/api";
 import { formatDate } from "@/lib/format";
@@ -63,8 +64,10 @@ export default function KnowledgePage() {
       <PageTitle
         title="Base documentaire"
         subtitle="Vos mémoires et documents qualité : la matière de vos futurs mémoires techniques."
+        icon="documents"
+        color="sky"
       />
-      <Card title="Déposer un document">
+      <Card title="Déposer un document" color="sky" icon="documents">
         <UploadButton
           id="kb-upload"
           label="Déposer"
@@ -104,12 +107,12 @@ export default function KnowledgePage() {
       ) : docs.data.length === 0 ? (
         <Empty>Aucun document déposé.</Empty>
       ) : (
-        <Card title="Documents">
-          <ul className="divide-y divide-slate-100">
+        <Card title={`Documents (${docs.data.length})`} color="sky" flush>
+          <ul>
             {docs.data.map((d) => (
               <li
                 key={d.id}
-                className="flex flex-wrap items-center justify-between gap-3 py-3 text-sm"
+                className={`flex flex-wrap items-center justify-between gap-3 px-5 py-3 text-sm ${tableRow}`}
               >
                 <div>
                   <p className="font-medium text-slate-800">{d.title}</p>
@@ -153,10 +156,14 @@ export default function KnowledgePage() {
               </li>
             ))}
           </ul>
-          {action.error && <Alert tone="danger">{action.error}</Alert>}
+          {action.error && (
+            <div className="p-5">
+              <Alert tone="danger">{action.error}</Alert>
+            </div>
+          )}
         </Card>
       )}
-      <Card title="Rechercher dans vos documents">
+      <Card title="Rechercher dans vos documents" color="sky" icon="tenders">
         <form
           className="flex flex-wrap items-end gap-3"
           onSubmit={async (e) => {

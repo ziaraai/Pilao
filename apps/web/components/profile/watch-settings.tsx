@@ -116,7 +116,7 @@ export function WatchSettings({
 
   if (part === "revenue")
     return (
-      <Card title="Chiffre d'affaires">
+      <Card title="Chiffre d'affaires" color="violet" icon="results">
         <form onSubmit={onSubmit} className="space-y-5" noValidate>
           <p className="text-sm text-slate-700">
             Les 3 derniers exercices clos, en euros hors taxes. Ils remplissent
@@ -151,7 +151,7 @@ export function WatchSettings({
     );
 
   return (
-    <Card title="Paramètres de veille" id="veille">
+    <Card title="Paramètres de veille" id="veille" color="green" icon="tenders">
       <form onSubmit={onSubmit} className="space-y-5" noValidate>
         <fieldset>
           <legend className="text-sm font-medium text-slate-800">

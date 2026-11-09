@@ -13,7 +13,7 @@ import type { DocumentKind, GeneratedDocument } from "@/lib/types";
 export function DocumentsSection({ bidId }: { bidId: string }) {
   const list = useApi<DocumentKind[]>(`/bids/${bidId}/documents`);
   return (
-    <Card title="Documents pré-remplis">
+    <Card title="Documents pré-remplis" color="violet">
       <p className="mb-3 text-sm text-slate-600">
         Générés à partir de votre profil et du DCE analysé. Ce qui manque est
         signalé « [À COMPLÉTER] » ; les cases à cocher et la signature restent à

@@ -58,7 +58,7 @@ export function Members() {
   }
 
   return (
-    <Card title="Utilisateurs">
+    <Card title="Utilisateurs" color="brand">
       <div className="space-y-4">
         <ul className="divide-y divide-slate-100">
           {(members.data ?? []).map((m) => {

@@ -44,6 +44,8 @@ export default function BidPage() {
       <PageTitle
         title={b.title}
         subtitle={`${b.buyer_name ?? "Acheteur à préciser"} · date limite : ${formatDateTime(b.deadline_at)}`}
+        icon="bids"
+        color="blue"
         actions={
           <div className="flex items-end gap-2">
             <Field label="Statut" htmlFor="bid-status">

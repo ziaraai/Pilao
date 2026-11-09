@@ -62,7 +62,7 @@ export function ExportCard({ memoir }: { memoir: Memoir }) {
   }
 
   return (
-    <Card title="Export">
+    <Card title="Export" color="violet">
       <div className="space-y-4">
         <p className="text-sm text-slate-600">
           Word avec votre logo, page de garde et sommaire ; PDF ; ou dossier

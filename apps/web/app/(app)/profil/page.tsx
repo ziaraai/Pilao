@@ -86,10 +86,12 @@ function ProfileTabs() {
       <PageTitle
         title="Profil de l'entreprise"
         subtitle={`${me.org.name} — SIRET ${me.org.siret}`}
+        icon="profile"
+        color="brand"
       />
-      <Card title={`Profil complet à ${c.pct} %`}>
+      <Card title={`Profil complet à ${c.pct} %`} color="brand">
         <div
-          className="h-2 w-full overflow-hidden rounded-full bg-slate-100"
+          className="h-3 w-full overflow-hidden rounded-full bg-slate-200"
           role="progressbar"
           aria-valuenow={c.pct}
           aria-valuemin={0}
@@ -133,7 +135,7 @@ function ProfileTabs() {
       <div
         role="tablist"
         aria-label="Parties du profil"
-        className="-mx-4 flex gap-1 overflow-x-auto overflow-y-hidden border-b border-slate-200 px-4 lg:mx-0 lg:px-0"
+        className="-mx-4 flex gap-1 overflow-x-auto overflow-y-hidden border-b-2 border-slate-300 px-4 lg:mx-0 lg:px-0"
       >
         {TABS.map((t, i) => {
           const selected = t.id === current;
@@ -152,7 +154,7 @@ function ProfileTabs() {
               tabIndex={selected ? 0 : -1}
               onClick={() => open(t.id)}
               onKeyDown={(e) => onKeyDown(e, i)}
-              className={`-mb-px inline-flex shrink-0 items-center gap-2 whitespace-nowrap border-b-2 px-3 py-2.5 text-sm font-medium ${selected ? "border-brand-navy text-brand-navy" : "border-transparent text-slate-600 hover:border-slate-300 hover:text-slate-800"}`}
+              className={`-mb-0.5 inline-flex shrink-0 items-center gap-2 whitespace-nowrap rounded-t-md border-b-2 px-3 py-2.5 text-sm ${selected ? "border-brand-green bg-[#dcfbf1] font-bold text-brand-navy" : "border-transparent font-medium text-slate-700 hover:bg-white hover:text-slate-900"}`}
             >
               {t.label}
               {missing > 0 && (

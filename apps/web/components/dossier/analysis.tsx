@@ -3,7 +3,17 @@
 import { useRef } from "react";
 
 import { SourceLink, SourceViewer } from "@/components/dossier/source";
-import { Alert, Badge, Button, Card, Empty, Loading } from "@/components/ui";
+import {
+  Alert,
+  Badge,
+  Button,
+  Card,
+  type Color,
+  Empty,
+  Loading,
+  tableHead,
+  tableRow,
+} from "@/components/ui";
 import { api } from "@/lib/api";
 import { formatCents, formatDateTime } from "@/lib/format";
 import { useAction, useApi } from "@/lib/hooks";
@@ -14,7 +24,15 @@ import {
   REQUIREMENT_CATEGORY,
   VERDICT,
 } from "@/lib/labels";
+import type { Tone } from "@/lib/labels";
 import type { Analysis, Sourced } from "@/lib/types";
+
+/** The Go / No-Go block takes the colour of its verdict. */
+const VERDICT_COLOR: Partial<Record<Tone, Color>> = {
+  ok: "green",
+  warning: "amber",
+  danger: "red",
+};
 
 const working = (a: Analysis) =>
   a.status === "pending" || a.status === "processing";
@@ -64,7 +82,7 @@ export function AnalysisSection({
 
   if (analysis.error && !a) {
     return (
-      <Card title="Analyse du DCE">
+      <Card title="Analyse du DCE" color="blue">
         <Empty>
           {analysis.error === "Aucune analyse pour ce dossier."
             ? "L'analyse démarrera dès que le DCE sera déposé et traité."
@@ -75,7 +93,7 @@ export function AnalysisSection({
   }
   if (!a)
     return (
-      <Card title="Analyse du DCE">
+      <Card title="Analyse du DCE" color="blue">
         <Loading />
       </Card>
     );
@@ -99,7 +117,7 @@ export function AnalysisSection({
   );
   if (a.status !== "ready" || !a.data) {
     return (
-      <Card title="Analyse du DCE" actions={actions}>
+      <Card title="Analyse du DCE" color="blue" actions={actions}>
         {working(a) ? (
           <Alert tone="info">
             {a.error ??
@@ -131,6 +149,7 @@ export function AnalysisSection({
         {g && (
           <Card
             title="Avis Go / No-Go"
+            color={VERDICT_COLOR[VERDICT[g.verdict]?.tone] ?? "slate"}
             actions={
               <Badge tone={VERDICT[g.verdict]?.tone}>
                 {VERDICT[g.verdict]?.label} · {g.score}/100
@@ -148,8 +167,8 @@ export function AnalysisSection({
             <p className="mt-3 text-xs text-slate-500">{g.disclaimer}</p>
           </Card>
         )}
-        <Card title="Informations clés" actions={actions}>
-          <dl className="divide-y divide-slate-100">
+        <Card title="Informations clés" color="blue" actions={actions}>
+          <dl className="divide-y divide-slate-200">
             <Row label="Acheteur" item={ki.buyer_name} />
             <Row label="Objet" item={ki.title} />
             <Row label="Procédure" item={ki.procedure} />
@@ -205,7 +224,7 @@ export function AnalysisSection({
           )}
         </Card>
         <div className="grid gap-6 lg:grid-cols-2">
-          <Card title="Critères de notation">
+          <Card title="Critères de notation" color="violet">
             {d.award_criteria.length === 0 ? (
               <Empty>Non trouvés : vérifiez le RC.</Empty>
             ) : (
@@ -230,7 +249,7 @@ export function AnalysisSection({
               </ul>
             )}
           </Card>
-          <Card title="Mémoire technique attendu">
+          <Card title="Mémoire technique attendu" color="violet">
             {d.memoir_requirements.imposed_outline.length > 0 ? (
               <>
                 <p className="mb-2 text-sm font-medium text-slate-700">
@@ -260,7 +279,7 @@ export function AnalysisSection({
             )}
           </Card>
         </div>
-        <Card title="Pièces à fournir">
+        <Card title="Pièces à fournir" color="amber">
           {a.documents.length === 0 ? (
             <Empty>Aucune pièce listée dans l&apos;analyse.</Empty>
           ) : (
@@ -294,7 +313,7 @@ export function AnalysisSection({
           )}
         </Card>
         {d.watch_points.length > 0 && (
-          <Card title="Points de vigilance">
+          <Card title="Points de vigilance" color="red">
             <ul className="space-y-2 text-sm">
               {d.watch_points.map((w, i) => (
                 <li key={i} className="flex items-start gap-2">
@@ -322,32 +341,37 @@ export function AnalysisSection({
             </ul>
           </Card>
         )}
-        <Card title={`Exigences du CCTP (${a.requirements.length})`}>
+        <Card
+          title={`Exigences du CCTP (${a.requirements.length})`}
+          color="blue"
+        >
           {a.requirements.length === 0 ? (
             <Empty>Aucune exigence extraite.</Empty>
           ) : (
             <div className="overflow-x-auto">
               <table className="w-full text-left text-sm">
-                <thead className="text-xs uppercase text-slate-500">
+                <thead className={tableHead}>
                   <tr>
-                    <th className="py-2 pr-3">Réf.</th>
-                    <th className="pr-3">Exigence</th>
-                    <th className="pr-3">Catégorie</th>
-                    <th>Importance</th>
+                    <th className="px-3 py-2">Réf.</th>
+                    <th className="px-3 py-2">Exigence</th>
+                    <th className="px-3 py-2">Catégorie</th>
+                    <th className="px-3 py-2">Importance</th>
                   </tr>
                 </thead>
-                <tbody className="divide-y divide-slate-100">
+                <tbody>
                   {a.requirements.map((r) => (
-                    <tr key={r.id}>
-                      <td className="py-2 pr-3 font-mono text-xs">{r.ref}</td>
-                      <td className="pr-3">
+                    <tr key={r.id} className={tableRow}>
+                      <td className="px-3 py-2 font-mono text-xs">{r.ref}</td>
+                      <td className="px-3 py-2">
                         {r.text}
                         <SourceLink source={r.source} />
                       </td>
-                      <td className="pr-3">
+                      <td className="px-3 py-2">
                         {REQUIREMENT_CATEGORY[r.category] ?? r.category}
                       </td>
-                      <td>{IMPORTANCE[r.importance] ?? r.importance}</td>
+                      <td className="px-3 py-2">
+                        {IMPORTANCE[r.importance] ?? r.importance}
+                      </td>
                     </tr>
                   ))}
                 </tbody>
@@ -356,7 +380,7 @@ export function AnalysisSection({
           )}
         </Card>
         {a.warnings.length > 0 && (
-          <Card title="Points à vérifier">
+          <Card title="Points à vérifier" color="amber">
             <ul className="list-inside list-disc space-y-1 text-sm text-slate-700">
               {a.warnings.map((w, i) => (
                 <li key={i}>{w}</li>

@@ -81,6 +81,22 @@ function scoreTone(score: number): Tone {
   return score >= 80 ? "ok" : score >= 60 ? "info" : "neutral";
 }
 
+const SCORE_BOX: Partial<Record<Tone, string>> = {
+  ok: "bg-emerald-100 text-emerald-800 ring-emerald-300",
+  info: "bg-blue-100 text-blue-800 ring-blue-300",
+  neutral: "bg-slate-100 text-slate-700 ring-slate-300",
+};
+
+/** The stripe on the left of a notice: green good match, blue possible, grey weak. */
+function scoreStripe(score: number | null): string {
+  if (score == null) return "border-l-slate-300";
+  return score >= 80
+    ? "border-l-emerald-500"
+    : score >= 60
+      ? "border-l-blue-500"
+      : "border-l-slate-400";
+}
+
 function daysLeft(iso: string | null): string | null {
   if (!iso) return null;
   const days = Math.ceil((new Date(iso).getTime() - Date.now()) / 86_400_000);
@@ -104,6 +120,8 @@ export default function TendersPage() {
       <PageTitle
         title="Annonces"
         subtitle="Les appels d'offres qui correspondent à votre profil, avec un score et son explication."
+        icon="tenders"
+        color="green"
       />
       <div
         role="tablist"
@@ -125,7 +143,7 @@ export default function TendersPage() {
           </Button>
         ))}
       </div>
-      <Card title="Filtres">
+      <Card title="Filtres" color="slate">
         <form
           className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4"
           onSubmit={(e) => {
@@ -297,7 +315,9 @@ function TenderCard({
   const action = useAction();
   const left = daysLeft(t.deadline_at);
   return (
-    <li className="space-y-2 rounded-lg bg-white p-4 shadow-sm ring-1 ring-slate-200">
+    <li
+      className={`space-y-3 rounded-lg border border-slate-300 border-l-[6px] bg-white p-4 shadow-sm ${scoreStripe(t.score)}`}
+    >
       <div className="flex flex-wrap items-start gap-3">
         <div className="min-w-64 flex-1">
           <h2 className="text-base font-semibold text-brand-navy">{t.title}</h2>
@@ -308,7 +328,11 @@ function TenderCard({
           </p>
         </div>
         {t.score != null ? (
-          <Badge tone={scoreTone(t.score)}>{t.score} / 100</Badge>
+          <span
+            className={`inline-flex items-center rounded-md px-2.5 py-1 text-sm font-bold ring-1 ring-inset ${SCORE_BOX[scoreTone(t.score)]}`}
+          >
+            {t.score} / 100
+          </span>
         ) : (
           <Badge tone="neutral">
             {t.score_error ? "Score indisponible" : "Score en attente"}
@@ -318,26 +342,41 @@ function TenderCard({
       {t.explanation && (
         <p className="text-sm text-slate-800">{t.explanation}</p>
       )}
-      <p className="flex flex-wrap gap-x-4 gap-y-1 text-sm text-slate-700">
-        <span>
-          Date limite : {formatDateTime(t.deadline_at)}
-          {left && ` (${left})`}
-        </span>
-        {t.estimated_amount_cents != null && (
-          <span>
-            Montant estimé : {formatCents(t.estimated_amount_cents)} HT
-          </span>
-        )}
-        <span className="text-slate-500">
-          {t.source === "ted" ? "TED" : "BOAMP"}
-        </span>
-      </p>
+      <dl className="grid gap-px overflow-hidden rounded-md border border-slate-300 bg-slate-300 text-sm sm:grid-cols-[minmax(0,2fr)_minmax(0,1.3fr)_minmax(0,0.7fr)]">
+        <div className="bg-slate-50 px-3 py-2">
+          <dt className="text-xs font-semibold uppercase tracking-wide text-slate-600">
+            Date limite
+          </dt>
+          <dd className="font-medium text-slate-900">
+            {formatDateTime(t.deadline_at)}
+            {left && ` (${left})`}
+          </dd>
+        </div>
+        <div className="bg-slate-50 px-3 py-2">
+          <dt className="text-xs font-semibold uppercase tracking-wide text-slate-600">
+            Montant estimé
+          </dt>
+          <dd className="font-medium text-slate-900">
+            {t.estimated_amount_cents != null
+              ? `${formatCents(t.estimated_amount_cents)} HT`
+              : "Non précisé"}
+          </dd>
+        </div>
+        <div className="bg-slate-50 px-3 py-2">
+          <dt className="text-xs font-semibold uppercase tracking-wide text-slate-600">
+            Source
+          </dt>
+          <dd className="font-medium text-slate-900">
+            {t.source === "ted" ? "TED" : "BOAMP"}
+          </dd>
+        </div>
+      </dl>
       {t.reasons.length > 0 && (
         <p className="flex flex-wrap gap-1.5 text-xs">
           {t.reasons.map((r) => (
             <span
               key={r}
-              className="rounded-full bg-slate-100 px-2 py-0.5 text-slate-700"
+              className="rounded-full bg-emerald-50 px-2 py-0.5 text-emerald-900 ring-1 ring-inset ring-emerald-200"
             >
               {r}
             </span>

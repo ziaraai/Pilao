@@ -85,7 +85,7 @@ function IdentityForm({ company }: { company: Company }) {
   };
 
   return (
-    <Card title="Identité et mise en page">
+    <Card title="Identité et mise en page" color="brand" icon="profile">
       <form
         className="space-y-4"
         onSubmit={async (e) => {

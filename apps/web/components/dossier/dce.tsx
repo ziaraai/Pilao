@@ -3,7 +3,15 @@
 import { useRef } from "react";
 
 import { UploadButton } from "@/components/upload";
-import { Alert, Badge, Card, Empty, Select } from "@/components/ui";
+import {
+  Alert,
+  Badge,
+  Card,
+  Empty,
+  Select,
+  tableHead,
+  tableRow,
+} from "@/components/ui";
 import { api } from "@/lib/api";
 import { formatDateTime } from "@/lib/format";
 import { useAction, useApi } from "@/lib/hooks";
@@ -41,7 +49,7 @@ export function DceSection({
 
   const busy = versions.data ? running(versions.data) : false;
   return (
-    <Card title="DCE (dossier de consultation)">
+    <Card title="DCE (dossier de consultation)" color="blue" icon="bids">
       <UploadButton
         id="dce-upload"
         label={
@@ -78,9 +86,9 @@ export function DceSection({
           <details
             key={v.id}
             open={i === 0}
-            className="rounded-md ring-1 ring-slate-200"
+            className="overflow-hidden rounded-md border border-slate-300"
           >
-            <summary className="flex cursor-pointer flex-wrap items-center gap-2 px-4 py-3 text-sm">
+            <summary className="flex cursor-pointer flex-wrap items-center gap-2 bg-slate-50 px-4 py-3 text-sm">
               <span className="font-semibold text-brand-navy">
                 Version {v.version}
               </span>
@@ -92,7 +100,7 @@ export function DceSection({
                 pièce(s)
               </span>
             </summary>
-            <div className="space-y-3 px-4 pb-4">
+            <div className="space-y-3 border-t border-slate-200 px-4 py-4">
               {v.error && (
                 <Alert tone={v.status === "error" ? "danger" : "info"}>
                   {v.error}
@@ -101,18 +109,18 @@ export function DceSection({
               {v.diff_summary && <Alert tone="info">{v.diff_summary}</Alert>}
               {v.files.length > 0 && (
                 <table className="w-full text-left text-sm">
-                  <thead className="text-xs uppercase text-slate-500">
+                  <thead className={tableHead}>
                     <tr>
-                      <th className="py-1 pr-3">Pièce</th>
-                      <th className="pr-3">Type</th>
-                      <th>Texte</th>
+                      <th className="px-3 py-2">Pièce</th>
+                      <th className="px-3 py-2">Type</th>
+                      <th className="px-3 py-2">Texte</th>
                     </tr>
                   </thead>
-                  <tbody className="divide-y divide-slate-100">
+                  <tbody>
                     {v.files.map((f) => (
-                      <tr key={f.id}>
-                        <td className="py-2 pr-3 break-all">{f.path}</td>
-                        <td className="pr-3">
+                      <tr key={f.id} className={tableRow}>
+                        <td className="px-3 py-2 break-all">{f.path}</td>
+                        <td className="px-3 py-2">
                           <label htmlFor={`kind-${f.id}`} className="sr-only">
                             Type de {f.path}
                           </label>
@@ -145,7 +153,7 @@ export function DceSection({
                             </span>
                           )}
                         </td>
-                        <td className="text-xs text-slate-600">
+                        <td className="px-3 py-2 text-xs text-slate-600">
                           {f.text_status === "ready" ? (
                             `${f.paginated ? `${f.page_count ?? 0} page(s)` : "lu"}${f.ocr_used ? " · OCR" : ""}`
                           ) : f.text_status === "ocr_unavailable" ? (
