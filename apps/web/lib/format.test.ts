@@ -9,6 +9,7 @@ import {
   formatDate,
   formatDateTimeShort,
   formatDuration,
+  formatEuros,
   minutesToHours,
   parseHours,
   fromParisInput,
@@ -18,6 +19,13 @@ import {
 } from "./format";
 
 describe("money", () => {
+  it("shows a decimal amount in euros, as the AI costs are stored", () => {
+    expect(formatEuros("3.85000")).toBe("3,85 €");
+    expect(formatEuros(0)).toBe("0,00 €");
+    expect(formatEuros("1234.5")).toBe("1 234,50 €");
+    expect(formatEuros("pas un nombre")).toBe("—");
+  });
+
   it("parses what French users type into cents", () => {
     expect(parseEuros("12 500,50")).toBe(1250050);
     expect(parseEuros("12500.5 €")).toBe(1250050);

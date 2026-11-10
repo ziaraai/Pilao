@@ -10,6 +10,14 @@ export function formatCents(cents: number | null | undefined): string {
   return cents == null ? "—" : euros.format(cents / 100).replace(/ | /g, " ");
 }
 
+/** "3,85 €" from a decimal amount in euros (the AI costs: "3.85000"). */
+export function formatEuros(value: string | number): string {
+  const amount = typeof value === "number" ? value : Number.parseFloat(value);
+  return Number.isFinite(amount)
+    ? euros.format(amount).replace(/\u202f|\u00a0/g, " ")
+    : "—";
+}
+
 /** Cents from what a French user types: "12 500,50", "12500.5 €"... null if empty/invalid. */
 export function parseEuros(text: string): number | null {
   const cleaned = text.replace(/[\s  €]/g, "").replace(",", ".");

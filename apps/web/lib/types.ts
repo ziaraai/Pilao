@@ -531,3 +531,67 @@ export type AcceptResult = {
   created: number;
   errors: { id: string; message: string }[];
 };
+
+// --- Platform administration (super admin), calqué sur app/schemas/admin.py ---------------
+
+export type AdminMe = {
+  email: string;
+  full_name: string | null;
+  recovery_codes_left: number;
+  previous_login_at: string | null;
+};
+
+export type AdminSetupSecret = {
+  secret: string;
+  otpauth_uri: string;
+  qr_svg: string;
+};
+
+export type AdminSetupDone = { recovery_codes: string[]; me: AdminMe };
+
+export type AdminWatchItem = {
+  level: "red" | "amber";
+  kind: "import" | "job" | "ai" | "inactive";
+  title: string;
+  detail: string | null;
+  at: string | null;
+  org_id: string | null;
+};
+
+export type AdminTimeSaved = {
+  name: string;
+  bids: number;
+  minutes_saved: number;
+  percent: number | null;
+};
+
+export type AdminOverview = {
+  counters: {
+    organizations: number;
+    active_7d: number;
+    bids_open: number;
+    memoirs_done: number;
+    ai_cost_month: string;
+    job_errors_24h: number;
+  };
+  watch: AdminWatchItem[];
+  more_job_issues: number;
+  activity: {
+    org_id: string;
+    name: string;
+    logins: number;
+    bids: number;
+    memoirs: number;
+    exports: number;
+  }[];
+  imports: {
+    source: string;
+    enabled: boolean;
+    status: string | null;
+    started_at: string | null;
+    fetched: number | null;
+    created: number | null;
+    error: string | null;
+  }[];
+  time_saved: AdminTimeSaved[];
+};
