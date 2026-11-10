@@ -22,7 +22,21 @@ users (
   password_hash text, email_verified_at timestamptz, last_login_at timestamptz
 )
 
-platform_admins ( id, email citext unique )          -- global
+-- Administration de la plateforme (ADR-040) : tables globales, jamais filtrées par org_id
+platform_admins (
+  id, email citext unique, full_name text, password_hash text,
+  totp_secret_enc text,              -- secret de l'application d'authentification, chiffré (core/crypto.py)
+  totp_confirmed_at timestamptz,     -- vide tant que l'activation n'est pas finie
+  totp_last_step bigint,             -- dernier pas de temps accepté : un code ne sert qu'une fois
+  recovery_codes jsonb default '[]', -- empreintes SHA-256 des codes de secours restants
+  setup_token_hash char(64) unique, setup_expires_at timestamptz,   -- lien d'activation, 30 min
+  last_login_at timestamptz, disabled_at timestamptz
+)
+platform_admin_sessions ( id, admin_id -> platform_admins cascade, token_hash char(64) unique,
+                          expires_at, revoked_at, user_agent, ip inet )         -- 12 h
+platform_audit_logs ( id, admin_id -> platform_admins set null, admin_email text, action text,
+                      org_id uuid null,  -- sans clé étrangère : la ligne survit à l'entreprise
+                      at timestamptz, ip inet, meta jsonb )                      -- 12 mois
 ```
 
 ## Profil

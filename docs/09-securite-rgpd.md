@@ -23,6 +23,7 @@ Les mémoires techniques et les prix sont des secrets d'affaires pour nos client
 - URL signées à courte durée pour les fichiers.
 - Secrets dans un gestionnaire de secrets, jamais dans le dépôt.
 - Journal d'audit : génération, modification, export, suppression, accès support.
+- **Administration de la plateforme** (ADR-040) : comptes séparés des entreprises (table, sessions et cookie à part), créés seulement depuis le serveur (`admin-access`) ; mot de passe (12 caractères) + code d'une application d'authentification (TOTP, secret chiffré par une clé dérivée de `APP_SECRET_KEY`) + 8 codes de secours à usage unique ; blocage après 5 échecs en 15 minutes ; session de 12 heures (`SameSite=Strict`) ; pages exclues des moteurs de recherche. La supervision lit dans une transaction en **lecture seule** imposée par PostgreSQL et ne renvoie jamais le contenu des mémoires, des DCE, des documents, ni les titres des dossiers ou les lignes du profil (un test « témoin » le vérifie). Chaque action est notée dans `platform_audit_logs`.
 - Sauvegardes quotidiennes chiffrées, restauration testée.
 - Analyse antivirus des fichiers déposés (ClamAV ou équivalent).
 
@@ -32,7 +33,7 @@ Les mémoires techniques et les prix sont des secrets d'affaires pour nos client
 - Base légale : exécution du contrat (abonnement).
 - Pilao est **sous-traitant** pour les données que les clients déposent : contrat de sous-traitance (DPA) à faire signer.
 - Droits : export et suppression complète des données de l'org sur demande et à la résiliation (job de purge, y compris S3 et index vectoriel). **Fait** (ADR-026) : Profil > Vos données, export ZIP et suppression programmée à 30 jours, purge horaire avec reçu `purge_logs`.
-- Durées de conservation : effacement 30 jours après la demande ou la résiliation (ADR-026) ; tentatives de connexion 30 jours, sessions effacées dès leur fin, liens de confirmation dès leur utilisation ou expiration (purge horaire, ADR-029) ; sauvegardes : à fixer (Q15).
+- Durées de conservation : effacement 30 jours après la demande ou la résiliation (ADR-026) ; tentatives de connexion 30 jours, sessions effacées dès leur fin, liens de confirmation dès leur utilisation ou expiration (purge horaire, ADR-029) ; sessions d'administration dès leur fin, journal de l'administration 12 mois (ADR-040) ; sauvegardes : à fixer (Q15).
 - Documents : mentions légales, CGU, politique de confidentialité et accord de traitement (DPA, article 28) **rédigés** (`/mentions-legales`, `/conditions-utilisation`, `/confidentialite`, `/accord-de-traitement`, ADR-029) ; à compléter (`apps/web/lib/legal.ts`) et à faire relire par un juriste avant l'ouverture (Q16). L'acceptation est enregistrée à l'inscription (date et version).
 
 ## Responsabilité

@@ -395,3 +395,21 @@ Format : numéro, date, décision, raison, statut. Ajouter une entrée pour chaq
   - Les propositions vont dans `profile_suggestions` ; rien n'entre dans le profil sans que l'utilisateur coche et ajoute, avec les mêmes contrôles qu'une saisie à la main et une entrée d'audit.
   - Les notes d'une lecture réussie (documents sans ligne trouvée) sont gardées dans `jobs.error`, faute de colonne dédiée.
 - **Statut** : validé.
+
+## ADR-040 — Administration de la plateforme : un compte à part, en cinq lots, d'abord en lecture seule
+- **Date** : 2026-11-10
+- **Contexte** : l'exploitant de Pilao veut un vrai back-office du SaaS (comptes, formules, crédits, clés API, modèles d'IA). Le rôle `platform_admin` existait dans `docs/04` et la table `platform_admins` en base, sans écran. Tout compte et toute session appartenaient à une entreprise. Spécification : `docs/superpowers/specs/2026-11-10-administration-lot1-supervision-design.md`.
+- **Décision** :
+  - Cinq lots, chacun conçu, validé et mis en ligne à part : 1. accès et supervision en lecture seule ; 2. gestion des comptes ; 3. socle des modules ; 4. formules et crédits ; 5. réglages de la plateforme.
+  - Le super admin n'est pas un utilisateur d'entreprise : ses comptes (`platform_admins`), ses sessions (`platform_admin_sessions`) et son cookie (`pilao_admin_session`, 12 heures, `SameSite=Strict`) sont à part. Une session d'entreprise n'ouvre rien sous `/admin`, et l'inverse.
+  - Un compte ne se crée, ne se réinitialise et ne se ferme que depuis le serveur : `python -m app.cli admin-access`. Le lien d'activation est à usage unique (30 minutes) ; seule son empreinte est en base.
+  - Connexion : mot de passe (12 caractères) + code d'une application d'authentification (TOTP, RFC 6238, fenêtre d'un pas, chaque pas une seule fois) ou un des 8 codes de secours. Le secret est chiffré (Fernet, clé dérivée de `APP_SECRET_KEY` par HKDF, `app/core/crypto.py`, réutilisé pour les clés API du lot 5). Une seule réponse en cas d'échec ; 5 échecs en 15 minutes bloquent l'adresse.
+  - La supervision lit dans une transaction en **lecture seule** (`SET TRANSACTION READ ONLY`) : PostgreSQL refuse toute écriture, même par erreur de code. Elle ne renvoie jamais le texte d'un mémoire, d'un DCE ou d'un document, un fichier, le titre d'un dossier ni une ligne de profil (test « témoin »).
+  - Le journal `platform_audit_logs` garde 12 mois les actions de l'administration, dont chaque ouverture de la fiche d'une entreprise et chaque échec de connexion (qui sert aussi au blocage).
+- **Statut** : validé (lot 1 livré).
+
+## ADR-041 — Des modules internes activables, pas des plugins installables
+- **Date** : 2026-11-10
+- **Contexte** : l'exploitant veut pouvoir ajouter plus tard d'autres modules (CRM, gestion de stock…) et les ouvrir entreprise par entreprise. Deux voies : des modules dans le code de Pilao, activés par le super admin, ou de vrais plugins installés et mis à jour à part (comme le plugin de Ziara dans son application hôte).
+- **Décision** : modules internes. Chaque module est un bloc séparé du code (écrans, données, entrée de menu), déclaré dans un registre ; le super admin l'active par entreprise ou par formule ; tout est mis en ligne ensemble. Le produit actuel devient le module « Appels d'offres ». Des plugins installables ne seraient utiles qu'avec des développeurs tiers ou une boutique de modules ; des modules bien séparés pourront le devenir. Conception au lot 3 de l'administration.
+- **Statut** : validé (principe) ; à concevoir.

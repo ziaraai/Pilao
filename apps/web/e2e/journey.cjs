@@ -38,6 +38,27 @@ function luhnSiret(prefix) {
 }
 const step = (n) => console.log("✓", n);
 
+// The code an authenticator application shows (RFC 6238: SHA-1, 6 digits, 30 s).
+function totp(secret, offsetSteps = 0) {
+  const alphabet = "ABCDEFGHIJKLMNOPQRSTUVWXYZ234567";
+  let bits = "";
+  for (const ch of secret.replace(/=+$/, "").toUpperCase())
+    bits += alphabet.indexOf(ch).toString(2).padStart(5, "0");
+  const key = [];
+  for (let i = 0; i + 8 <= bits.length; i += 8)
+    key.push(parseInt(bits.slice(i, i + 8), 2));
+  const counter = Buffer.alloc(8);
+  counter.writeBigUInt64BE(
+    BigInt(Math.floor(Date.now() / 30000) + offsetSteps),
+  );
+  const mac = require("crypto")
+    .createHmac("sha1", Buffer.from(key))
+    .update(counter)
+    .digest();
+  const at = mac[mac.length - 1] & 0xf;
+  return String((mac.readUInt32BE(at) & 0x7fffffff) % 1000000).padStart(6, "0");
+}
+
 let current; // the page, for a screenshot when a step fails
 
 (async () => {
@@ -708,6 +729,91 @@ let current; // the page, for a screenshot when a step fails
   }
   step("legal pages reachable from the footer");
   await page.goto(`${WEB}/profil`);
+
+  // 14. Platform administration (US-6.1, US-6.2): its own account, created from the server
+  const adminEmail = `admin-e2e${n}@example.fr`;
+  const adminPassword = "un-mot-de-passe-d-administration";
+  const granted = execFileSync(
+    PY,
+    ["-m", "app.cli", "admin-access", adminEmail, "--name", "Admin E2E"],
+    { cwd: `${__dirname}/../../api` },
+  ).toString();
+  const link = granted
+    .split("\n")
+    .find((l) => l.includes("/admin/activation?jeton="));
+  if (!link) throw new Error("admin-access: " + granted);
+  const adminContext = await browser.newContext({
+    viewport: { width: 1280, height: 900 },
+    locale: "fr-FR",
+  });
+  const admin = await adminContext.newPage();
+  current = admin;
+  admin.on("console", (m) => {
+    if (m.type() === "error") consoleErrors.push(m.text());
+  });
+  await admin.goto(
+    `${WEB}${new URL(link.trim()).pathname}${new URL(link.trim()).search}`,
+  );
+  await admin.getByLabel("Choisissez un mot de passe").fill(adminPassword);
+  await admin.getByLabel("Saisissez-le une seconde fois").fill(adminPassword);
+  await admin.getByRole("button", { name: "Continuer" }).click();
+  await admin.getByAltText("QR code").waitFor();
+  const secret = (await admin.getByTestId("totp-secret").innerText()).trim();
+  await admin.getByLabel("Code affiché par l'application").fill(totp(secret));
+  await admin.getByRole("button", { name: "Activer mon accès" }).click();
+  const codes = admin.getByLabel("Codes de secours").locator("li");
+  await codes.first().waitFor();
+  if ((await codes.count()) !== 8) throw new Error("8 recovery codes expected");
+  await admin.getByLabel("J'ai noté mes codes").check();
+  await admin.getByRole("button", { name: "Ouvrir l'administration" }).click();
+  await admin.waitForURL(`${WEB}/admin`);
+  await admin.getByRole("heading", { name: "Vue d'ensemble" }).waitFor();
+  await admin.getByText("Lecture seule").first().waitFor();
+  await admin
+    .getByRole("link", { name: "Nettoyage E2E", exact: true })
+    .first()
+    .waitFor();
+  step(
+    "super admin created from the server, activated with an authenticator code",
+  );
+
+  await admin.getByRole("button", { name: "Déconnexion" }).click();
+  await admin.waitForURL(`${WEB}/admin/connexion`);
+  await admin.getByLabel("E-mail").fill(adminEmail);
+  await admin.getByLabel("Mot de passe").fill(adminPassword);
+  await admin.getByLabel("Code").fill(totp(secret, 1)); // the current step activated the access
+  await admin.getByRole("button", { name: "Se connecter" }).click();
+  await admin.waitForURL(`${WEB}/admin`);
+  await admin.getByText("Votre connexion précédente").waitFor();
+  for (const [path, heading] of [
+    ["/admin/entreprises", "Entreprises"],
+    ["/admin/couts-ia", "Coûts de l'IA"],
+    ["/admin/technique", "Technique"],
+    ["/admin/avis", "Avis des testeurs"],
+  ]) {
+    await admin.getByRole("link", { name: heading, exact: true }).click();
+    await admin.waitForURL(`${WEB}${path}`);
+    await admin.getByRole("heading", { name: heading }).waitFor();
+  }
+  await admin.getByRole("link", { name: "Entreprises", exact: true }).click();
+  await admin
+    .getByRole("link", { name: "Nettoyage E2E", exact: true })
+    .first()
+    .click();
+  await admin.getByRole("heading", { name: "Nettoyage E2E" }).waitFor();
+  await admin.getByText("n'est jamais affiché ici").waitFor();
+  // the company's user is listed, never its documents
+  await admin.getByRole("cell", { name: email, exact: true }).waitFor();
+  await admin.screenshot({ path: `${S}/admin-fiche.png`, fullPage: true });
+  await adminContext.close();
+  current = page;
+  // the company's session opens nothing in the administration
+  await page.goto(`${WEB}/admin`);
+  await page.waitForURL(/\/admin\/connexion\?suite=%2Fadmin$/);
+  await page.goto(`${WEB}/profil`);
+  step(
+    "signed in again, five screens and the company page read; a company session is refused",
+  );
 
   // 8. Logout
   await page.getByRole("button", { name: "Déconnexion" }).click();

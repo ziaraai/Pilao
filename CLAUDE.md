@@ -67,6 +67,7 @@ Ce fichier est le point d'entrée. Lis-le en entier au début de chaque session,
 ## 6. Phase en cours
 
 Phases 1 (socle) et 2 (mémoire, documents, export) faites ; Phase 3 (veille) faite : TED et BOAMP importés toutes les 2 h (ADR-036, `docs/10-roadmap-taches.md`).
+Administration de la plateforme (back-office du SaaS, ADR-040) : lot 1 fait (compte super admin séparé, supervision en lecture seule sur `/admin`) ; lots 2 à 5 à concevoir (comptes, modules ADR-041, formules et crédits, réglages).
 En attente : **Phase 0 — test des modèles d'IA** (clé OpenRouter, 3 vrais DCE + mémoires techniques + plan type envoyés par Abdraouf, à placer dans `samples/` — dossier **non versionné**, ajouté au `.gitignore`).
 
 ## 7. Commandes (à compléter quand le repo sera initialisé)
@@ -81,6 +82,7 @@ cd apps/api && uv run python -m app.cli load-tenders annonces.json  # charger de
 cd apps/api && uv run python -m app.cli import-tenders --source ted [--since 2026-10-01] [--essai]  # importer TED / BOAMP maintenant
 cd apps/api && uv run python -m app.cli eval-models --models a,b,c  # phase 0 : comparer des modèles (docs/11, base *_eval)
 cd apps/api && uv run python -m app.cli feedback-report --days 30 --csv retours.csv  # avis des testeurs et temps gagné
+cd apps/api && uv run python -m app.cli admin-access vous@exemple.fr --name "Nom"  # accès super admin (lien d'activation ; --disable ferme), ADR-040
 sudo apt-get install tesseract-ocr tesseract-ocr-fra libreoffice-writer-nogui fonts-liberation  # OCR et export PDF (worker)
 cd apps/web && pnpm install && pnpm dev               # NEXT_PUBLIC_API_URL=http://localhost:8000 par défaut
 cd apps/web && pnpm test                             # tests unitaires du front ; parcours navigateur : apps/web/e2e/README.md

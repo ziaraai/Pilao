@@ -166,6 +166,31 @@ L'utilisateur indique gagné / perdu, le montant proposé, le classement et les 
 
 ---
 
+## Module 6 — Administration de la plateforme
+
+Le back-office de l'exploitant de Pilao, en cinq lots (ADR-040) : 1. accès et supervision en lecture seule (**fait**) ; 2. gestion des comptes ; 3. socle des modules (ADR-041) ; 4. formules et crédits ; 5. réglages de la plateforme (modèles d'IA, clés API, imports). Conception du lot 1 : `docs/superpowers/specs/2026-11-10-administration-lot1-supervision-design.md`.
+
+**US-6.1 Accès du super admin**
+L'exploitant a un compte à lui, séparé de tout compte d'entreprise, sur `app.pilao.pro/admin`.
+- CA1 Création et réinitialisation seulement depuis le serveur : `python -m app.cli admin-access EMAIL [--name NOM]` affiche un lien d'activation à usage unique, valable 30 minutes. `--disable` ferme le compte et ses sessions. Aucun écran ne crée un super admin.
+- CA2 Activation en trois étapes : mot de passe (12 caractères au moins, deux saisies), QR code à scanner avec une application d'authentification et premier code à 6 chiffres, puis 8 codes de secours affichés une seule fois.
+- CA3 Connexion : e-mail, mot de passe et code (de l'application ou de secours). Une seule réponse en cas d'échec : « Identifiants ou code incorrects. » Un code de l'application ne sert qu'une fois ; un code de secours aussi.
+- CA4 Après 5 échecs pour une adresse en 15 minutes : « Trop de tentatives. Réessayez dans quelques minutes. »
+- CA5 Session de 12 heures, sans prolongation, sur son propre cookie : une session d'entreprise n'ouvre rien sous `/admin`, une session d'administration rien dans l'espace des entreprises.
+- CA6 La vue d'ensemble rappelle la date de la connexion précédente, et le nombre de codes de secours restants quand il en manque.
+
+**US-6.2 Supervision (lecture seule)**
+Cinq écrans, avec la pastille « Lecture seule » : vue d'ensemble (compteurs, « À surveiller », activité des 7 jours, imports, temps gagné), entreprises et fiche d'une entreprise, coûts de l'IA par mois (par entreprise, tâche et modèle), technique (imports, tâches en erreur ou bloquées), avis des testeurs (7, 30 ou 90 jours).
+- CA1 « À surveiller » : en rouge, un import en erreur ou sans réussite depuis 6 heures, une tâche en erreur sur 24 heures ou bloquée depuis 30 minutes, plus de 20 % d'appels à l'IA en échec sur 24 heures (10 appels au moins) ; en orange, une entreprise inscrite depuis plus de 10 jours et sans activité depuis 10 jours.
+- CA2 La base refuse toute écriture depuis ces écrans (transaction en lecture seule).
+- CA3 Jamais affiché ni renvoyé : le texte d'un mémoire, d'un DCE ou d'un document, un fichier, le titre d'un dossier, les lignes du profil (moyens, références, chiffre d'affaires).
+- CA4 Jours et mois en heure de Paris ; un appel à l'IA sans entreprise est rangé sous « Plateforme ».
+
+**US-6.3 Journal de l'administration**
+Chaque création ou réinitialisation d'accès, activation, connexion (réussie ou non), code de secours utilisé, déconnexion, fermeture de compte et ouverture de la fiche d'une entreprise est enregistrée (`platform_audit_logs`), et gardée 12 mois. Son écran de consultation arrive avec le lot 2.
+
+---
+
 ## Hors périmètre V1
 
 Téléchargement automatique des DCE, chiffrage, dépôt de l'offre, marchés privés, application mobile, analyse DECP, facturation Stripe (prévoir l'emplacement, ne pas coder).

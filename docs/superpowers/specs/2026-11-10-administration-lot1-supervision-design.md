@@ -1,7 +1,7 @@
 # Administration de la plateforme, lot 1 : compte super admin et supervision — conception
 
 - **Date** : 2026-11-10
-- **Statut** : conception validée en discussion ; document à relire avant le plan.
+- **Statut** : validé et livré (lot 1).
 - **Stories** : US-6.1 à US-6.3 (nouvelles, « Module 6 — Administration de la plateforme »). Le rôle
   `platform_admin` existe déjà dans `docs/04` et la table `platform_admins` en base (vide, sans
   écran).
@@ -109,7 +109,7 @@ Aucune table d'entreprise n'est modifiée. Ces trois tables sont **globales** (p
 char(64) unique, `expires_at`, `revoked_at`, `ip`, `user_agent`, `created_at`. Le calque de
 `user_sessions`, sans `org_id`.
 
-**`platform_audit_log`** : `id`, `admin_id` (→ `platform_admins`, `set null`), `admin_email`
+**`platform_audit_logs`** : `id`, `admin_id` (→ `platform_admins`, `set null`), `admin_email`
 (gardé si le compte disparaît ; pour un échec, l'e-mail saisi), `action`, `org_id` uuid null
 (sans clé étrangère : la ligne survit à la suppression de l'entreprise), `at`, `ip`, `meta` jsonb.
 Index sur (`action`, `at`).
@@ -173,7 +173,7 @@ ne lit pas le cookie d'administration : deux noms de cookie, deux tables de sess
 - **Blocage** : 5 échecs pour un même e-mail ou 30 pour une même adresse IP en 15 minutes → 429
   (la fenêtre et le seuil par adresse IP sont ceux des comptes d'entreprise). Un mot de passe juste
   avec un code faux compte comme un échec.
-  Les échecs sont comptés dans `platform_audit_log` (`login_failed`). Tentatives sur un même
+  Les échecs sont comptés dans `platform_audit_logs` (`login_failed`). Tentatives sur un même
   e-mail sérialisées (verrou consultatif), comme pour les comptes d'entreprise.
 - **Pas d'indice** : même message et même travail (hachage compris) que l'e-mail existe ou non,
   que l'erreur soit le mot de passe ou le code.

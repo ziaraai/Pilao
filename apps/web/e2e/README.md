@@ -8,7 +8,7 @@ sources cliquables, plan du mémoire, rédaction, matrice de conformité et « c
 modification d'un chapitre et restauration d'une version, DC1 téléchargé, export du dossier complet
 (ZIP avec le PDF de LibreOffice) après avertissements, base documentaire, annonces chargées par
 `python -m app.cli load-tenders` puis filtrées, notées, écartée ou suivie, résultat du dossier,
-tableau de bord, déconnexion. Le parcours lance la CLI : exécutez-le avec les variables ci-dessus. Le worker
+tableau de bord, puis l'administration de la plateforme (accès créé par `python -m app.cli admin-access`, activation avec un code TOTP calculé par le parcours, nouvelle connexion, les cinq écrans et la fiche de l'entreprise, refus d'une session d'entreprise), déconnexion. Le parcours lance la CLI : exécutez-le avec les variables ci-dessus. Le worker
 a besoin de LibreOffice (`libreoffice-writer-nogui`) pour le PDF.
 
 ```bash

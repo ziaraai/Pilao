@@ -104,6 +104,12 @@ Les fichiers déposés sont stockés sur le disque du serveur, dans le volume `p
     - Fréquence : tous les jours à 03:15, utilisateur root.
     - Les sauvegardes vont dans `/var/backups/pilao`. **Copier aussi ce dossier hors du serveur** (Plesk Backup Manager vers un stockage distant) : une sauvegarde qui reste sur le même disque ne protège pas d'une panne du serveur.
 12. **Sauvegarder `secrets.env`** dans un gestionnaire de mots de passe : sans lui, la base sauvegardée ne s'ouvre plus.
+13. **Accès super admin** (ADR-040) : dans le terminal (Plesk > Tools & Settings > SSH Terminal) :
+    `/opt/pilao/pilao.sh exec api python -m app.cli admin-access vous@exemple.fr --name "Votre nom"`.
+    Ouvrez dans les 30 minutes le lien affiché, choisissez un mot de passe (12 caractères au moins), scannez le QR code avec une application d'authentification (Google Authenticator ou équivalent), saisissez son code, puis notez les 8 codes de secours. L'administration est ensuite sur `https://app.pilao.pro/admin`.
+    - Téléphone changé ou perdu : un code de secours remplace une fois le code à 6 chiffres. Sans code de secours, relancez la même commande : l'accès est réinitialisé (mot de passe, application, codes, sessions) et un nouveau lien s'affiche.
+    - Fermer un compte tout de suite : la même commande avec `--disable`.
+    - Changer `APP_SECRET_KEY` rend les secrets des applications d'authentification illisibles : relancez alors la commande pour chaque super admin.
 
 ### Au quotidien
 
@@ -113,7 +119,7 @@ Les fichiers déposés sont stockés sur le disque du serveur, dans le volume `p
 - Si le miroir de paquets d'Ubuntu bloque dans la CI (vu les 5 et 6 novembre 2026), l'installation de Tesseract et LibreOffice abandonne au bout de quelques minutes avec un avertissement. Leurs tests sont alors sautés dans le job `api`, mais le job `images` vérifie l'OCR et chaque conversion LibreOffice dans l'image de production : le déploiement n'est plus bloqué.
 - Les migrations de base passent avant la nouvelle version. Elles n'ajoutent que des tables et des colonnes, donc la version précédente fonctionne encore avec la base migrée.
 - Lire les journaux : `/opt/pilao/pilao.sh logs --tail 100 api worker`.
-- Les avis des testeurs : `/opt/pilao/pilao.sh exec api python -m app.cli feedback-report --days 7`.
+- Les avis des testeurs, les coûts de l'IA, les imports et les tâches en erreur : l'administration, `https://app.pilao.pro/admin` (lecture seule). En ligne de commande : `/opt/pilao/pilao.sh exec api python -m app.cli feedback-report --days 7`.
 
 ### Restaurer une sauvegarde
 

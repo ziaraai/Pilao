@@ -4,7 +4,7 @@
 
 **Goal:** un espace `app.pilao.pro/admin` réservé à un compte super admin séparé des entreprises (mot de passe + code TOTP, créé par une commande du serveur), avec cinq écrans de supervision en lecture seule.
 
-**Architecture:** trois tables globales (`platform_admins` étendue, `platform_admin_sessions`, `platform_audit_log`) ; un groupe de routes `/admin` avec son propre cookie et ses propres dépendances ; les lectures de supervision passent par une session PostgreSQL en lecture seule ; les règles « À surveiller » sont des fonctions pures. Côté web, un groupe de routes `(admin)` avec sa coquille bleu marine.
+**Architecture:** trois tables globales (`platform_admins` étendue, `platform_admin_sessions`, `platform_audit_logs`) ; un groupe de routes `/admin` avec son propre cookie et ses propres dépendances ; les lectures de supervision passent par une session PostgreSQL en lecture seule ; les règles « À surveiller » sont des fonctions pures. Côté web, un groupe de routes `(admin)` avec sa coquille bleu marine.
 
 **Tech Stack:** FastAPI, SQLAlchemy 2, Alembic, Pydantic v2, `pyotp`, `cryptography` (Fernet + HKDF), `segno`, Next.js + Tailwind, pytest, vitest, Playwright (`journey.cjs`).
 

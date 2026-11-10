@@ -84,6 +84,12 @@ Reste à faire :
 - [ ] P4-04 Pages légales (CGU, confidentialité, DPA), mise en production UE — images de production, garde-fous de démarrage et guide faits (ADR-025, `docs/14-deploiement.md`) ; pages légales rédigées, acceptation enregistrée, rétention et non-entraînement appliqués par le code (ADR-029) ; restent les informations de la société (Q5), l'hébergeur (Q7), la relecture juridique (Q16)
 - [x] Réacceptation des conditions quand `TERMS_VERSION` change (article 12 des CGU) : écran bloquant « Nos conditions ont changé », `POST /auth/accept-terms` (ADR-029)
 - [ ] P4-05 Décision prix et formules
+- [ ] P4-06 Administration de la plateforme (back-office du SaaS, US-6.x, ADR-040), en cinq lots :
+  - [x] Lot 1 — compte super admin séparé (mot de passe + code TOTP, créé par `admin-access`) et supervision en lecture seule : vue d'ensemble, entreprises et fiche, coûts de l'IA, technique, avis
+  - [ ] Lot 2 — gestion des comptes : créer, suspendre, réactiver, utilisateurs, invitations, suppression ; écran du journal
+  - [ ] Lot 3 — socle des modules : modules internes activables par entreprise, le produit actuel devient le module « Appels d'offres » (ADR-041)
+  - [ ] Lot 4 — formules et crédits : une formule = des modules + des crédits ; attribution à la main (dépend de P4-05), Stripe plus tard
+  - [ ] Lot 5 — réglages de la plateforme : modèle d'IA par tâche, clés API chiffrées en base, imports
 
 ## V2 (après validation)
 

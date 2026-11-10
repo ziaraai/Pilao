@@ -32,17 +32,17 @@ pilao/
 ├── docs/ prompts/ schemas/ data/          # cette base de connaissance
 ├── apps/
 │   ├── web/                               # Next.js
-│   │   ├── app/(auth)/ app/(app)/
+│   │   ├── app/(auth)/ app/(app)/ app/(admin)/   # (admin) : l'administration de la plateforme (ADR-040)
 │   │   │   ├── dashboard/  tenders/  bids/[id]/  profile/  vault/  settings/
-│   │   ├── components/  lib/api.ts  lib/i18n/fr.ts
+│   │   ├── components/ (admin/ : coquille et blocs de l'administration)  lib/api.ts  lib/admin.ts
 │   └── api/                               # FastAPI + worker
 │       ├── app/
 │       │   ├── main.py
-│       │   ├── core/        config.py, security.py, tenancy.py, logging.py
+│       │   ├── core/        config.py, security.py, tenancy.py, logging.py, crypto.py, admin_deps.py
 │       │   ├── db/          base.py, session.py, models/*.py
 │       │   ├── schemas/     pydantic (miroir de /schemas/*.json)
-│       │   ├── routers/     auth, orgs, profile, tenders, bids, dce, memoirs, vault, exports
-│       │   ├── services/    logique métier par module
+│       │   ├── routers/     auth, orgs, profile, tenders, bids, dce, memoirs, vault, exports ; admin/ (auth, supervision)
+│       │   ├── services/    logique métier par module ; admin/ (access, auth, audit, supervision)
 │       │   ├── integrations/ boamp.py, ted.py, recherche_entreprises.py
 │       │   ├── documents/   extract.py (pdf/docx/xlsx), ocr.py, classify.py, chunk.py
 │       │   ├── ai/          llm.py, embeddings.py, prompts.py (charge /prompts), costs.py
