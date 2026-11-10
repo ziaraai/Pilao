@@ -19,6 +19,7 @@ from sqlalchemy import ColumnElement, and_, func, or_, select
 from sqlalchemy.orm import Session
 
 from app.core.config import get_settings
+from app.core.errors import ApiError
 from app.db.models import (
     AiCall,
     AuditLog,
@@ -38,10 +39,16 @@ from app.domain import admin_watch
 from app.domain.admin_watch import ImportState, JobIssue, OrgActivity
 from app.schemas.admin import (
     ActivityRowOut,
+    AiCostModelOut,
+    AiCostOrgOut,
+    AiCostsOut,
+    AiCostTaskOut,
     AiMonthOut,
     AiTaskOut,
     CountersOut,
     FeedbackItemOut,
+    FeedbackOut,
+    ImportPassOut,
     ImportRowOut,
     JobIssueOut,
     OrganizationDetailOut,
@@ -50,6 +57,7 @@ from app.schemas.admin import (
     OrgIdentityOut,
     OrgUserOut,
     OverviewOut,
+    SystemOut,
     TimeSavedRowOut,
     WatchItemOut,
 )
@@ -421,4 +429,126 @@ def organization_detail(db: Session, org_id: uuid.UUID, now: datetime) -> Organi
             job_issue_out(issue) for issue in job_issues(db, now, now - timedelta(days=30), org_id)
         ],
         feedback=[FeedbackItemOut(**vars(row)) for row in recent_feedback(db, org_id=org_id)],
+    )
+
+
+# --- AI costs, system, feedback ---------------------------------------------------------
+
+PLATFORM = "Plateforme"  # calls made for no company in particular (org_id NULL)
+MAX_IMPORT_PASSES = 20
+MAX_JOB_ISSUES = 50
+
+
+def ai_costs(db: Session, month: date | None, now: datetime) -> AiCostsOut:
+    """What the AI cost over one calendar month of Paris, by company, task and model."""
+    months = months_back(current_month(now), 12)
+    month = month or months[-1]
+    if month not in months:
+        raise ApiError(422, "invalid_month", "Choisissez un des douze derniers mois.")
+    start, end = paris_month_bounds(month)
+    window = (AiCall.created_at >= start, AiCall.created_at < end)
+    cost = func.sum(AiCall.cost_eur)
+    by_org = db.execute(
+        select(
+            AiCall.org_id,
+            Organization.name,
+            func.count(),
+            func.sum(AiCall.input_tokens),
+            func.sum(AiCall.output_tokens),
+            cost,
+        )
+        .outerjoin(Organization, Organization.id == AiCall.org_id)
+        .where(*window)
+        .group_by(AiCall.org_id, Organization.name)
+        .order_by(cost.desc(), Organization.name)
+    ).all()
+    by_task = db.execute(
+        select(
+            AiCall.task,
+            func.count(),
+            func.count().filter(AiCall.success.is_(False)),
+            func.avg(AiCall.latency_ms),
+            cost,
+        )
+        .where(*window)
+        .group_by(AiCall.task)
+        .order_by(cost.desc(), AiCall.task)
+    ).all()
+    by_model = db.execute(
+        select(AiCall.model, func.count(), cost)
+        .where(*window)
+        .group_by(AiCall.model)
+        .order_by(cost.desc(), AiCall.model)
+    ).all()
+    return AiCostsOut(
+        month=f"{month:%Y-%m}",
+        months=[f"{m:%Y-%m}" for m in reversed(months)],
+        total=euros(sum((row[2] for row in by_model), Decimal(0))),
+        by_org=[
+            AiCostOrgOut(
+                org_id=org_id,
+                name=name or PLATFORM,
+                calls=calls,
+                input_tokens=int(tokens_in or 0),
+                output_tokens=int(tokens_out or 0),
+                cost=euros(spent),
+            )
+            for org_id, name, calls, tokens_in, tokens_out, spent in by_org
+        ],
+        by_task=[
+            AiCostTaskOut(
+                task=task,
+                label=admin_watch.task_label(task),
+                calls=calls,
+                failures=failures,
+                avg_latency_ms=round(latency or 0),
+                cost=euros(spent),
+            )
+            for task, calls, failures, latency, spent in by_task
+        ],
+        by_model=[
+            AiCostModelOut(model=model, calls=calls, cost=euros(spent))
+            for model, calls, spent in by_model
+        ],
+    )
+
+
+def system(db: Session, now: datetime) -> SystemOut:
+    """The latest passes of the notice readers, and the jobs that need a look."""
+    passes = db.scalars(
+        select(TenderImport).order_by(TenderImport.created_at.desc()).limit(MAX_IMPORT_PASSES)
+    ).all()
+    return SystemOut(
+        imports=[
+            ImportPassOut(
+                source=p.source,
+                status=p.status,
+                started_at=p.created_at,
+                duration_seconds=(
+                    round((p.finished_at - p.created_at).total_seconds()) if p.finished_at else None
+                ),
+                fetched=p.fetched,
+                created=p.created,
+                updated=p.updated,
+                corrected=p.corrected,
+                skipped=p.skipped,
+                matched=p.matched,
+                error=p.error,
+            )
+            for p in passes
+        ],
+        jobs=[
+            job_issue_out(issue)
+            for issue in job_issues(db, now, now - timedelta(days=30))[:MAX_JOB_ISSUES]
+        ],
+    )
+
+
+def feedback(db: Session, days: int, now: datetime) -> FeedbackOut:
+    """What the users wrote over the last ``days`` days, and the time they saved."""
+    items = recent_feedback(db, since=now - timedelta(days=days))
+    return FeedbackOut(
+        days=days,
+        items=[FeedbackItemOut(**vars(row)) for row in items],
+        time_saved=_time_saved(db),
     )

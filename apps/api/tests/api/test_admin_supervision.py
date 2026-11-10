@@ -14,11 +14,13 @@ from sqlalchemy.orm import Session
 from app.core.config import get_settings
 from app.db.models import (
     AuditLog,
+    Feedback,
     Organization,
     PlatformAuditLog,
     TenderImport,
     User,
 )
+from app.routers.admin import supervision as supervision_routes
 from tests.api.admin_helpers import (
     activated_admin,
     org_named,
@@ -282,3 +284,223 @@ def test_detail_and_its_audit_entry(make_client: Factory, outbox: Outbox, db: Se
         )
         == 1
     )  # an unknown company leaves no trace
+
+
+# --- AI costs, system, feedback -----------------------------------------------------------
+
+FROZEN = datetime(2026, 11, 10, 12, 0, tzinfo=UTC)  # a Tuesday noon, mid-month
+
+
+@pytest.fixture
+def frozen(monkeypatch: pytest.MonkeyPatch) -> datetime:
+    """The supervision routes believe it is ``FROZEN``: months do not move under the tests."""
+    monkeypatch.setattr(supervision_routes, "_now", lambda: FROZEN)
+    return FROZEN
+
+
+def test_costs_by_month_company_task_and_model(
+    make_client: Factory, outbox: Outbox, db: Session, frozen: datetime
+) -> None:
+    signed_in_client(make_client, outbox, 1)
+    signed_in_client(make_client, outbox, 2)
+    one, two = org_named(db, "Entreprise 1").id, org_named(db, "Entreprise 2").id
+    hour_ago = frozen - timedelta(hours=1)
+    seed_ai_call(
+        db,
+        one,
+        "memoir_generation",
+        "0.20",
+        created_at=hour_ago,
+        input_tokens=1000,
+        output_tokens=500,
+        latency_ms=2000,
+    )
+    seed_ai_call(
+        db,
+        one,
+        "memoir_generation",
+        "0.10",
+        created_at=hour_ago,
+        input_tokens=200,
+        output_tokens=0,
+        latency_ms=4000,
+        success=False,
+    )
+    seed_ai_call(db, two, "dce_extraction", "0.25", created_at=hour_ago)
+    seed_ai_call(db, None, "tender_scoring", "0.05", created_at=hour_ago)
+    seed_ai_call(
+        db, one, "memoir_generation", "9.00", created_at=datetime(2026, 10, 15, 9, 0, tzinfo=UTC)
+    )
+    db.commit()
+    admin, _ = activated_admin(make_client, db)
+
+    res = admin.get("/admin/ai-costs")
+
+    assert res.status_code == 200, res.text
+    r = res.json()
+    assert (r["month"], r["total"]) == ("2026-11", "0.60")
+    assert r["months"][:2] == ["2026-11", "2026-10"] and r["months"][-1] == "2025-12"
+    assert len(r["months"]) == 12
+    assert [(o["name"], o["calls"], o["cost"]) for o in r["by_org"]] == [
+        ("Entreprise 1", 2, "0.30"),
+        ("Entreprise 2", 1, "0.25"),
+        ("Plateforme", 1, "0.05"),
+    ]
+    first, _, platform = r["by_org"]
+    assert (first["org_id"], first["input_tokens"], first["output_tokens"]) == (
+        str(one),
+        1200,
+        500,
+    )
+    assert platform["org_id"] is None
+    assert r["by_task"][0] == {
+        "task": "memoir_generation",
+        "label": "Rédaction du mémoire",
+        "calls": 2,
+        "failures": 1,
+        "avg_latency_ms": 3000,
+        "cost": "0.30",
+    }
+    assert [t["task"] for t in r["by_task"]] == [
+        "memoir_generation",
+        "dce_extraction",
+        "tender_scoring",
+    ]
+    assert r["by_model"] == [{"model": "fournisseur/modele", "calls": 4, "cost": "0.60"}]
+    october = admin.get("/admin/ai-costs", params={"month": "2026-10"}).json()
+    assert (october["month"], october["total"]) == ("2026-10", "9.00")
+
+
+def test_month_edge_in_paris_time(make_client: Factory, db: Session, frozen: datetime) -> None:
+    # 31 October 23:30 UTC is already 1 November, 00:30, in Paris
+    seed_ai_call(
+        db, None, "embedding", "1.00", created_at=datetime(2026, 10, 31, 23, 30, tzinfo=UTC)
+    )
+    db.commit()
+    admin, _ = activated_admin(make_client, db)
+    assert admin.get("/admin/ai-costs", params={"month": "2026-11"}).json()["total"] == "1.00"
+    assert admin.get("/admin/ai-costs", params={"month": "2026-10"}).json()["total"] == "0.00"
+
+
+def test_bad_month(make_client: Factory, db: Session, frozen: datetime) -> None:
+    admin, _ = activated_admin(make_client, db)
+    for month in ("2026-13", "novembre", "2025-11", "2026-12", "2026-1"):
+        assert admin.get("/admin/ai-costs", params={"month": month}).status_code == 422, month
+    assert admin.get("/admin/ai-costs", params={"month": "2025-12"}).status_code == 200
+
+
+def test_system_lists_imports_and_job_issues(
+    make_client: Factory, outbox: Outbox, db: Session, frozen: datetime
+) -> None:
+    signed_in_client(make_client, outbox, 1)
+    one = org_named(db, "Entreprise 1").id
+    start = frozen - timedelta(hours=2)
+    db.add(
+        TenderImport(
+            source="ted",
+            status="done",
+            since=start.date(),
+            created_at=start,
+            finished_at=start + timedelta(minutes=1),
+            fetched=212,
+            created=14,
+            updated=3,
+            corrected=1,
+            skipped=2,
+            matched=9,
+        )
+    )
+    db.add(
+        TenderImport(
+            source="boamp",
+            status="error",
+            since=start.date(),
+            created_at=frozen - timedelta(hours=1),
+            error="le site n'a pas répondu",
+        )
+    )
+    seed_job(
+        db,
+        one,
+        "analyze_dce",
+        "error",
+        finished_at=frozen - timedelta(days=2),
+        error="Fichier illisible.",
+    )
+    seed_job(db, one, "draft_memoir_section", "running", started_at=frozen - timedelta(minutes=31))
+    seed_job(db, one, "process_dce", "done", finished_at=frozen - timedelta(hours=1))
+    seed_job(db, one, "process_dce", "error", finished_at=frozen - timedelta(days=31))
+    db.commit()
+    admin, _ = activated_admin(make_client, db)
+
+    res = admin.get("/admin/system")
+
+    assert res.status_code == 200, res.text
+    body = res.json()
+    boamp, ted = body["imports"]  # the most recent first
+    assert (boamp["source"], boamp["status"], boamp["error"]) == (
+        "boamp",
+        "error",
+        "le site n'a pas répondu",
+    )
+    assert boamp["duration_seconds"] is None
+    assert ted == {
+        "source": "ted",
+        "status": "done",
+        "started_at": start.isoformat().replace("+00:00", "Z"),
+        "duration_seconds": 60,
+        "fetched": 212,
+        "created": 14,
+        "updated": 3,
+        "corrected": 1,
+        "skipped": 2,
+        "matched": 9,
+        "error": None,
+    }
+    stuck, failed = body["jobs"]  # 30 days, the most recent first
+    assert (stuck["label"], stuck["state"], stuck["message"]) == (
+        "Rédaction du mémoire",
+        "stuck",
+        None,
+    )
+    assert (failed["label"], failed["state"], failed["message"], failed["org_name"]) == (
+        "Analyse du DCE",
+        "error",
+        "Fichier illisible.",
+        "Entreprise 1",
+    )
+
+
+def test_feedback_window_and_time_saved(make_client: Factory, outbox: Outbox, db: Session) -> None:
+    company = signed_in_client(make_client, outbox, 1)
+    for kind, message in (("problem", "Le PDF ne s'ouvre pas."), ("idea", "Un export Excel ?")):
+        sent = company.post(
+            "/feedback", json={"kind": kind, "message": message, "page": "/dossiers"}
+        )
+        assert sent.status_code == 201
+    one = org_named(db, "Entreprise 1").id
+    db.execute(update(Feedback).where(Feedback.kind == "problem").values(created_at=ago(days=40)))
+    db.execute(update(Feedback).where(Feedback.kind == "idea").values(created_at=ago(days=5)))
+    seed_bid(db, one, minutes_with_pilao=60, minutes_usual=240)
+    db.commit()
+    admin, _ = activated_admin(make_client, db)
+
+    week = admin.get("/admin/feedback", params={"days": 7}).json()
+    assert week["days"] == 7
+    (note,) = week["items"]
+    assert note | {"created_at": ""} == {
+        "created_at": "",
+        "org_name": "Entreprise 1",
+        "user_email": "user1@example.fr",
+        "kind": "idea",
+        "page": "/dossiers",
+        "message": "Un export Excel ?",
+    }
+    assert week["time_saved"] == [
+        {"name": "Entreprise 1", "bids": 1, "minutes_saved": 180, "percent": 75}
+    ]
+    default = admin.get("/admin/feedback").json()
+    assert default["days"] == 30 and len(default["items"]) == 1
+    quarter = admin.get("/admin/feedback", params={"days": 90}).json()
+    assert [i["kind"] for i in quarter["items"]] == ["idea", "problem"]
+    assert admin.get("/admin/feedback", params={"days": 15}).status_code == 422

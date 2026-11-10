@@ -32,7 +32,14 @@ from tests.conftest import Outbox
 
 Factory = Callable[[], TestClient]
 
-ADMIN_GETS = ["/admin/auth/me", "/admin/overview", "/admin/organizations"]
+ADMIN_GETS = [
+    "/admin/auth/me",
+    "/admin/overview",
+    "/admin/organizations",
+    "/admin/ai-costs",
+    "/admin/system",
+    "/admin/feedback",
+]
 
 
 def test_company_session_is_refused_everywhere(make_client: Factory, outbox: Outbox) -> None:

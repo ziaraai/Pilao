@@ -202,3 +202,61 @@ class OrganizationDetailOut(BaseModel):
     ai_tasks: list[AiTaskOut]  # this month
     job_errors: list[JobIssueOut]  # 30 days
     feedback: list[FeedbackItemOut]
+
+
+class AiCostOrgOut(BaseModel):
+    org_id: uuid.UUID | None  # None: a call made for the platform itself
+    name: str
+    calls: int
+    input_tokens: int
+    output_tokens: int
+    cost: Decimal
+
+
+class AiCostTaskOut(BaseModel):
+    task: str
+    label: str
+    calls: int
+    failures: int
+    avg_latency_ms: int
+    cost: Decimal
+
+
+class AiCostModelOut(BaseModel):
+    model: str
+    calls: int
+    cost: Decimal
+
+
+class AiCostsOut(BaseModel):
+    month: str  # "2026-11", a calendar month of Paris
+    months: list[str]  # the twelve that can be asked for, the most recent first
+    total: Decimal
+    by_org: list[AiCostOrgOut]
+    by_task: list[AiCostTaskOut]
+    by_model: list[AiCostModelOut]
+
+
+class ImportPassOut(BaseModel):
+    source: str
+    status: str
+    started_at: datetime
+    duration_seconds: int | None  # None: still running, or it died
+    fetched: int
+    created: int
+    updated: int
+    corrected: int
+    skipped: int
+    matched: int
+    error: str | None
+
+
+class SystemOut(BaseModel):
+    imports: list[ImportPassOut]  # the latest 20 passes
+    jobs: list[JobIssueOut]  # in error over 30 days, or stuck now; 50 at most
+
+
+class FeedbackOut(BaseModel):
+    days: int
+    items: list[FeedbackItemOut]
+    time_saved: list[TimeSavedRowOut]
