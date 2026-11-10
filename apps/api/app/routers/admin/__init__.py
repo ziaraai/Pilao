@@ -2,7 +2,8 @@
 
 from fastapi import APIRouter
 
-from app.routers.admin import auth
+from app.routers.admin import auth, supervision
 
 router = APIRouter()
 router.include_router(auth.router)
+router.include_router(supervision.router)

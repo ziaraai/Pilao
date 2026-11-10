@@ -218,55 +218,36 @@ def feedback_report(args: argparse.Namespace) -> int:
     import csv
     from datetime import UTC, datetime, timedelta
 
-    from sqlalchemy import func, select
-
-    from app.db.models import Bid, Feedback, Organization, User
-    from app.services.feedback import KINDS
+    from app.services.feedback import KINDS, recent_feedback, time_saved_by_org
 
     since = datetime.now(UTC) - timedelta(days=args.days)
     with get_sessionmaker()() as db:  # unscoped: the team reads every company's feedback
-        rows = db.execute(
-            select(Feedback, Organization.name, User.email)
-            .join(Organization, Organization.id == Feedback.org_id)
-            .outerjoin(User, User.id == Feedback.user_id)
-            .where(Feedback.created_at >= since)
-            .order_by(Feedback.created_at.desc())
-        ).all()
-        saved = db.execute(
-            select(
-                Organization.name,
-                func.count(),
-                func.sum(Bid.minutes_with_pilao),
-                func.sum(Bid.minutes_usual),
-            )
-            .join(Organization, Organization.id == Bid.org_id)
-            .where(Bid.minutes_with_pilao.is_not(None), Bid.minutes_usual.is_not(None))
-            .group_by(Organization.name)
-            .order_by(Organization.name)
-        ).all()
+        rows = recent_feedback(db, since)
+        saved = time_saved_by_org(db)
     print(f"{len(rows)} avis depuis {args.days} jour{'s' if args.days > 1 else ''}")
-    for item, org, email in rows:
+    for item in rows:
         when = item.created_at.astimezone(PARIS).strftime("%d/%m %H:%M")
-        print(f"\n[{when}] {KINDS[item.kind]} — {org} — {email or 'compte supprimé'}")
+        who = item.user_email or "compte supprimé"
+        print(f"\n[{when}] {KINDS[item.kind]} — {item.org_name} — {who}")
         print(f"  page : {item.page or '?'}")
         print("  " + item.message.replace("\n", "\n  "))
     print("\nTemps gagné (dossiers où les deux durées sont saisies)")
-    for org, count, with_, usual in saved:
-        gain = (usual or 0) - (with_ or 0)
-        pct = f" ({round(100 * gain / usual)} %)" if usual else ""
-        print(f"  {org} : {count} dossier(s), {_duration(gain)} gagnées{pct}")
+    for line in saved:
+        gain = line.minutes_saved
+        pct = f" ({round(100 * gain / line.minutes_usual)} %)" if line.minutes_usual else ""
+        print(f"  {line.org_name} : {line.bids} dossier(s), {_duration(gain)} gagnées{pct}")
     if not saved:
         print("  (aucun dossier renseigné)")
     if args.csv:
         with args.csv.open("w", newline="", encoding="utf-8-sig") as fh:  # opens in Excel
             out = csv.writer(fh, delimiter=";")
             out.writerow(["date", "entreprise", "utilisateur", "type", "page", "message"])
-            for item, org, email in rows:
+            for item in rows:
                 out.writerow(
                     [
                         item.created_at.astimezone(PARIS).isoformat(timespec="minutes"),
-                        org,
-                        email or "",
+                        item.org_name,
+                        item.user_email or "",
                         KINDS[item.kind],
                         item.page or "",
                         item.message,
