@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 
-import { AdminTitle, Pill, Tile } from "@/components/admin/ui";
+import { AdminTitle, CELL, NUM, Pill, Tile } from "@/components/admin/ui";
 import { Alert, Card, Loading, tableHead, tableRow } from "@/components/ui";
 import { useAdmin } from "@/lib/admin-auth";
 import { formatDateTimeShort, formatDuration, formatEuros } from "@/lib/format";
@@ -15,8 +15,6 @@ const today = new Intl.DateTimeFormat("fr-FR", {
   month: "long",
   timeZone: "Europe/Paris",
 });
-const CELL = "px-3 py-2.5 sm:px-4";
-const NUM = `${CELL} text-right tabular-nums`;
 
 /** Where a line of « À surveiller » leads. */
 function watchLink(item: AdminWatchItem): { href: string; label: string } {

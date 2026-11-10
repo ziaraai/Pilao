@@ -595,3 +595,120 @@ export type AdminOverview = {
   }[];
   time_saved: AdminTimeSaved[];
 };
+
+export type AdminOrganizationRow = {
+  id: string;
+  name: string;
+  city: string | null;
+  created_at: string;
+  users: number;
+  last_activity_at: string | null;
+  bids: number;
+  memoirs: number;
+  completeness_pct: number;
+  ai_cost_month: string;
+  deletion_requested: boolean;
+};
+
+export type AdminJobIssue = {
+  kind: string;
+  label: string;
+  org_id: string | null;
+  org_name: string | null;
+  state: "error" | "stuck";
+  at: string;
+  message: string | null;
+};
+
+export type AdminFeedbackItem = {
+  created_at: string;
+  org_name: string;
+  user_email: string | null;
+  kind: string;
+  page: string | null;
+  message: string;
+};
+
+export type AdminOrganizationDetail = {
+  identity: {
+    name: string;
+    siret: string;
+    legal_form: string | null;
+    naf_code: string | null;
+    postal_code: string | null;
+    city: string | null;
+    created_at: string;
+    trades: string[];
+    departments: string[];
+    last_activity_at: string | null;
+    deletion_requested: boolean;
+  };
+  counters: {
+    bids: number;
+    bids_by_status: Record<string, number>;
+    memoirs_done: number;
+    knowledge_documents: number;
+    compliance_valid: number;
+    compliance_expired: number;
+    completeness_pct: number;
+    ai_cost_month: string;
+  };
+  users: {
+    full_name: string | null;
+    email: string;
+    role: string;
+    email_verified: boolean;
+    last_login_at: string | null;
+    terms_version: string | null;
+  }[];
+  ai_months: { month: string; cost: string }[];
+  ai_tasks: { task: string; label: string; calls: number; cost: string }[];
+  job_errors: AdminJobIssue[];
+  feedback: AdminFeedbackItem[];
+};
+
+export type AdminAiCosts = {
+  month: string;
+  months: string[];
+  total: string;
+  by_org: {
+    org_id: string | null;
+    name: string;
+    calls: number;
+    input_tokens: number;
+    output_tokens: number;
+    cost: string;
+  }[];
+  by_task: {
+    task: string;
+    label: string;
+    calls: number;
+    failures: number;
+    avg_latency_ms: number;
+    cost: string;
+  }[];
+  by_model: { model: string; calls: number; cost: string }[];
+};
+
+export type AdminSystem = {
+  imports: {
+    source: string;
+    status: string;
+    started_at: string;
+    duration_seconds: number | null;
+    fetched: number;
+    created: number;
+    updated: number;
+    corrected: number;
+    skipped: number;
+    matched: number;
+    error: string | null;
+  }[];
+  jobs: AdminJobIssue[];
+};
+
+export type AdminFeedback = {
+  days: number;
+  items: AdminFeedbackItem[];
+  time_saved: AdminTimeSaved[];
+};

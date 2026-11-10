@@ -1,7 +1,9 @@
 import Link from "next/link";
 import type { ReactNode } from "react";
 
-import type { Color } from "@/components/ui";
+import { Alert, Button, type Color, Loading, tableRow } from "@/components/ui";
+import { formatDateTimeShort } from "@/lib/format";
+import type { AdminFeedbackItem, AdminJobIssue } from "@/lib/types";
 
 /** Counters of the administration: the colours of the application (ADR-038). */
 const TILE: Record<Color, string> = {
@@ -106,5 +108,114 @@ export function Pill({
     >
       {children}
     </span>
+  );
+}
+
+/** Loading, error (with a retry) or content: the same on every screen of the administration. */
+export function Loaded<T>({
+  state,
+  children,
+}: {
+  state: { data?: T; error: string | null; reload: () => void };
+  children: (data: T) => ReactNode;
+}) {
+  if (state.data !== undefined) return <>{children(state.data)}</>;
+  if (state.error)
+    return (
+      <div className="space-y-3">
+        <Alert tone="danger">{state.error}</Alert>
+        <Button variant="secondary" onClick={state.reload}>
+          Réessayer
+        </Button>
+      </div>
+    );
+  return <Loading />;
+}
+
+export const CELL = "px-3 py-2.5 sm:px-4";
+export const NUM = `${CELL} whitespace-nowrap text-right tabular-nums`;
+export const HEAD = `${CELL} whitespace-nowrap text-left`;
+
+const FEEDBACK_KINDS: Record<
+  string,
+  { label: string; tone: "ok" | "danger" | "warning" }
+> = {
+  idea: { label: "Idée", tone: "ok" },
+  problem: { label: "Problème", tone: "danger" },
+  question: { label: "Question", tone: "warning" },
+};
+
+/** What the users wrote: the message, then who wrote it, when and from which page. */
+export function FeedbackList({
+  items,
+  showCompany = true,
+}: {
+  items: AdminFeedbackItem[];
+  showCompany?: boolean;
+}) {
+  return (
+    <ul>
+      {items.map((item, i) => {
+        const kind = FEEDBACK_KINDS[item.kind] ?? {
+          label: item.kind,
+          tone: "warning" as const,
+        };
+        return (
+          <li key={i} className={`px-5 py-3 text-sm ${tableRow}`}>
+            <div className="flex items-start gap-3">
+              <Pill tone={kind.tone}>{kind.label}</Pill>
+              <p className="min-w-0 flex-1 whitespace-pre-line text-slate-900">
+                {item.message}
+              </p>
+            </div>
+            <p className="mt-1 text-xs text-slate-500">
+              {formatDateTimeShort(item.created_at)}
+              {showCompany && <> · {item.org_name}</>} ·{" "}
+              {item.user_email ?? "compte supprimé"}
+              {item.page && <> · page {item.page}</>}
+            </p>
+          </li>
+        );
+      })}
+    </ul>
+  );
+}
+
+/** Jobs in error or stuck: what, for whom, when, and the message the user saw. */
+export function JobIssues({
+  jobs,
+  showCompany = true,
+}: {
+  jobs: AdminJobIssue[];
+  showCompany?: boolean;
+}) {
+  return (
+    <ul>
+      {jobs.map((job, i) => (
+        <li
+          key={i}
+          className={`flex flex-wrap items-start gap-x-3 gap-y-1 px-5 py-3 text-sm ${tableRow}`}
+        >
+          <Pill tone={job.state === "error" ? "danger" : "warning"}>
+            {job.state === "error" ? "En erreur" : "Bloquée"}
+          </Pill>
+          <p className="min-w-0 flex-1">
+            <strong className="text-slate-900">{job.label}</strong>
+            {showCompany && (
+              <span className="text-slate-700">
+                {" "}
+                — {job.org_name ?? "Plateforme"}
+              </span>
+            )}
+            {job.message && (
+              <span className="block text-slate-600">{job.message}</span>
+            )}
+          </p>
+          <p className="whitespace-nowrap text-xs text-slate-500">
+            {formatDateTimeShort(job.at)}
+          </p>
+        </li>
+      ))}
+    </ul>
   );
 }
