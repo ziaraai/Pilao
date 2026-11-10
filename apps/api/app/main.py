@@ -15,6 +15,7 @@ from app.core.limits import BodySizeLimitMiddleware
 from app.core.logging import configure_logging
 from app.db.session import get_sessionmaker
 from app.routers import (
+    admin,
     auth,
     bids,
     companies,
@@ -68,6 +69,7 @@ app.include_router(dashboard.router)
 app.include_router(organization.router)
 app.include_router(members.router)
 app.include_router(feedback.router)
+app.include_router(admin.router)
 
 
 @app.get("/health")

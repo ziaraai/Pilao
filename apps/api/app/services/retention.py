@@ -6,7 +6,9 @@ Run every hour with the alerts (unscoped session):
   attack, while the throttle itself only looks at the last 15 minutes;
 * sessions once expired or ended (logout);
 * single-use links once used or expired. The resend cap counts the links of the last hour
-  of an unverified account: those are neither used (unverified) nor expired (48 h).
+  of an unverified account: those are neither used (unverified) nor expired (48 h);
+* super admin sessions once expired or ended, and the platform audit log after
+  ``ADMIN_AUDIT_RETENTION_DAYS`` (365).
 """
 
 import logging
@@ -17,7 +19,13 @@ from sqlalchemy import Delete, delete, or_
 from sqlalchemy.orm import Session
 
 from app.core.config import get_settings
-from app.db.models import AuthToken, LoginAttempt, UserSession
+from app.db.models import (
+    AuthToken,
+    LoginAttempt,
+    PlatformAdminSession,
+    PlatformAuditLog,
+    UserSession,
+)
 
 logger = logging.getLogger("pilao.retention")
 
@@ -27,6 +35,8 @@ class RetentionReport:
     login_attempts: int = 0
     sessions: int = 0
     tokens: int = 0
+    admin_sessions: int = 0
+    admin_audit: int = 0
 
 
 def _deleted(db: Session, statement: Delete) -> int:
@@ -50,8 +60,24 @@ def purge_expired(db: Session, now: datetime | None = None) -> RetentionReport:
                 or_(AuthToken.expires_at < now, AuthToken.used_at.is_not(None))
             ),
         ),
+        admin_sessions=_deleted(
+            db,
+            delete(PlatformAdminSession).where(
+                or_(
+                    PlatformAdminSession.expires_at < now,
+                    PlatformAdminSession.revoked_at.is_not(None),
+                )
+            ),
+        ),
+        admin_audit=_deleted(
+            db,
+            delete(PlatformAuditLog).where(
+                PlatformAuditLog.at
+                < now - timedelta(days=get_settings().admin_audit_retention_days)
+            ),
+        ),
     )
     db.commit()
-    if report.login_attempts or report.sessions or report.tokens:
+    if any(vars(report).values()):
         logger.info("retention: %s", report)
     return report

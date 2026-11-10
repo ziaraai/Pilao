@@ -7,7 +7,14 @@ from fastapi.testclient import TestClient
 from sqlalchemy import func, select, update
 from sqlalchemy.orm import Session
 
-from app.db.models import AuthToken, LoginAttempt, UserSession
+from app.db.models import (
+    AuthToken,
+    LoginAttempt,
+    PlatformAdmin,
+    PlatformAdminSession,
+    PlatformAuditLog,
+    UserSession,
+)
 from app.services.alerts import run_daily
 from tests.api.helpers import PASSWORD, register_payload, signed_in_client
 from tests.conftest import Outbox
@@ -48,3 +55,28 @@ def test_the_hourly_run_purges_old_attempts_ended_sessions_and_used_links(
     later = now + timedelta(days=15)  # sessions last 14 days
     assert run_daily(db, outbox, later).retention.sessions == 2
     assert count(db, UserSession) == 0
+
+
+def test_the_run_purges_ended_admin_sessions_and_audit_lines_past_a_year(db: Session) -> None:
+    from app.services.retention import purge_expired
+
+    now = datetime.now(UTC)
+    admin = PlatformAdmin(email="admin@exemple.fr", recovery_codes=[])
+    db.add(admin)
+    db.flush()
+    hour = timedelta(hours=1)
+    live = PlatformAdminSession(admin_id=admin.id, token_hash="1" * 64, expires_at=now + hour)
+    expired = PlatformAdminSession(admin_id=admin.id, token_hash="2" * 64, expires_at=now - hour)
+    ended = PlatformAdminSession(
+        admin_id=admin.id, token_hash="3" * 64, expires_at=now + hour, revoked_at=now
+    )
+    old = PlatformAuditLog(admin_email=admin.email, action="login", at=now - timedelta(days=366))
+    kept = PlatformAuditLog(admin_email=admin.email, action="login", at=now - timedelta(days=364))
+    db.add_all([live, expired, ended, old, kept])
+    db.commit()
+
+    report = purge_expired(db, now)
+
+    assert (report.admin_sessions, report.admin_audit) == (2, 1)
+    assert list(db.scalars(select(PlatformAdminSession.id))) == [live.id]
+    assert list(db.scalars(select(PlatformAuditLog.id))) == [kept.id]
