@@ -11,8 +11,8 @@ import {
   NUM,
 } from "@/components/admin/ui";
 import { Card, tableHead, tableRow } from "@/components/ui";
+import { useAdminApi } from "@/lib/admin-auth";
 import { formatDuration } from "@/lib/format";
-import { useApi } from "@/lib/hooks";
 import type { AdminFeedback } from "@/lib/types";
 
 const WINDOWS = [7, 30, 90];
@@ -20,7 +20,7 @@ const WINDOWS = [7, 30, 90];
 /** US-6.2: what the testers wrote from the application, and the time saved. Read-only. */
 export default function AdminFeedbackPage() {
   const [days, setDays] = useState(30);
-  const feedback = useApi<AdminFeedback>(`/admin/feedback?days=${days}`);
+  const feedback = useAdminApi<AdminFeedback>(`/admin/feedback?days=${days}`);
 
   return (
     <div className="space-y-6">

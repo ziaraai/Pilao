@@ -805,6 +805,12 @@ let current; // the page, for a screenshot when a step fails
   // the company's user is listed, never its documents
   await admin.getByRole("cell", { name: email, exact: true }).waitFor();
   await admin.screenshot({ path: `${S}/admin-fiche.png`, fullPage: true });
+  // the account closed from the server: the next screen asks to sign in again
+  execFileSync(PY, ["-m", "app.cli", "admin-access", adminEmail, "--disable"], {
+    cwd: `${__dirname}/../../api`,
+  });
+  await admin.getByRole("link", { name: "Technique", exact: true }).click();
+  await admin.waitForURL(`${WEB}/admin/connexion?suite=%2Fadmin%2Ftechnique`);
   await adminContext.close();
   current = page;
   // the company's session opens nothing in the administration
@@ -812,7 +818,7 @@ let current; // the page, for a screenshot when a step fails
   await page.waitForURL(/\/admin\/connexion\?suite=%2Fadmin$/);
   await page.goto(`${WEB}/profil`);
   step(
-    "signed in again, five screens and the company page read; a company session is refused",
+    "signed in again, five screens and the company page read; a closed account is sent to sign-in; a company session is refused",
   );
 
   // 8. Logout

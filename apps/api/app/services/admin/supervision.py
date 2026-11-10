@@ -16,7 +16,7 @@ from typing import Any
 from zoneinfo import ZoneInfo
 
 from sqlalchemy import ColumnElement, and_, func, or_, select
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, aliased
 
 from app.core.config import get_settings
 from app.core.errors import ApiError
@@ -132,18 +132,39 @@ def _deletions_requested(db: Session) -> set[uuid.UUID]:
 def job_issues(
     db: Session, now: datetime, errors_since: datetime, org_id: uuid.UUID | None = None
 ) -> list[JobIssue]:
-    """Jobs in error since ``errors_since``, and jobs stuck right now; most recent first."""
+    """Jobs in error since ``errors_since``, and jobs stuck since then; most recent first.
+
+    A worker killed mid-job (a deploy, a crash) leaves its row « running » for good, and a
+    retry adds a new row for the same work: a job only counts as stuck if it is the latest
+    one of its ``(kind, ref_id)``, and only within the window, so that it eventually leaves.
+    """
     ended = func.coalesce(Job.finished_at, Job.updated_at)
     began = func.coalesce(Job.started_at, Job.created_at)
     limit = now - admin_watch.STUCK_AFTER
+    newer = aliased(Job)
+    superseded = (
+        select(newer.id)
+        .where(
+            newer.kind == Job.kind,
+            newer.ref_id == Job.ref_id,
+            newer.created_at > Job.created_at,
+        )
+        .exists()
+    )
     query = (
         select(Job, Organization.name, ended, began)
         .outerjoin(Organization, Organization.id == Job.org_id)
         .where(
             or_(
                 and_(Job.status == "error", ended >= errors_since),
-                and_(Job.status == "running", began < limit),
-                and_(Job.status == "pending", Job.created_at < limit),
+                and_(
+                    or_(
+                        and_(Job.status == "running", began < limit),
+                        and_(Job.status == "pending", Job.created_at < limit),
+                    ),
+                    began >= errors_since,
+                    ~superseded,
+                ),
             )
         )
     )

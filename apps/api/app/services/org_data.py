@@ -26,7 +26,7 @@ from app.core.config import get_settings
 from app.core.email import Email, Mailer, send_quietly
 from app.core.errors import ApiError
 from app.core.tenancy import scope_session
-from app.db.base import Base
+from app.db.base import Base, TenantOwned
 from app.db.models import (
     AuditLog,
     DataRequest,
@@ -71,10 +71,18 @@ def _jsonable(value: Any) -> Any:
 
 
 def _org_tables() -> list[Any]:
+    """The company's own tables: the tenant-owned models. A platform table may have an
+    ``org_id`` too (``platform_audit_logs``: what a super admin looked at, ADR-040); those
+    rows are the platform's, not the company's, and stay out of its export and receipt."""
+    owned = {
+        m.persist_selectable.description
+        for m in Base.registry.mappers
+        if issubclass(m.class_, TenantOwned)
+    }
     return [
         t
         for t in Base.metadata.sorted_tables
-        if "org_id" in t.c and t.name not in EXCLUDED_TABLES and t.name != "purge_logs"
+        if t.name in owned and t.name not in EXCLUDED_TABLES and t.name != "purge_logs"
     ]
 
 

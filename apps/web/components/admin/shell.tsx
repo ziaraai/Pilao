@@ -7,7 +7,7 @@ import { useEffect, useState } from "react";
 import { Icon } from "@/components/icon";
 import { Logo } from "@/components/logo";
 import { Alert, Button, Loading } from "@/components/ui";
-import { ADMIN_NAV } from "@/lib/admin";
+import { ADMIN_NAV, adminSignInPath } from "@/lib/admin";
 import { AdminAuthContext } from "@/lib/admin-auth";
 import { api } from "@/lib/api";
 import { useApi } from "@/lib/hooks";
@@ -26,8 +26,10 @@ export function AdminShell({ children }: { children: React.ReactNode }) {
 
   useEffect(() => {
     if (unauthenticated)
-      router.replace(`/admin/connexion?suite=${encodeURIComponent(pathname)}`);
-  }, [unauthenticated, router, pathname]);
+      router.replace(
+        adminSignInPath(window.location.pathname, window.location.search),
+      );
+  }, [unauthenticated, router]);
 
   if (!me.data) {
     if (me.error && !unauthenticated) {

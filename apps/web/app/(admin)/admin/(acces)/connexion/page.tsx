@@ -57,8 +57,10 @@ function LoginForm() {
       >
         <Input
           id="code"
-          inputMode="numeric"
           autoComplete="one-time-code"
+          autoCapitalize="off"
+          autoCorrect="off"
+          spellCheck={false}
           value={code}
           onChange={(e) => setCode(e.target.value)}
           required

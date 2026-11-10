@@ -4,9 +4,8 @@ import Link from "next/link";
 
 import { AdminTitle, CELL, NUM, Pill, Tile } from "@/components/admin/ui";
 import { Alert, Card, Loading, tableHead, tableRow } from "@/components/ui";
-import { useAdmin } from "@/lib/admin-auth";
+import { useAdmin, useAdminApi } from "@/lib/admin-auth";
 import { formatDateTimeShort, formatDuration, formatEuros } from "@/lib/format";
-import { useApi } from "@/lib/hooks";
 import type { AdminOverview, AdminWatchItem } from "@/lib/types";
 
 const today = new Intl.DateTimeFormat("fr-FR", {
@@ -30,7 +29,7 @@ function watchLink(item: AdminWatchItem): { href: string; label: string } {
 /** US-6.2: everything that happens on the platform, at a glance. Read-only. */
 export default function AdminOverviewPage() {
   const { me } = useAdmin();
-  const overview = useApi<AdminOverview>("/admin/overview");
+  const overview = useAdminApi<AdminOverview>("/admin/overview");
   if (overview.error && !overview.data)
     return <Alert tone="danger">{overview.error}</Alert>;
   if (!overview.data) return <Loading />;

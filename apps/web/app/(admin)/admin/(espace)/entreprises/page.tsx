@@ -11,13 +11,13 @@ import {
   Pill,
 } from "@/components/admin/ui";
 import { Card, tableHead, tableRow } from "@/components/ui";
+import { useAdminApi } from "@/lib/admin-auth";
 import { formatDate, formatDateTimeShort, formatEuros } from "@/lib/format";
-import { useApi } from "@/lib/hooks";
 import type { AdminOrganizationRow } from "@/lib/types";
 
 /** US-6.2: every company on the platform, the last active first. Read-only. */
 export default function AdminOrganizationsPage() {
-  const list = useApi<AdminOrganizationRow[]>("/admin/organizations");
+  const list = useAdminApi<AdminOrganizationRow[]>("/admin/organizations");
   return (
     <div className="space-y-6">
       <AdminTitle

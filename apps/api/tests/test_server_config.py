@@ -48,3 +48,39 @@ def test_ports_agree_between_compose_nginx_and_the_deploy_check() -> None:
     assert f"proxy_pass http://127.0.0.1:{web[1]};" in nginx
     assert f"http://127.0.0.1:{api[1]}/ready" in deploy and f"http://127.0.0.1:{web[1]}/" in deploy
     assert re.findall(r'"(\d+\.\d+\.\d+\.\d+:)?\d+:\d+"', compose) == ["127.0.0.1:", "127.0.0.1:"]
+
+
+DOCKERFILE = Path(__file__).resolve().parents[1] / "Dockerfile"
+
+
+def trusted_proxies() -> str:
+    """The ``--forwarded-allow-ips`` the API image starts uvicorn with."""
+    import json
+
+    found = re.search(r"^CMD (\[.*\])$", DOCKERFILE.read_text(encoding="utf-8"), re.MULTILINE)
+    assert found, "no CMD in the API Dockerfile"
+    command: list[str] = json.loads(found.group(1))
+    return command[command.index("--forwarded-allow-ips") + 1]
+
+
+def test_a_client_cannot_choose_the_address_the_api_sees() -> None:
+    """nginx appends the address it saw to whatever X-Forwarded-For the client sent: the API
+    must take that last address, or the per-address lock and the audit log are the client's
+    to choose."""
+    from uvicorn.middleware.proxy_headers import _TrustedHosts
+
+    trusted = _TrustedHosts(trusted_proxies())
+    assert trusted.get_trusted_client_address("6.6.6.6, 203.0.113.7")[0] == "203.0.113.7"
+    assert trusted.get_trusted_client_address("10.0.0.5, 203.0.113.7")[0] == "203.0.113.7"
+    assert trusted.get_trusted_client_address("203.0.113.7")[0] == "203.0.113.7"
+    # whatever network Docker gives the compose project, its gateway (nginx's way in) is trusted,
+    # or every visitor would share one address and one lock
+    for gateway in (
+        "127.0.0.1",
+        "172.17.0.1",
+        "172.18.0.1",
+        "172.31.0.1",
+        "192.168.16.1",
+        "10.0.0.1",
+    ):
+        assert gateway in trusted, gateway

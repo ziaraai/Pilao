@@ -10,8 +10,8 @@ import {
   Pill,
 } from "@/components/admin/ui";
 import { Card, tableHead, tableRow } from "@/components/ui";
+import { useAdminApi } from "@/lib/admin-auth";
 import { formatDateTimeShort } from "@/lib/format";
-import { useApi } from "@/lib/hooks";
 import type { AdminSystem } from "@/lib/types";
 
 const IMPORT_STATUS: Record<
@@ -32,7 +32,7 @@ function duration(seconds: number | null): string {
 
 /** US-6.2: the notice readers and the background jobs that need a look. Read-only. */
 export default function AdminSystemPage() {
-  const system = useApi<AdminSystem>("/admin/system");
+  const system = useAdminApi<AdminSystem>("/admin/system");
   return (
     <div className="space-y-6">
       <AdminTitle

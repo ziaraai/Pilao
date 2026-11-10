@@ -13,8 +13,8 @@ import {
 } from "@/components/admin/ui";
 import { Card, Select, tableHead, tableRow } from "@/components/ui";
 import { monthLabel } from "@/lib/admin";
+import { useAdminApi } from "@/lib/admin-auth";
 import { formatEuros } from "@/lib/format";
-import { useApi } from "@/lib/hooks";
 import type { AdminAiCosts } from "@/lib/types";
 
 const number = new Intl.NumberFormat("fr-FR");
@@ -25,7 +25,7 @@ const Empty = () => (
 /** US-6.2: what the AI cost over one month, by company, task and model. Read-only. */
 export default function AdminAiCostsPage() {
   const [month, setMonth] = useState<string | null>(null);
-  const costs = useApi<AdminAiCosts>(
+  const costs = useAdminApi<AdminAiCosts>(
     month ? `/admin/ai-costs?month=${month}` : "/admin/ai-costs",
   );
 

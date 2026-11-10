@@ -15,9 +15,9 @@ import {
   Tile,
 } from "@/components/admin/ui";
 import { Card, tableHead, tableRow } from "@/components/ui";
+import { useAdminApi } from "@/lib/admin-auth";
 import { monthLabel } from "@/lib/admin";
 import { formatDate, formatDateTimeShort, formatEuros } from "@/lib/format";
-import { useApi } from "@/lib/hooks";
 import { BID_STATUS, ROLES, label } from "@/lib/labels";
 import type { AdminOrganizationDetail } from "@/lib/types";
 
@@ -56,7 +56,9 @@ function CostBars({
 /** US-6.2: one company. Identity, users, counters, costs — never its documents. */
 export default function AdminOrganizationPage() {
   const { id } = useParams<{ id: string }>();
-  const detail = useApi<AdminOrganizationDetail>(`/admin/organizations/${id}`);
+  const detail = useAdminApi<AdminOrganizationDetail>(
+    `/admin/organizations/${id}`,
+  );
 
   return (
     <div>

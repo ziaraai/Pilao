@@ -504,3 +504,52 @@ def test_feedback_window_and_time_saved(make_client: Factory, outbox: Outbox, db
     quarter = admin.get("/admin/feedback", params={"days": 90}).json()
     assert [i["kind"] for i in quarter["items"]] == ["idea", "problem"]
     assert admin.get("/admin/feedback", params={"days": 15}).status_code == 422
+
+
+def test_a_stuck_job_that_was_retried_or_is_too_old_is_not_shown(
+    make_client: Factory, db: Session, frozen: datetime
+) -> None:
+    """A worker killed mid-job leaves its row « running » for good: only the latest job of a
+    piece of work counts, and only over the window of the screen."""
+    retried, current = uuid.uuid4(), uuid.uuid4()
+    long_ago = frozen - timedelta(days=31)
+    # left running by a worker killed during a deploy, then relaunched and finished
+    seed_job(
+        db,
+        None,
+        "analyze_dce",
+        "running",
+        ref_id=retried,
+        started_at=frozen - timedelta(hours=5),
+        created_at=frozen - timedelta(hours=5),
+    )
+    seed_job(
+        db,
+        None,
+        "analyze_dce",
+        "done",
+        ref_id=retried,
+        created_at=frozen - timedelta(hours=4),
+        finished_at=frozen - timedelta(hours=4),
+    )
+    # stuck for weeks: out of the 30 days of the screen
+    seed_job(db, None, "export_memoir", "pending", ref_id=uuid.uuid4(), created_at=long_ago)
+    # really stuck now
+    seed_job(
+        db,
+        None,
+        "profile_prefill",
+        "running",
+        ref_id=current,
+        started_at=frozen - timedelta(minutes=45),
+        created_at=frozen - timedelta(minutes=45),
+    )
+    db.commit()
+    admin, _ = activated_admin(make_client, db)
+
+    jobs = admin.get("/admin/system").json()["jobs"]
+    assert [(j["kind"], j["state"]) for j in jobs] == [("profile_prefill", "stuck")]
+    watched = [
+        i["title"] for i in admin.get("/admin/overview").json()["watch"] if i["kind"] == "job"
+    ]
+    assert watched == ["Lecture des documents du profil bloquée"]

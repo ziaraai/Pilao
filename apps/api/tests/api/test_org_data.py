@@ -13,7 +13,7 @@ from fastapi.testclient import TestClient
 from sqlalchemy import func, select, update
 from sqlalchemy.orm import Session
 
-from app.db.base import Base
+from app.db.base import Base, TenantOwned
 from app.db.models import DataRequest, File, Organization, PurgeLog, Tender, User
 from app.schemas.tenders import TenderIn
 from app.services.alerts import run_daily
@@ -26,7 +26,12 @@ from tests.documents_helpers import make_docx
 
 Factory = Callable[[], TestClient]
 NOW = datetime.now(UTC)
-ORG_TABLES = [t for t in Base.metadata.sorted_tables if "org_id" in t.c and t.name != "purge_logs"]
+# The company's own tables: the tenant-owned models (platform tables may carry an org_id too).
+ORG_TABLES = [
+    m.local_table
+    for m in Base.registry.mappers
+    if issubclass(m.class_, TenantOwned) and m.local_table.name != "purge_logs"
+]
 
 
 def populate(c: TestClient, queue: FakeQueue, marker: str) -> None:
@@ -231,3 +236,19 @@ def test_tenancy_and_authentication(
     anon = make_client()
     assert anon.post("/organization/exports").status_code == 401
     assert anon.get("/organization/deletion").status_code == 401
+
+
+def test_the_administration_s_own_traces_are_not_part_of_a_company_s_data(
+    make_client: Factory, outbox: Outbox, queue: FakeQueue, storage: MemoryStorage, db: Session
+) -> None:
+    """A super admin who opened the company's page is not in the company's export (ADR-040)."""
+    from tests.api.admin_helpers import ADMIN_EMAIL, activated_admin
+
+    a = signed_in_client(make_client, outbox, 1)
+    admin, _ = activated_admin(make_client, db)
+    assert admin.get(f"/admin/organizations/{org_id_of(db, 'Entreprise 1')}").status_code == 200
+
+    raw = export_zip(a, queue, storage, db).read("donnees.json").decode("utf-8")
+
+    assert "platform_audit_logs" not in json.loads(raw)
+    assert ADMIN_EMAIL not in raw

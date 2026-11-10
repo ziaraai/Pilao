@@ -20,6 +20,11 @@ export function safeAdminNext(value: string | null): string {
   return inside && !ACCESS_PAGES.includes(path) ? value : "/admin";
 }
 
+/** The sign-in page, coming back to ``pathname`` + ``search`` afterwards. */
+export function adminSignInPath(pathname: string, search: string): string {
+  return `/admin/connexion?suite=${encodeURIComponent(pathname + search)}`;
+}
+
 /** "2026-11" → "novembre 2026". */
 export function monthLabel(month: string): string {
   const [year, index] = month.split("-").map(Number);

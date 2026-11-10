@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { ADMIN_NAV, safeAdminNext } from "./admin";
+import { ADMIN_NAV, adminSignInPath, safeAdminNext } from "./admin";
 
 describe("administration", () => {
   it("goes back, after sign-in, only to a page of the administration", () => {
@@ -20,6 +20,22 @@ describe("administration", () => {
       "/admin/activation?jeton=x",
     ])
       expect(safeAdminNext(bad)).toBe("/admin");
+  });
+
+  it("sends an expired session to the sign-in page, then back to the same screen", () => {
+    expect(adminSignInPath("/admin/couts-ia", "?mois=2026-10")).toBe(
+      "/admin/connexion?suite=%2Fadmin%2Fcouts-ia%3Fmois%3D2026-10",
+    );
+    expect(adminSignInPath("/admin", "")).toBe(
+      "/admin/connexion?suite=%2Fadmin",
+    );
+    expect(
+      safeAdminNext(
+        decodeURIComponent(
+          adminSignInPath("/admin/technique", "").split("=")[1],
+        ),
+      ),
+    ).toBe("/admin/technique");
   });
 
   it("has five screens, the overview first", () => {
