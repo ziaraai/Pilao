@@ -98,6 +98,12 @@ class Settings(BaseSettings):
     login_max_failures_per_ip: int = 30
     login_window_minutes: int = 15
     login_attempts_retention_days: int = 30  # then purged (privacy policy)
+    # Platform administration (ADR-040): its own cookie and a shorter session
+    admin_session_cookie_name: str = "pilao_admin_session"
+    admin_session_ttl_hours: int = 12
+    admin_setup_ttl_minutes: int = 30  # validity of the activation link
+    admin_login_max_failures: int = 5  # per e-mail, over login_window_minutes
+    admin_audit_retention_days: int = 365
 
     @property
     def cookie_secure(self) -> bool:

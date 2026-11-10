@@ -9,6 +9,9 @@
 * ``import-tenders [--source ted|boamp] [--since 2026-10-01] [--essai]``: one pass of the
   notice readers now (as the scheduler does every 2 hours). ``--essai`` reads and shows a
   few notices without saving anything: the check of a reader from the server.
+* ``admin-access you@example.fr [--name "Your Name"] [--disable]``: creates a super admin, or
+  resets its access (lost phone), and prints the one-time activation link; ``--disable``
+  closes the account. The only way to create a platform administrator (ADR-040).
 * ``eval-models --models a,b,c`` runs the phase 0 comparison (docs/11) on ``samples/``:
   every DCE through the real pipeline with each model, then the anonymized memoirs, the
   rating grid and the cost report. Never on the production database.
@@ -62,7 +65,15 @@ def main(argv: list[str] | None = None) -> int:
     imp.add_argument(
         "--relire", action="store_true", help="relire aussi les annonces déjà enregistrées"
     )
+    adm = commands.add_parser(
+        "admin-access", help="créer, réinitialiser ou fermer un accès super admin"
+    )
+    adm.add_argument("email")
+    adm.add_argument("--name", default=None, help="nom affiché dans l'administration")
+    adm.add_argument("--disable", action="store_true", help="fermer le compte et ses sessions")
     args = parser.parse_args(argv)
+    if args.command == "admin-access":
+        return admin_access(args)
     if args.command == "send-test-email":
         return send_test_email(args.to)
     if args.command == "eval-models":
@@ -82,6 +93,29 @@ def main(argv: list[str] | None = None) -> int:
         f"{report.awards} attribution(s), {report.unchanged} inchangée(s) ; "
         f"{matched} correspondance(s) avec les entreprises."
     )
+    return 0
+
+
+def admin_access(args: argparse.Namespace) -> int:
+    from email_validator import EmailNotValidError, validate_email
+
+    from app.services.admin import access
+
+    try:
+        email = validate_email(args.email, check_deliverability=False).normalized.lower()
+    except EmailNotValidError:
+        print(f"Adresse e-mail invalide : {args.email}")
+        return 1
+    with get_sessionmaker()() as db:  # unscoped: platform accounts are global
+        if args.disable:
+            closed = access.disable(db, email)
+            print(f"Compte fermé : {email}" if closed else f"Compte inconnu : {email}")
+            return 0 if closed else 1
+        token = access.grant_access(db, email, args.name)
+    minutes = get_settings().admin_setup_ttl_minutes
+    print(f"Accès super admin prêt pour {email}.")
+    print(f"Lien d'activation (valable {minutes} minutes, à usage unique) :")
+    print(f"{get_settings().app_base_url}/admin/activation?jeton={token}")
     return 0
 
 

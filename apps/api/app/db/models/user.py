@@ -19,11 +19,3 @@ class User(IdMixin, TimestampMixin, OrgScoped, Base):
     last_login_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     terms_accepted_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     terms_version: Mapped[str | None] = mapped_column(Text)
-
-
-class PlatformAdmin(IdMixin, TimestampMixin, Base):
-    """Global table (support / back-office)."""
-
-    __tablename__ = "platform_admins"
-
-    email: Mapped[str] = mapped_column(CITEXT, unique=True, nullable=False)

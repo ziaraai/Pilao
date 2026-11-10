@@ -11,6 +11,7 @@ from app.db.models.job import Job
 from app.db.models.knowledge import DocumentChunk, KnowledgeDocument
 from app.db.models.memoir import ConformityItem, Memoir, MemoirSection, MemoirSectionRevision
 from app.db.models.organization import Organization
+from app.db.models.platform import PlatformAdmin, PlatformAdminSession, PlatformAuditLog
 from app.db.models.profile import (
     Certification,
     CompanyProfile,
@@ -26,7 +27,7 @@ from app.db.models.tender import (
     TenderImport,
     TenderMatch,
 )
-from app.db.models.user import PlatformAdmin, User
+from app.db.models.user import User
 from app.db.models.vault import ComplianceDocument
 
 __all__ = [
@@ -61,6 +62,8 @@ __all__ = [
     "Notification",
     "Organization",
     "PlatformAdmin",
+    "PlatformAdminSession",
+    "PlatformAuditLog",
     "ProfileSuggestion",
     "PurgeLog",
     "Requirement",
