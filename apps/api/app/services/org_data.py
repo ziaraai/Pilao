@@ -38,7 +38,9 @@ from app.db.models import (
 )
 from app.exports.bundle import safe_name
 from app.exports.dc_forms import french_date
+from app.services.actors import Actor, PlatformActor, meta_of, name_of, user_id_of
 from app.services.files import discard_object, store_generated_file
+from app.services.suspension import contact_sentence
 from app.storage.objects import ObjectStorage
 from app.workers.queue import JobQueue
 
@@ -238,63 +240,94 @@ def pending_deletion(db: Session) -> DataRequest | None:
     )
 
 
-def request_deletion(
-    db: Session, user: User, org: Organization, confirmation: str, mailer: Mailer
-) -> DataRequest:
+def check_confirmation(org: Organization, confirmation: str) -> None:
+    """The company's name typed again before an erasure."""
     if confirmation.strip().casefold() != org.name.strip().casefold():
         raise ApiError(
             422,
             "confirmation_mismatch",
             "Recopiez exactement le nom de l'entreprise pour confirmer.",
         )
+
+
+def _deletion_body(actor: Actor, org: Organization, when: str) -> str:
+    if isinstance(actor, PlatformActor):
+        return (
+            f"Bonjour,\n\nPilao a programmé la suppression de toutes les données de {org.name} : "
+            f"elle aura lieu le {when}. Comptes, profil, dossiers, mémoires, attestations et "
+            f"fichiers seront effacés définitivement.\n\n{contact_sentence()}\n"
+        )
+    return (
+        f"Bonjour,\n\n{name_of(actor)} a demandé la suppression de toutes "
+        f"les données de {org.name} dans Pilao. Elle aura lieu le {when} : comptes, "
+        "profil, dossiers, mémoires, attestations et fichiers seront effacés "
+        "définitivement.\n\nD'ici là, un administrateur peut l'annuler dans Profil > "
+        "Vos données, et y télécharger un export complet.\n"
+    )
+
+
+def request_deletion(
+    db: Session, actor: Actor, org: Organization, confirmation: str, mailer: Mailer
+) -> DataRequest:
+    check_confirmation(org, confirmation)
     if pending_deletion(db) is not None:
         raise ApiError(409, "deletion_pending", "La suppression est déjà programmée.")
     due = _now() + timedelta(days=get_settings().deletion_grace_days)
     req = DataRequest(
-        id=uuid.uuid4(), org_id=org.id, kind="deletion", requested_by=user.id, due_at=due
+        id=uuid.uuid4(),
+        org_id=org.id,
+        kind="deletion",
+        requested_by=user_id_of(actor),
+        platform_admin_id=actor.admin_id if isinstance(actor, PlatformActor) else None,
+        due_at=due,
     )
     db.add(req)
     db.add(
         AuditLog(
-            user_id=user.id, action="request_deletion", entity="organization", entity_id=org.id
+            user_id=user_id_of(actor),
+            action="request_deletion",
+            entity="organization",
+            entity_id=org.id,
+            meta=meta_of(actor),
         )
     )
     db.commit()
-    when = french_date(due.date())
+    when = french_date(due.date()) or ""
     for email in _recipients(db, org.id):
         send_quietly(
             mailer,
             Email(
                 to=email,
                 subject=f"Suppression des données de {org.name} programmée le {when}",
-                body=(
-                    f"Bonjour,\n\n{user.full_name or user.email} a demandé la suppression de toutes "
-                    f"les données de {org.name} dans Pilao. Elle aura lieu le {when} : comptes, "
-                    "profil, dossiers, mémoires, attestations et fichiers seront effacés "
-                    "définitivement.\n\nD'ici là, un administrateur peut l'annuler dans Profil > "
-                    "Vos données, et y télécharger un export complet.\n"
-                ),
+                body=_deletion_body(actor, org, when),
             ),
         )
     return req
 
 
-def cancel_deletion(db: Session, user: User, org: Organization, mailer: Mailer) -> None:
+def cancel_deletion(db: Session, actor: Actor, org: Organization, mailer: Mailer) -> None:
     req = pending_deletion(db)
     if req is None:
         raise ApiError(404, "not_found", "Aucune suppression programmée.")
     req.status = "cancelled"
     db.add(
-        AuditLog(user_id=user.id, action="cancel_deletion", entity="organization", entity_id=org.id)
+        AuditLog(
+            user_id=user_id_of(actor),
+            action="cancel_deletion",
+            entity="organization",
+            entity_id=org.id,
+            meta=meta_of(actor),
+        )
     )
     db.commit()
+    who = "Pilao" if isinstance(actor, PlatformActor) else name_of(actor)
     for email in _recipients(db, org.id):
         send_quietly(
             mailer,
             Email(
                 to=email,
                 subject=f"Suppression des données de {org.name} annulée",
-                body=f"Bonjour,\n\n{user.full_name or user.email} a annulé la suppression des "
+                body=f"Bonjour,\n\n{who} a annulé la suppression des "
                 f"données de {org.name}. Rien n'a été effacé.\n",
             ),
         )
@@ -315,32 +348,45 @@ def purge_due(
     return sum(_purge(db, req, storage, mailer) for req in due)
 
 
-def _purge(db: Session, req: DataRequest, storage: ObjectStorage, mailer: Mailer) -> bool:
-    org_id, requested_at = req.org_id, req.created_at
-    org = db.get(Organization, org_id)
-    if org is None:
+def erase_organization(
+    db: Session, org_id: uuid.UUID, storage: ObjectStorage, *, requested_at: datetime | None
+) -> bool:
+    """Erase a company now (unscoped session): files first, then every row; commits.
+
+    False when a file could not be deleted: everything is left in place for another try."""
+    if db.get(Organization, org_id) is None:
         return False
     keys = list(db.scalars(select(File.storage_key).where(File.org_id == org_id)))
-    for key in keys:  # objects first: a failure leaves everything in place, retried next hour
+    for key in keys:  # objects first: a failure leaves everything in place
         try:
             storage.delete(key)
         except Exception:
             logger.exception("purge of %s: could not delete object %s", org_id, key)
-            req.error = "Suppression des fichiers interrompue : nouvelle tentative dans une heure."
-            db.commit()
             return False
     counts = {
         t.name: n
         for t in _org_tables()
         if (n := db.scalar(select(func.count()).select_from(t).where(t.c.org_id == org_id)))
     }
-    name, recipients = org.name, _recipients(db, org_id)
     db.add(PurgeLog(org_id=org_id, requested_at=requested_at, rows=counts, objects=len(keys)))
     db.execute(delete(Organization).where(Organization.id == org_id))  # every table cascades
     db.commit()
     logger.info(
         "organization %s erased: %s rows, %s objects", org_id, sum(counts.values()), len(keys)
     )
+    return True
+
+
+def _purge(db: Session, req: DataRequest, storage: ObjectStorage, mailer: Mailer) -> bool:
+    org_id, requested_at = req.org_id, req.created_at
+    org = db.get(Organization, org_id)
+    if org is None:
+        return False
+    name, recipients = org.name, _recipients(db, org_id)
+    if not erase_organization(db, org_id, storage, requested_at=requested_at):
+        req.error = "Suppression des fichiers interrompue : nouvelle tentative dans une heure."
+        db.commit()  # retried next hour
+        return False
     for email in recipients:  # the last message; the addresses are not kept
         send_quietly(
             mailer,

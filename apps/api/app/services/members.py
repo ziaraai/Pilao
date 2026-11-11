@@ -26,8 +26,9 @@ from app.core.email import Email, Mailer
 from app.core.errors import ApiError
 from app.core.legal import TERMS_VERSION
 from app.core.security import hash_password, hash_token, new_token
-from app.db.models import AuditLog, AuthToken, Organization, User
+from app.db.models import AuditLog, AuthToken, Organization, User, UserSession
 from app.schemas.members import AcceptInvitationIn, InvitationOut, InviteIn, MemberOut
+from app.services.actors import PILAO_NAME, Actor, PlatformActor, meta_of, name_of, user_id_of
 from app.services.auth import open_session
 from app.services.suspension import is_suspended, suspended_error
 
@@ -41,8 +42,16 @@ def _now() -> datetime:
     return datetime.now(UTC)
 
 
-def _audit(db: Session, actor: User, action: str, target: uuid.UUID) -> None:
-    db.add(AuditLog(user_id=actor.id, action=action, entity="user", entity_id=target))
+def _audit(db: Session, actor: Actor, action: str, target: uuid.UUID) -> None:
+    db.add(
+        AuditLog(
+            user_id=user_id_of(actor),
+            action=action,
+            entity="user",
+            entity_id=target,
+            meta=meta_of(actor),
+        )
+    )
 
 
 # ---------- the list ------------------------------------------------------------------
@@ -85,8 +94,12 @@ def list_members(db: Session, me: User) -> list[MemberOut]:
 # ---------- inviting ------------------------------------------------------------------
 
 
-def _invitation(db: Session, user: User, org: Organization, inviter: User) -> Email:
-    """Stage a new link; send the returned e-mail once it is committed."""
+def _invitation(
+    db: Session, user: User, org: Organization, inviter: Actor, first_access: bool = False
+) -> Email:
+    """Stage a new link; send the returned e-mail once it is committed.
+
+    ``first_access``: Pilao opened the company's space and this is its first person."""
     s = get_settings()
     token = new_token()
     db.add(
@@ -98,8 +111,21 @@ def _invitation(db: Session, user: User, org: Organization, inviter: User) -> Em
             expires_at=_now() + timedelta(hours=s.invitation_ttl_hours),
         )
     )
-    who = inviter.full_name or inviter.email
+    who = name_of(inviter)
     days = s.invitation_ttl_hours // 24
+    link = f"{s.app_base_url}/invitation?token={token}"
+    if isinstance(inviter, PlatformActor) and first_access:
+        hello = f"Bonjour {user.full_name}," if user.full_name else "Bonjour,"
+        return Email(
+            to=user.email,
+            subject=f"Pilao a ouvert l'espace de {org.name}",
+            body=(
+                f"{hello}\n\n{PILAO_NAME} a ouvert l'espace de {org.name} sur Pilao, la "
+                "plateforme qui vous aide à répondre aux appels d'offres publics.\n\n"
+                f"Choisissez votre mot de passe pour y entrer (lien valable {days} jours) :\n"
+                f"{link}\n"
+            ),
+        )
     return Email(
         to=user.email,
         subject=f"{who} vous invite sur Pilao ({org.name})",
@@ -107,13 +133,21 @@ def _invitation(db: Session, user: User, org: Organization, inviter: User) -> Em
             f"Bonjour,\n\n{who} vous invite à rejoindre l'espace de {org.name} sur Pilao, "
             "pour préparer ensemble les réponses aux appels d'offres.\n\n"
             f"Pour créer votre accès, ouvrez ce lien (valable {days} jours) :\n"
-            f"{s.app_base_url}/invitation?token={token}\n\n"
+            f"{link}\n\n"
             f"Si vous ne connaissez pas {org.name}, ignorez ce message.\n"
         ),
     )
 
 
-def invite(db: Session, admin: User, org: Organization, data: InviteIn, mailer: Mailer) -> User:
+def invite(
+    db: Session,
+    actor: Actor,
+    org: Organization,
+    data: InviteIn,
+    mailer: Mailer,
+    *,
+    first_access: bool = False,
+) -> User:
     email = str(data.email).lower()
     # An address belongs to one account in all Pilao: the unique index (case-insensitive)
     # says so below, without this scoped session ever reading another company's accounts.
@@ -130,8 +164,8 @@ def invite(db: Session, admin: User, org: Organization, data: InviteIn, mailer: 
     try:
         db.add(user)
         db.flush()
-        _audit(db, admin, "invite", user.id)
-        message = _invitation(db, user, org, admin)
+        _audit(db, actor, "invite", user.id)
+        message = _invitation(db, user, org, actor, first_access)
         db.commit()
     except IntegrityError:  # the same address invited or registered at the same moment
         db.rollback()
@@ -147,7 +181,9 @@ def _colleague(db: Session, user_id: uuid.UUID) -> User:
     return user
 
 
-def resend(db: Session, admin: User, org: Organization, user_id: uuid.UUID, mailer: Mailer) -> None:
+def resend(
+    db: Session, actor: Actor, org: Organization, user_id: uuid.UUID, mailer: Mailer
+) -> None:
     user = _colleague(db, user_id)
     if user.password_hash is not None:
         raise ApiError(409, "already_active", "Ce collaborateur a déjà créé son accès.")
@@ -164,8 +200,8 @@ def resend(db: Session, admin: User, org: Organization, user_id: uuid.UUID, mail
         raise ApiError(
             429, "too_many_invitations", "Invitation déjà renvoyée : réessayez plus tard."
         )
-    message = _invitation(db, user, org, admin)
-    _audit(db, admin, "resend_invitation", user.id)
+    message = _invitation(db, user, org, actor)
+    _audit(db, actor, "resend_invitation", user.id)
     db.commit()
     mailer.send(message)
 
@@ -174,28 +210,44 @@ def _admins(db: Session) -> int:
     return db.scalar(select(func.count()).select_from(User).where(User.role == "org_admin")) or 0
 
 
-def change_role(db: Session, admin: User, user_id: uuid.UUID, role: str) -> User:
+def change_role(db: Session, actor: Actor, user_id: uuid.UUID, role: str) -> User:
     user = _colleague(db, user_id)
     if user.role == "org_admin" and role != "org_admin" and _admins(db) <= 1:
         raise ApiError(409, "last_admin", "L'entreprise doit garder au moins un administrateur.")
     user.role = role
-    _audit(db, admin, "change_role", user.id)
+    _audit(db, actor, "change_role", user.id)
     db.commit()
     return user
 
 
-def remove(db: Session, admin: User, user_id: uuid.UUID) -> None:
+def remove(db: Session, actor: Actor, user_id: uuid.UUID) -> None:
     user = _colleague(db, user_id)
-    if user.id == admin.id:
+    if isinstance(actor, User) and user.id == actor.id:
         raise ApiError(
             409,
             "self_removal",
             "Vous ne pouvez pas retirer votre propre accès : demandez-le à un autre "
             "administrateur.",
         )
-    _audit(db, admin, "remove_member", user.id)
+    if user.role == "org_admin" and _admins(db) <= 1:  # only Pilao can get here
+        raise ApiError(409, "last_admin", "L'entreprise doit garder au moins un administrateur.")
+    _audit(db, actor, "remove_member", user.id)
     db.delete(user)  # sessions and links cascade; authorship of the work becomes empty
     db.commit()
+
+
+def logout_everywhere(db: Session, actor: Actor, user_id: uuid.UUID) -> int:
+    """Revoke every open session of a colleague; returns how many were open."""
+    user = _colleague(db, user_id)
+    sessions = db.scalars(
+        select(UserSession).where(UserSession.user_id == user.id, UserSession.revoked_at.is_(None))
+    ).all()
+    now = _now()
+    for session in sessions:
+        session.revoked_at = now
+    _audit(db, actor, "logout_everywhere", user.id)
+    db.commit()
+    return len(sessions)
 
 
 # ---------- accepting (public, unscoped) ----------------------------------------------
