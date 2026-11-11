@@ -32,7 +32,7 @@ def _audit(db: Session, user: User, action: str, entity: str, entity_id: uuid.UU
     )
 
 
-def _verification_email(db: Session, user: User) -> Email:
+def verification_email(db: Session, user: User) -> Email:
     """Stage a new verification token; send the returned e-mail only once it is committed."""
     s = get_settings()
     token = new_token()
@@ -67,7 +67,7 @@ _PREFILLED = (
 )
 
 
-def _prefill_from_registry(org: Organization, directory: CompanyDirectory) -> None:
+def prefill_from_registry(org: Organization, directory: CompanyDirectory) -> None:
     """Best effort: the registry being down or odd must never block sign-up."""
     try:
         info = directory.lookup_siret(org.siret)
@@ -107,7 +107,7 @@ def register(
         # Do not keep the read transaction (and its pooled connection) open during the HTTP
         # call; the unique constraints still catch a concurrent registration below.
         db.rollback()
-        _prefill_from_registry(org, directory)
+        prefill_from_registry(org, directory)
     try:
         db.add(org)
         db.flush()
@@ -123,7 +123,7 @@ def register(
         db.add(user)
         db.flush()
         _audit(db, user, "register", "user", user.id)
-        message = _verification_email(db, user)
+        message = verification_email(db, user)
         db.commit()
     except IntegrityError:  # concurrent registration with the same SIRET / e-mail
         db.rollback()
@@ -161,21 +161,30 @@ def resend_verification(db: Session, email: str, mailer: Mailer) -> None:
         return  # an invited colleague has no password yet: the invitation link is the way in
     if is_suspended(db.get_one(Organization, user.org_id)):
         return  # nothing leaves for a suspended company
-    s = get_settings()
-    recent = db.scalar(
+    if too_many_links(db, user.id, VERIFY_KIND):  # silent cap: no mail-bombing
+        return
+    message = verification_email(db, user)
+    db.commit()
+    mailer.send(message)
+
+
+LINK_CAP_MESSAGE = "Envoi déjà fait : réessayez plus tard."
+
+
+def too_many_links(db: Session, user_id: uuid.UUID, kind: str) -> bool:
+    """Links of one kind e-mailed to one person within the hour: 5 at most (no mail-bombing).
+
+    The single cap of every link Pilao e-mails: confirmation, invitation, new password."""
+    sent = db.scalar(
         select(func.count())
         .select_from(AuthToken)
         .where(
-            AuthToken.user_id == user.id,
-            AuthToken.kind == VERIFY_KIND,
+            AuthToken.user_id == user_id,
+            AuthToken.kind == kind,
             AuthToken.created_at >= _now() - timedelta(hours=1),
         )
     )
-    if (recent or 0) >= s.email_verify_max_per_hour:  # silent cap: no mail-bombing
-        return
-    message = _verification_email(db, user)
-    db.commit()
-    mailer.send(message)
+    return (sent or 0) >= get_settings().email_verify_max_per_hour
 
 
 def _check_throttle(db: Session, email: str, ip: str | None) -> None:

@@ -131,6 +131,8 @@ class OrganizationRowOut(BaseModel):
     ai_cost_month: Decimal
     deletion_requested: bool
     suspended: bool
+    suspended_at: datetime | None
+    suspension_reason: str | None
     deletion_due_at: datetime | None
     invitation_pending: bool  # nobody of the company has created their access yet
 
@@ -300,6 +302,7 @@ class AdminCreateOrgIn(BaseModel):
 
 class CreatedOut(BaseModel):
     id: uuid.UUID
+    email_sent: bool = True  # False: created, but the invitation e-mail did not leave
 
 
 class SuspendIn(BaseModel):

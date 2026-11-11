@@ -4,8 +4,8 @@ from fastapi import APIRouter, Request, Response
 
 from app.core.admin_deps import AdminDb, CurrentAdmin
 from app.core.config import get_settings
+from app.core.net import client_ip
 from app.core.ratelimit import SlidingWindowLimiter
-from app.routers.auth import _client_ip
 from app.schemas.admin import (
     AdminLoginIn,
     AdminMeOut,
@@ -24,7 +24,7 @@ _limiter = SlidingWindowLimiter(max_calls=20, window_seconds=60)
 
 
 def _throttle(request: Request) -> None:
-    _limiter.check(_client_ip(request) or "unknown")
+    _limiter.check(client_ip(request) or "unknown")
 
 
 def _set_cookie(response: Response, token: str) -> None:
@@ -58,7 +58,7 @@ def setup_confirm(
 ) -> SetupConfirmOut:
     _throttle(request)
     token, out = svc.setup_confirm(
-        db, data.token, data.code, _client_ip(request), request.headers.get("user-agent")
+        db, data.token, data.code, client_ip(request), request.headers.get("user-agent")
     )
     _set_cookie(response, token)
     return out
@@ -72,7 +72,7 @@ def login(data: AdminLoginIn, request: Request, response: Response, db: AdminDb)
         data.email,
         data.password,
         data.code,
-        _client_ip(request),
+        client_ip(request),
         request.headers.get("user-agent"),
     )
     _set_cookie(response, token)

@@ -358,6 +358,8 @@ def organizations(db: Session, now: datetime) -> list[OrganizationRowOut]:
             ai_cost_month=euros(costs.get(o.id)),
             deletion_requested=o.id in deletions,
             suspended=o.suspended_at is not None,
+            suspended_at=o.suspended_at,
+            suspension_reason=o.suspension_reason,
             deletion_due_at=deletions[o.id].due_at if o.id in deletions else None,
             invitation_pending=o.id not in with_access,
         )
@@ -486,7 +488,11 @@ def organization_detail(db: Session, org_id: uuid.UUID, now: datetime) -> Organi
                 last_login_at=u.last_login_at,
                 terms_version=u.terms_version,
                 status=_user_status(u, invitations.get(u.id), now),
-                invited_at=u.created_at if u.password_hash is None else None,
+                invited_at=(
+                    (invitations[u.id].created_at if u.id in invitations else u.created_at)
+                    if u.password_hash is None
+                    else None
+                ),
                 has_sessions=u.id in open_sessions,
             )
             for u in users

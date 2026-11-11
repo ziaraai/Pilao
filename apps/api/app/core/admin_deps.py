@@ -21,8 +21,8 @@ from app.core.errors import ApiError
 from app.core.tenancy import scope_session
 from app.db.models import Organization, PlatformAdmin, PlatformAdminSession
 from app.db.session import get_db
-from app.services.actors import PlatformActor
 from app.services.admin import auth
+from app.services.admin.context import AdminOrgContext
 
 AdminDb = Annotated[Session, Depends(get_db)]  # unscoped, read-write: sign-in and audit only
 
@@ -60,19 +60,6 @@ def get_admin_read_db(_: CurrentAdmin, db: AdminDb) -> Session:
 AdminReadDb = Annotated[Session, Depends(get_admin_read_db)]
 
 
-@dataclass(frozen=True)
-class AdminOrgContext:
-    """A route that acts on one company: the super admin, and a session scoped to that company.
-
-    The scope is the barrier of the company space (``core.tenancy``): the session only sees, and
-    may only write, this company's rows. The platform's own tables are global and stay usable."""
-
-    admin: PlatformAdmin
-    session: PlatformAdminSession
-    org: Organization
-    db: Session
-
-
 def get_admin_org(org_id: uuid.UUID, ctx: CurrentAdmin, db: AdminDb) -> AdminOrgContext:
     org = db.get(Organization, org_id)
     if org is None:
@@ -82,7 +69,3 @@ def get_admin_org(org_id: uuid.UUID, ctx: CurrentAdmin, db: AdminDb) -> AdminOrg
 
 
 AdminOrg = Annotated[AdminOrgContext, Depends(get_admin_org)]
-
-
-def actor_of(ctx: AdminContext | AdminOrgContext) -> PlatformActor:
-    return PlatformActor(admin_id=ctx.admin.id, email=ctx.admin.email)

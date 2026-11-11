@@ -22,14 +22,14 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from app.core.config import get_settings
-from app.core.email import Email, Mailer
+from app.core.email import Email, Mailer, send_quietly
 from app.core.errors import ApiError
 from app.core.legal import TERMS_VERSION
 from app.core.security import hash_password, hash_token, new_token
 from app.db.models import AuditLog, AuthToken, Organization, User, UserSession
 from app.schemas.members import AcceptInvitationIn, InvitationOut, InviteIn, MemberOut
 from app.services.actors import PILAO_NAME, Actor, PlatformActor, meta_of, name_of, user_id_of
-from app.services.auth import open_session
+from app.services.auth import LINK_CAP_MESSAGE, open_session, too_many_links
 from app.services.suspension import is_suspended, suspended_error
 
 INVITE_KIND = "invitation"
@@ -174,7 +174,7 @@ def invite(
     return user
 
 
-def _colleague(db: Session, user_id: uuid.UUID) -> User:
+def colleague(db: Session, user_id: uuid.UUID) -> User:
     user = db.get(User, user_id)  # scoped: another organization's account is not found
     if user is None:
         raise ApiError(404, "not_found", "Utilisateur introuvable.")
@@ -184,22 +184,11 @@ def _colleague(db: Session, user_id: uuid.UUID) -> User:
 def resend(
     db: Session, actor: Actor, org: Organization, user_id: uuid.UUID, mailer: Mailer
 ) -> None:
-    user = _colleague(db, user_id)
+    user = colleague(db, user_id)
     if user.password_hash is not None:
         raise ApiError(409, "already_active", "Ce collaborateur a déjà créé son accès.")
-    recent = db.scalar(
-        select(func.count())
-        .select_from(AuthToken)
-        .where(
-            AuthToken.user_id == user.id,
-            AuthToken.kind == INVITE_KIND,
-            AuthToken.created_at >= _now() - timedelta(hours=1),
-        )
-    )
-    if (recent or 0) >= get_settings().email_verify_max_per_hour:
-        raise ApiError(
-            429, "too_many_invitations", "Invitation déjà renvoyée : réessayez plus tard."
-        )
+    if too_many_links(db, user.id, INVITE_KIND):
+        raise ApiError(429, "too_many_invitations", LINK_CAP_MESSAGE)
     message = _invitation(db, user, org, actor)
     _audit(db, actor, "resend_invitation", user.id)
     db.commit()
@@ -211,16 +200,7 @@ def reinvite(db: Session, user: User, org: Organization, mailer: Mailer) -> bool
 
     Capped like ``resend``; ``False`` when the cap is reached (nothing leaves)."""
     s = get_settings()
-    recent = db.scalar(
-        select(func.count())
-        .select_from(AuthToken)
-        .where(
-            AuthToken.user_id == user.id,
-            AuthToken.kind == INVITE_KIND,
-            AuthToken.created_at >= _now() - timedelta(hours=1),
-        )
-    )
-    if (recent or 0) >= s.email_verify_max_per_hour:
+    if too_many_links(db, user.id, INVITE_KIND):
         return False
     token = new_token()
     db.add(
@@ -234,7 +214,8 @@ def reinvite(db: Session, user: User, org: Organization, mailer: Mailer) -> bool
     )
     db.commit()
     days = s.invitation_ttl_hours // 24
-    mailer.send(
+    return send_quietly(  # « Mot de passe oublié » answers the same, mail server down or not
+        mailer,
         Email(
             to=user.email,
             subject=f"Créez votre accès à Pilao ({org.name})",
@@ -243,9 +224,8 @@ def reinvite(db: Session, user: User, org: Organization, mailer: Mailer) -> bool
                 "pas encore créé. Choisissez votre mot de passe ici "
                 f"(lien valable {days} jours) :\n{s.app_base_url}/invitation?token={token}\n"
             ),
-        )
+        ),
     )
-    return True
 
 
 def _admins(db: Session) -> int:
@@ -253,7 +233,7 @@ def _admins(db: Session) -> int:
 
 
 def change_role(db: Session, actor: Actor, user_id: uuid.UUID, role: str) -> User:
-    user = _colleague(db, user_id)
+    user = colleague(db, user_id)
     if user.role == "org_admin" and role != "org_admin" and _admins(db) <= 1:
         raise ApiError(409, "last_admin", "L'entreprise doit garder au moins un administrateur.")
     user.role = role
@@ -263,7 +243,7 @@ def change_role(db: Session, actor: Actor, user_id: uuid.UUID, role: str) -> Use
 
 
 def remove(db: Session, actor: Actor, user_id: uuid.UUID) -> None:
-    user = _colleague(db, user_id)
+    user = colleague(db, user_id)
     if isinstance(actor, User) and user.id == actor.id:
         raise ApiError(
             409,
@@ -280,7 +260,7 @@ def remove(db: Session, actor: Actor, user_id: uuid.UUID) -> None:
 
 def logout_everywhere(db: Session, actor: Actor, user_id: uuid.UUID) -> int:
     """Revoke every open session of a colleague; returns how many were open."""
-    user = _colleague(db, user_id)
+    user = colleague(db, user_id)
     sessions = db.scalars(
         select(UserSession).where(UserSession.user_id == user.id, UserSession.revoked_at.is_(None))
     ).all()

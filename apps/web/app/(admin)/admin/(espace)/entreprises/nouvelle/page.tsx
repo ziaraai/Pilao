@@ -8,7 +8,7 @@ import { AdminTitle } from "@/components/admin/ui";
 import { Alert, Button, Card, Field, Input } from "@/components/ui";
 import { useAdminAction } from "@/lib/admin-auth";
 import { api, ApiError } from "@/lib/api";
-import type { AdminOrganizationRow } from "@/lib/types";
+import type { AdminCreated, AdminOrganizationRow } from "@/lib/types";
 
 type Lookup = {
   available: boolean;
@@ -59,7 +59,7 @@ export default function NewOrganizationPage() {
     setExisting(null);
     const res = await create.run(async () => {
       try {
-        return await api<{ id: string }>("/admin/organizations", {
+        return await api<AdminCreated>("/admin/organizations", {
           json: {
             siret,
             name,
@@ -78,7 +78,10 @@ export default function NewOrganizationPage() {
         throw err;
       }
     });
-    if (res) router.push(`/admin/entreprises/${res.id}`);
+    if (res)
+      router.push(
+        `/admin/entreprises/${res.id}${res.email_sent ? "" : "?invitation=non-envoyee"}`,
+      );
   }
 
   const ready =

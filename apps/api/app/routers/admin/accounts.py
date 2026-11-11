@@ -10,9 +10,9 @@ from fastapi import APIRouter, Depends, Query, Request, Response
 
 from app.core.admin_deps import AdminDb, AdminOrg, AdminReadDb, CurrentAdmin
 from app.core.email import Mailer, get_mailer
+from app.core.net import client_ip
 from app.integrations.recherche_entreprises import CompanyDirectory, get_company_directory
 from app.routers import companies
-from app.routers.auth import _client_ip
 from app.schemas.admin import (
     AdminCreateOrgIn,
     AuditPageOut,
@@ -54,13 +54,15 @@ def create_organization(
     directory: Directory,
     mailer: MailerDep,
 ) -> CreatedOut:
-    org_id = svc.create_organization(db, ctx.admin, data, directory, mailer, _client_ip(request))
-    return CreatedOut(id=org_id)
+    org_id, sent = svc.create_organization(
+        db, ctx.admin, data, directory, mailer, client_ip(request)
+    )
+    return CreatedOut(id=org_id, email_sent=sent)
 
 
 @router.post("/organizations/{org_id}/suspend", status_code=204)
 def suspend(data: SuspendIn, request: Request, ctx: AdminOrg) -> Response:
-    svc.suspend(ctx, data.reason, _client_ip(request))
+    svc.suspend(ctx, data.reason, client_ip(request))
     return Response(status_code=204)
 
 
@@ -68,7 +70,7 @@ def suspend(data: SuspendIn, request: Request, ctx: AdminOrg) -> Response:
 def reactivate(
     request: Request, ctx: AdminOrg, queue: Annotated[JobQueue, Depends(get_job_queue)]
 ) -> Response:
-    svc.reactivate(ctx, queue, _client_ip(request))
+    svc.reactivate(ctx, queue, client_ip(request))
     return Response(status_code=204)
 
 
@@ -85,12 +87,12 @@ def delete(
     storage: Annotated[ObjectStorage, Depends(get_storage)],
     mailer: MailerDep,
 ) -> OrgDeletionOut:
-    return svc.delete(ctx, data.confirmation, data.code, storage, mailer, _client_ip(request))
+    return svc.delete(ctx, data.confirmation, data.code, storage, mailer, client_ip(request))
 
 
 @router.delete("/organizations/{org_id}/deletion", status_code=204)
 def cancel_deletion(request: Request, ctx: AdminOrg, mailer: MailerDep) -> Response:
-    svc.cancel_deletion(ctx, mailer, _client_ip(request))
+    svc.cancel_deletion(ctx, mailer, client_ip(request))
     return Response(status_code=204)
 
 
@@ -101,14 +103,15 @@ USERS = "/organizations/{org_id}/users"
 
 @router.post(USERS, status_code=201)
 def invite_user(data: InviteIn, request: Request, ctx: AdminOrg, mailer: MailerDep) -> CreatedOut:
-    return CreatedOut(id=svc.invite_user(ctx, data, mailer, _client_ip(request)))
+    user_id, sent = svc.invite_user(ctx, data, mailer, client_ip(request))
+    return CreatedOut(id=user_id, email_sent=sent)
 
 
 @router.post(USERS + "/{user_id}/invitation", status_code=204)
 def resend_invitation(
     user_id: uuid.UUID, request: Request, ctx: AdminOrg, mailer: MailerDep
 ) -> Response:
-    svc.resend_invitation(ctx, user_id, mailer, _client_ip(request))
+    svc.resend_invitation(ctx, user_id, mailer, client_ip(request))
     return Response(status_code=204)
 
 
@@ -116,7 +119,7 @@ def resend_invitation(
 def resend_verification(
     user_id: uuid.UUID, request: Request, ctx: AdminOrg, mailer: MailerDep
 ) -> Response:
-    svc.resend_verification(ctx, user_id, mailer, _client_ip(request))
+    svc.resend_verification(ctx, user_id, mailer, client_ip(request))
     return Response(status_code=204)
 
 
@@ -124,26 +127,26 @@ def resend_verification(
 def send_password_reset(
     user_id: uuid.UUID, request: Request, ctx: AdminOrg, mailer: MailerDep
 ) -> Response:
-    svc.send_password_reset(ctx, user_id, mailer, _client_ip(request))
+    svc.send_password_reset(ctx, user_id, mailer, client_ip(request))
     return Response(status_code=204)
 
 
 @router.patch(USERS + "/{user_id}", status_code=204)
 def change_role(user_id: uuid.UUID, data: RoleIn, request: Request, ctx: AdminOrg) -> Response:
-    svc.change_role(ctx, user_id, data.role, _client_ip(request))
+    svc.change_role(ctx, user_id, data.role, client_ip(request))
     return Response(status_code=204)
 
 
 @router.post(USERS + "/{user_id}/logout", status_code=204)
 def logout_user(user_id: uuid.UUID, request: Request, ctx: AdminOrg) -> Response:
-    svc.logout_user(ctx, user_id, _client_ip(request))
+    svc.logout_user(ctx, user_id, client_ip(request))
     return Response(status_code=204)
 
 
 @router.post(USERS + "/{user_id}/remove", status_code=204)
 def remove_user(user_id: uuid.UUID, data: StepUpIn, request: Request, ctx: AdminOrg) -> Response:
     """POST, not DELETE: the code travels in the body."""
-    svc.remove_user(ctx, user_id, data.code, _client_ip(request))
+    svc.remove_user(ctx, user_id, data.code, client_ip(request))
     return Response(status_code=204)
 
 

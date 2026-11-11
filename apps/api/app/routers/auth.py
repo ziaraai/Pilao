@@ -1,4 +1,3 @@
-import ipaddress
 from typing import Annotated
 
 from fastapi import APIRouter, Depends, Request, Response
@@ -8,6 +7,7 @@ from app.core.config import get_settings
 from app.core.deps import CurrentAuth
 from app.core.email import Mailer, get_mailer
 from app.core.legal import TERMS_VERSION
+from app.core.net import client_ip
 from app.core.ratelimit import SlidingWindowLimiter
 from app.db.models import Organization, User
 from app.db.session import get_db
@@ -35,15 +35,6 @@ Db = Annotated[Session, Depends(get_db)]
 MailerDep = Annotated[Mailer, Depends(get_mailer)]
 # « Mot de passe oublié »: public routes that send e-mails or try tokens, per client address
 _password_limiter = SlidingWindowLimiter(max_calls=10, window_seconds=60)
-
-
-def _client_ip(request: Request) -> str | None:
-    """Client IP if it is a valid address. Behind a proxy, run uvicorn with --proxy-headers."""
-    host = request.client.host if request.client else None
-    try:
-        return str(ipaddress.ip_address(host)) if host else None
-    except ValueError:
-        return None
 
 
 def _me_from(user: User, org: Organization) -> MeOut:
@@ -91,7 +82,7 @@ def resend(data: ResendIn, db: Db, mailer: MailerDep) -> MessageOut:
 
 @router.post("/login")
 def login(data: LoginIn, request: Request, response: Response, db: Db) -> MeOut:
-    ip = _client_ip(request)
+    ip = client_ip(request)
     token, user = svc.login(db, data.email, data.password, ip, request.headers.get("user-agent"))
     _set_session_cookie(response, token)
     return _me_from(user, db.get_one(Organization, user.org_id))
@@ -120,7 +111,7 @@ def invitation(data: InvitationLookupIn, db: Db) -> InvitationOut:
 def accept_invitation(
     data: AcceptInvitationIn, request: Request, response: Response, db: Db
 ) -> MeOut:
-    token, user = members.accept(db, data, _client_ip(request), request.headers.get("user-agent"))
+    token, user = members.accept(db, data, client_ip(request), request.headers.get("user-agent"))
     _set_session_cookie(response, token)
     return _me_from(user, db.get_one(Organization, user.org_id))
 
@@ -129,7 +120,7 @@ def accept_invitation(
 def forgot_password(
     data: ForgotPasswordIn, request: Request, db: Db, mailer: MailerDep
 ) -> MessageOut:
-    _password_limiter.check(_client_ip(request) or "unknown")
+    _password_limiter.check(client_ip(request) or "unknown")
     password_reset.request_reset(db, data.email, mailer)
     return MessageOut(
         message=(
@@ -142,15 +133,15 @@ def forgot_password(
 @router.post("/password/reset/lookup")
 def reset_lookup(data: ResetLookupIn, request: Request, db: Db) -> ResetLookupOut:
     """The token goes in the body, never in a URL that access logs would keep."""
-    _password_limiter.check(_client_ip(request) or "unknown")
+    _password_limiter.check(client_ip(request) or "unknown")
     return ResetLookupOut(email=password_reset.lookup(db, data.token))
 
 
 @router.post("/password/reset")
 def reset_password(data: ResetPasswordIn, request: Request, response: Response, db: Db) -> MeOut:
-    _password_limiter.check(_client_ip(request) or "unknown")
+    _password_limiter.check(client_ip(request) or "unknown")
     token, user = password_reset.reset(
-        db, data.token, data.password, _client_ip(request), request.headers.get("user-agent")
+        db, data.token, data.password, client_ip(request), request.headers.get("user-agent")
     )
     _set_session_cookie(response, token)
     return _me_from(user, db.get_one(Organization, user.org_id))

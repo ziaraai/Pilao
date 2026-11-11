@@ -12,7 +12,7 @@ from fastapi import APIRouter, Query, Request
 
 from app.core.admin_deps import AdminDb, AdminReadDb, CurrentAdmin, read_only
 from app.core.errors import ApiError
-from app.routers.auth import _client_ip
+from app.core.net import client_ip
 from app.schemas.admin import (
     AiCostsOut,
     FeedbackOut,
@@ -48,7 +48,7 @@ def organization(
 ) -> OrganizationDetailOut:
     if not svc.organization_exists(db, org_id):
         raise ApiError(404, "not_found", "Entreprise introuvable.")
-    audit.record(db, "organization_viewed", admin=ctx.admin, org_id=org_id, ip=_client_ip(request))
+    audit.record(db, "organization_viewed", admin=ctx.admin, org_id=org_id, ip=client_ip(request))
     return svc.organization_detail(read_only(db), org_id, _now())
 
 

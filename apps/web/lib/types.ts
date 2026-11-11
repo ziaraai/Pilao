@@ -611,9 +611,14 @@ export type AdminOrganizationRow = {
   deletion_requested: boolean;
   siret: string;
   suspended: boolean;
+  suspended_at: string | null;
+  suspension_reason: string | null;
   deletion_due_at: string | null;
   invitation_pending: boolean;
 };
+
+/** A company or a user created from the administration. */
+export type AdminCreated = { id: string; email_sent: boolean };
 
 export type AdminOrgUser = {
   id: string;

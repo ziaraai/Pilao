@@ -8,7 +8,5 @@ export function signInNotice(params: URLSearchParams): SignInNotice | null {
       tone: "danger",
       text: "L'accès de votre entreprise à Pilao est suspendu.",
     };
-  if (params.get("mot-de-passe") === "change")
-    return { tone: "ok", text: "Mot de passe enregistré." };
   return null;
 }

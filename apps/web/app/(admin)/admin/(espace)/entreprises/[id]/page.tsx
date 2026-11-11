@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useParams, useRouter } from "next/navigation";
+import { useParams, useRouter, useSearchParams } from "next/navigation";
 import { useState } from "react";
 
 import { ConfirmDialog } from "@/components/admin/dialogs";
@@ -19,7 +19,7 @@ import {
 } from "@/components/admin/ui";
 import { Alert, Button, Card, tableHead, tableRow } from "@/components/ui";
 import { monthLabel } from "@/lib/admin";
-import { useAdminApi } from "@/lib/admin-auth";
+import { useAdminAction, useAdminApi } from "@/lib/admin-auth";
 import { api } from "@/lib/api";
 import { formatDate, formatDateTimeShort, formatEuros } from "@/lib/format";
 import { BID_STATUS, label } from "@/lib/labels";
@@ -43,17 +43,28 @@ function AccountActions({
   const router = useRouter();
   const [open, setOpen] = useState<Open>(null);
   const [preview, setPreview] = useState<AdminDeletionPreview | null>(null);
+  const ask = useAdminAction();
   const account = detail.account;
   const name = detail.identity.name;
   const base = `/admin/organizations/${orgId}`;
 
   async function askDeletion() {
-    setPreview(await api<AdminDeletionPreview>(`${base}/deletion`));
-    setOpen("delete");
+    const found = await ask.run(() =>
+      api<AdminDeletionPreview>(`${base}/deletion`),
+    );
+    if (found) {
+      setPreview(found);
+      setOpen("delete");
+    }
   }
 
   return (
-    <div className="flex flex-wrap gap-2">
+    <div className="flex flex-wrap items-center gap-2">
+      {ask.error && (
+        <span className="text-sm text-red-700" role="alert">
+          {ask.error}
+        </span>
+      )}
       {account.suspended_at ? (
         <Button onClick={() => setOpen("reactivate")}>Réactiver</Button>
       ) : (
@@ -66,7 +77,7 @@ function AccountActions({
           Annuler la suppression
         </Button>
       ) : (
-        <Button variant="danger" onClick={askDeletion}>
+        <Button variant="danger" busy={ask.busy} onClick={askDeletion}>
           Supprimer
         </Button>
       )}
@@ -161,12 +172,19 @@ function AccountActions({
   );
 }
 
-/** Suspended, deletion scheduled: said at the top of the page. */
+/** Suspended, deletion scheduled, invitation not sent: said at the top of the page. */
 function AccountState({ detail }: { detail: AdminOrganizationDetail }) {
   const a = detail.account;
-  if (!a.suspended_at && !a.deletion_due_at) return null;
+  const unsent = useSearchParams().get("invitation") === "non-envoyee";
+  if (!a.suspended_at && !a.deletion_due_at && !unsent) return null;
   return (
     <div className="space-y-3">
+      {unsent && (
+        <Alert tone="warning">
+          L&apos;entreprise est créée, mais l&apos;e-mail d&apos;invitation
+          n&apos;est pas parti : renvoyez-le depuis la carte « Utilisateurs ».
+        </Alert>
+      )}
       {a.suspended_at && (
         <Alert tone="danger">
           <strong>Suspendue</strong> depuis le{" "}

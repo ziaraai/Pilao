@@ -129,7 +129,8 @@ def send_expiry_alerts(db: Session, mailer: Mailer, today: date) -> int:
         )
     ):
         assert doc.valid_until is not None
-        if orgs[doc.org_id].suspended_at is not None:
+        org = orgs.get(doc.org_id)
+        if org is None or org.suspended_at is not None:
             continue  # nothing leaves for a suspended company
         days = (doc.valid_until - today).days
         if days > 30 or days < -EXPIRED_ALERT_DAYS:

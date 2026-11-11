@@ -19,7 +19,7 @@ import { useAdminAction } from "@/lib/admin-auth";
 import { api } from "@/lib/api";
 import { formatDate, formatDateTimeShort } from "@/lib/format";
 import { ROLES, label } from "@/lib/labels";
-import type { AdminOrgUser } from "@/lib/types";
+import type { AdminCreated, AdminOrgUser } from "@/lib/types";
 
 function StatePill({ u }: { u: AdminOrgUser }) {
   if (u.status === "active") return <Pill tone="ok">Actif</Pill>;
@@ -89,14 +89,22 @@ export function OrgUsers({
 
   async function onInvite(e: React.FormEvent) {
     e.preventDefault();
-    await run(`Invitation envoyée à ${email}.`, () =>
-      api(base, {
+    setDone(null);
+    const res = await act.run(() =>
+      api<AdminCreated>(base, {
         json: { email, full_name: fullName || null, role },
       }),
+    );
+    if (!res) return; // the form keeps what was typed, the error says why
+    setDone(
+      res.email_sent
+        ? `Invitation envoyée à ${email}.`
+        : `${email} est ajouté, mais l'e-mail n'est pas parti : renvoyez l'invitation.`,
     );
     setAdding(false);
     setEmail("");
     setFullName("");
+    onChanged();
   }
 
   return (
@@ -284,6 +292,7 @@ export function OrgUsers({
           needsCode
           onConfirm={async ({ code }) => {
             await api(`${base}/${removing.id}/remove`, { json: { code } });
+            act.setError(null); // an earlier error must not hide this success
             setDone(`${removing.email} a été retiré de ${orgName}.`);
             onChanged();
           }}

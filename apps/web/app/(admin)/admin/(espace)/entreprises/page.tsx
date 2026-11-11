@@ -84,7 +84,12 @@ export default function AdminOrganizationsPage() {
                           </Link>
                           <span className="ml-2 inline-flex flex-wrap gap-1 align-middle">
                             {o.suspended && (
-                              <Pill tone="danger">Suspendue</Pill>
+                              <Pill tone="danger">
+                                Suspendue
+                                {o.suspended_at
+                                  ? ` le ${formatDate(o.suspended_at)}`
+                                  : ""}
+                              </Pill>
                             )}
                             {o.deletion_due_at && (
                               <Pill tone="warning">
@@ -95,6 +100,11 @@ export default function AdminOrganizationsPage() {
                               <Pill tone="neutral">Invitation en attente</Pill>
                             )}
                           </span>
+                          {o.suspension_reason && (
+                            <span className="mt-1 block text-xs text-red-700">
+                              Raison : {o.suspension_reason}
+                            </span>
+                          )}
                         </td>
                         <td className={CELL}>{o.city ?? "—"}</td>
                         <td className={`${CELL} whitespace-nowrap`}>

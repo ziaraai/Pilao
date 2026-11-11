@@ -5,6 +5,7 @@ the company rules (``members``, ``org_data``) on behalf of Pilao (ADR-042). Each
 to the platform journal, with the company and the person concerned, never with any content.
 """
 
+import logging
 import uuid
 from datetime import UTC, datetime, timedelta
 from typing import Literal
@@ -12,7 +13,6 @@ from typing import Literal
 from sqlalchemy import exists, func, select
 from sqlalchemy.orm import Session
 
-from app.core.admin_deps import AdminOrgContext, actor_of
 from app.core.config import get_settings
 from app.core.email import Mailer
 from app.core.errors import ApiError
@@ -26,11 +26,14 @@ from app.services import members, org_data, password_reset
 from app.services.actors import PlatformActor
 from app.services.admin import audit
 from app.services.admin import auth as admin_auth
+from app.services.admin.context import AdminOrgContext, actor_of
 from app.services.suspension import is_suspended
 from app.storage.objects import ObjectStorage
 from app.workers.queue import JobQueue
 
 DELETION_REASON = "Suppression programmée par Pilao"
+CANCELLED_REASON = "Suppression annulée : réactivez l'entreprise pour lui rendre l'accès."
+logger = logging.getLogger("pilao.admin.accounts")
 
 
 def _now() -> datetime:
@@ -47,15 +50,17 @@ def create_organization(
     directory: CompanyDirectory | None,
     mailer: Mailer,
     ip: str | None,
-) -> uuid.UUID:
-    """Open a company's space and invite its first person, an administrator without password."""
+) -> tuple[uuid.UUID, bool]:
+    """Open a company's space and invite its first person, an administrator without password.
+
+    Returns the company and whether the invitation e-mail left."""
     taken = db.scalar(select(Organization.name).where(Organization.siret == data.siret))
     if taken is not None:
         raise ApiError(409, "siret_taken", f"Ce SIRET a déjà un compte : {taken}.")
     org = Organization(siren=data.siret[:9], siret=data.siret, name=data.name.strip())
     if directory is not None:
         db.rollback()  # no transaction held open during the registry's HTTP call
-        company_auth._prefill_from_registry(org, directory)
+        company_auth.prefill_from_registry(org, directory)
     db.add(org)
     db.flush()
     audit.record(
@@ -71,8 +76,26 @@ def create_organization(
         email=data.contact_email, full_name=data.contact_name.strip(), role="org_admin"
     )
     actor = PlatformActor(admin_id=admin.id, email=admin.email)
-    members.invite(db, actor, org, invite, mailer, first_access=True)  # commits, then mails
-    return org.id
+    return org.id, _invite(db, actor, org, invite, mailer, first_access=True)
+
+
+def _invite(
+    db: Session,
+    actor: PlatformActor,
+    org: Organization,
+    data: InviteIn,
+    mailer: Mailer,
+    first_access: bool = False,
+) -> bool:
+    """Invite on behalf of Pilao; ``False`` when the e-mail did not leave (the account exists:
+    the invitation is resent from the company's page)."""
+    try:
+        members.invite(db, actor, org, data, mailer, first_access=first_access)  # commits, mails
+    except ApiError as exc:
+        if exc.code != "email_unavailable":
+            raise
+        return False
+    return True
 
 
 # --- Suspending ----------------------------------------------------------------------------
@@ -107,7 +130,10 @@ def reactivate(ctx: AdminOrgContext, queue: JobQueue, ip: str | None) -> None:
     ctx.org.suspended_at = ctx.org.suspension_reason = None
     audit.record(ctx.db, "organization_reactivated", admin=ctx.admin, org_id=ctx.org.id, ip=ip)
     ctx.db.commit()
-    queue.enqueue_rematch_org(ctx.org.id)  # the watch catches up with the open notices
+    try:
+        queue.enqueue_rematch_org(ctx.org.id)  # the watch catches up with the open notices
+    except Exception:  # reactivated all the same; the next notice import matches it again
+        logger.exception("reactivation of %s: could not queue the watch", ctx.org.id)
 
 
 # --- Deleting ------------------------------------------------------------------------------
@@ -185,6 +211,8 @@ def cancel_deletion(ctx: AdminOrgContext, mailer: Mailer, ip: str | None) -> Non
     audit.record(
         ctx.db, "deletion_cancelled", admin=ctx.admin, org_id=ctx.org.id, ip=ip, meta={"by": by}
     )
+    if ctx.org.suspension_reason == DELETION_REASON:
+        ctx.org.suspension_reason = CANCELLED_REASON  # still suspended: « Réactiver » is explicit
     org_data.cancel_deletion(ctx.db, actor_of(ctx), ctx.org, mailer)  # 404 if none; commits
 
 
@@ -210,12 +238,17 @@ def _sends(ctx: AdminOrgContext) -> None:
         )
 
 
-def invite_user(ctx: AdminOrgContext, data: InviteIn, mailer: Mailer, ip: str | None) -> uuid.UUID:
+def invite_user(
+    ctx: AdminOrgContext, data: InviteIn, mailer: Mailer, ip: str | None
+) -> tuple[uuid.UUID, bool]:
+    """The new user and whether the invitation e-mail left."""
     _sends(ctx)
-    user = members.invite(ctx.db, actor_of(ctx), ctx.org, data, mailer)  # commits, then mails
+    sent = _invite(ctx.db, actor_of(ctx), ctx.org, data, mailer)
+    user = ctx.db.scalar(select(User).where(User.email == str(data.email).lower()))
+    assert user is not None  # just created in this company
     _journal(ctx, "user_invited", user, ip, role=user.role)
     ctx.db.commit()
-    return user.id
+    return user.id, sent
 
 
 def resend_invitation(
@@ -223,7 +256,7 @@ def resend_invitation(
 ) -> None:
     _sends(ctx)
     members.resend(ctx.db, actor_of(ctx), ctx.org, user_id, mailer)  # commits, then mails
-    _journal(ctx, "invitation_resent", members._colleague(ctx.db, user_id), ip)
+    _journal(ctx, "invitation_resent", members.colleague(ctx.db, user_id), ip)
     ctx.db.commit()
 
 
@@ -231,7 +264,7 @@ def resend_verification(
     ctx: AdminOrgContext, user_id: uuid.UUID, mailer: Mailer, ip: str | None
 ) -> None:
     _sends(ctx)
-    user = members._colleague(ctx.db, user_id)
+    user = members.colleague(ctx.db, user_id)
     if user.password_hash is None:
         raise ApiError(409, "no_password", "Pas encore d'accès : renvoyez l'invitation.")
     if user.email_verified_at is not None:
@@ -247,7 +280,7 @@ def resend_verification(
     )
     if (recent or 0) >= get_settings().email_verify_max_per_hour:
         raise ApiError(429, "too_many_emails", "Envoi déjà fait : réessayez plus tard.")
-    message = company_auth._verification_email(ctx.db, user)
+    message = company_auth.verification_email(ctx.db, user)
     _journal(ctx, "verification_resent", user, ip)
     ctx.db.commit()
     mailer.send(message)
@@ -257,7 +290,7 @@ def send_password_reset(
     ctx: AdminOrgContext, user_id: uuid.UUID, mailer: Mailer, ip: str | None
 ) -> None:
     _sends(ctx)
-    user = members._colleague(ctx.db, user_id)
+    user = members.colleague(ctx.db, user_id)
     if user.password_hash is None:
         raise ApiError(409, "no_password", "Pas encore d'accès : renvoyez l'invitation.")
     _journal(ctx, "password_reset_sent", user, ip)
@@ -272,13 +305,13 @@ def change_role(ctx: AdminOrgContext, user_id: uuid.UUID, role: str, ip: str | N
 
 def logout_user(ctx: AdminOrgContext, user_id: uuid.UUID, ip: str | None) -> int:
     closed = members.logout_everywhere(ctx.db, actor_of(ctx), user_id)  # commits
-    _journal(ctx, "user_logged_out", members._colleague(ctx.db, user_id), ip)
+    _journal(ctx, "user_logged_out", members.colleague(ctx.db, user_id), ip)
     ctx.db.commit()
     return closed
 
 
 def remove_user(ctx: AdminOrgContext, user_id: uuid.UUID, code: str, ip: str | None) -> None:
-    user = members._colleague(ctx.db, user_id)  # 404 before asking for a code
+    user = members.colleague(ctx.db, user_id)  # 404 before asking for a code
     admin_auth.confirm_code(ctx.db, ctx.admin, ctx.session, code, ip)
     _journal(ctx, "user_removed", user, ip)
     members.remove(ctx.db, actor_of(ctx), user_id)  # last administrator refused; commits

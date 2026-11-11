@@ -10,13 +10,6 @@ describe("signInNotice", () => {
     });
   });
 
-  it("confirms a new password", () => {
-    expect(signInNotice(new URLSearchParams("mot-de-passe=change"))).toEqual({
-      tone: "ok",
-      text: "Mot de passe enregistré.",
-    });
-  });
-
   it("says nothing otherwise", () => {
     expect(signInNotice(new URLSearchParams(""))).toBeNull();
     expect(signInNotice(new URLSearchParams("suite=/profil"))).toBeNull();
