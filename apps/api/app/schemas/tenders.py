@@ -8,6 +8,8 @@ from zoneinfo import ZoneInfo
 
 from pydantic import BaseModel, Field, StringConstraints, field_validator
 
+from app.schemas.bids import BidOut
+
 PARIS = ZoneInfo("Europe/Paris")
 NoticeType = Literal["contract_notice", "correction", "award", "other"]
 Short = Annotated[str, StringConstraints(strip_whitespace=True, max_length=1000)]
@@ -130,3 +132,9 @@ class TenderListOut(BaseModel):
 
 class DismissIn(BaseModel):
     reason: Annotated[str, StringConstraints(strip_whitespace=True, min_length=1, max_length=300)]
+
+
+class TrackOut(BaseModel):
+    """« Suivre »: the bid created (or already there); empty without « Réponse » (lot 3)."""
+
+    bid: BidOut | None

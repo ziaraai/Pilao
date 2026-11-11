@@ -40,6 +40,7 @@ from app.domain.tender_filter import (
     similar_titles,
 )
 from app.domain.trades import TRADES
+from app.modules import has_module
 from app.schemas.tenders import TenderIn, TenderScoreOut
 from app.services.documents import paris
 from app.workers.queue import JobQueue
@@ -307,9 +308,11 @@ def notify(
     """E-mail every verified user of the organization, once per (kind, key).
 
     Nothing leaves for a suspended company (not recorded either)."""
-    if db.scalar(
+    if not db.scalar(
         select(Organization.id).where(
-            Organization.id == org_id, Organization.suspended_at.is_not(None)
+            Organization.id == org_id,
+            Organization.suspended_at.is_(None),
+            Organization.modules.contains(["veille"]),  # the watch's e-mails belong to « Veille »
         )
     ):
         return False
@@ -399,7 +402,7 @@ def _watching_profiles() -> Select[CompanyProfile]:
     return (
         select(CompanyProfile)
         .join(Organization, Organization.id == CompanyProfile.org_id)
-        .where(Organization.suspended_at.is_(None))
+        .where(Organization.suspended_at.is_(None), Organization.modules.contains(["veille"]))
     )
 
 
@@ -464,8 +467,8 @@ def score_org(
     now = now or _now()
     scope_session(db, org_id)
     org = db.get(Organization, org_id)
-    if org is None or org.suspended_at is not None:
-        return 0  # no AI cost for a suspended company, backlog included
+    if org is None or org.suspended_at is not None or not has_module(org, "veille"):
+        return 0  # no AI cost for a suspended company or without « Veille », backlog included
     profile = db.scalar(select(CompanyProfile))
     if profile is None:
         return 0
@@ -566,13 +569,21 @@ def get_match(db: Session, tender_id: uuid.UUID) -> tuple[TenderMatch, Tender]:
     return row[0], row[1]
 
 
-def track(db: Session, user: User, tender_id: uuid.UUID) -> Bid:
-    """Follow a notice: it becomes a bid « à étudier » (idempotent)."""
+def track(db: Session, user: User, tender_id: uuid.UUID, *, create_bid: bool = True) -> Bid | None:
+    """Follow a notice: it becomes a bid « à étudier » (idempotent).
+
+    ``create_bid=False`` (no « Réponse aux appels d'offres », lot 3): the notice is only marked
+    as followed; a bid created earlier stays linked."""
     match, tender = get_match(db, tender_id)
     if match.bid_id is not None and (bid := db.get(Bid, match.bid_id)) is not None:
         match.status = "tracked"
         db.commit()
-        return bid
+        return bid if create_bid else None
+    if not create_bid:
+        match.status, match.dismiss_reason = "tracked", None
+        db.add(AuditLog(user_id=user.id, action="track", entity="tender", entity_id=tender.id))
+        db.commit()
+        return None
     bid = Bid(
         title=tender.title[:300],
         buyer_name=(tender.buyer_name or None) and tender.buyer_name[:300],

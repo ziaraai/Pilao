@@ -7,7 +7,8 @@ from pydantic import BaseModel
 from sqlalchemy import or_, select
 
 from app.core.deps import CurrentAuth, ScopedDb
-from app.db.models import Tender, TenderMatch
+from app.db.models import Organization, Tender, TenderMatch
+from app.modules import has_module
 from app.routers.tenders import match_out
 from app.schemas.tenders import TenderMatchOut
 from app.services import dashboard as svc
@@ -91,7 +92,7 @@ def dashboard(ctx: CurrentAuth, db: ScopedDb) -> DashboardOut:
     submitted = sum(1 for b in board.all_bids if b.status == "submitted")
     won, lost = count["won"], count["lost"]
     saved = feedback_svc.time_saved(db)
-    return DashboardOut(
+    out = DashboardOut(
         actions=[ActionOut(**vars(a)) for a in board.actions],
         getting_started=[StepOut(**vars(s)) for s in board.getting_started],
         new_tenders=len(fresh),
@@ -127,3 +128,21 @@ def dashboard(ctx: CurrentAuth, db: ScopedDb) -> DashboardOut:
             minutes_saved=saved.minutes_saved,
         ),
     )
+    return _only_active_modules(out, ctx.org)
+
+
+def _only_active_modules(out: DashboardOut, org: Organization) -> DashboardOut:
+    """Lot 3: the blocks of a module the company does not have are empty (same format)."""
+    if not has_module(org, "veille"):
+        out.new_tenders, out.best_tenders, out.tenders_connected = 0, [], False
+    if not has_module(org, "reponse"):
+        out.actions, out.bids = [], []
+        out.results = ResultsOut(
+            deposited=0, won=0, lost=0, submitted=0, success_rate=None, amount_won_cents=0
+        )
+        out.time_saved = TimeSavedOut(
+            bids=0, minutes_with_pilao=0, minutes_usual=0, minutes_saved=0
+        )
+        steps = [s for s in out.getting_started if s.key == "profile"]
+        out.getting_started = [] if all(s.done for s in steps) else steps
+    return out

@@ -10,8 +10,9 @@ from app.core.deps import CurrentAuth, ScopedDb, require_module
 from app.db.models import Tender, TenderMatch
 from app.domain.tender_filter import cpv_hits
 from app.domain.trades import TRADES
+from app.modules import has_module
 from app.schemas.bids import BidOut
-from app.schemas.tenders import DismissIn, TenderListOut, TenderMatchOut
+from app.schemas.tenders import DismissIn, TenderListOut, TenderMatchOut, TrackOut
 from app.services import tenders as svc
 
 router = APIRouter(
@@ -119,9 +120,10 @@ def read_tender(tender_id: uuid.UUID, db: ScopedDb) -> TenderMatchOut:
 
 
 @router.post("/{tender_id}/track", status_code=201)
-def track(tender_id: uuid.UUID, ctx: CurrentAuth, db: ScopedDb) -> BidOut:
-    """US-2.3: follow the notice: it becomes a bid « à étudier »."""
-    return BidOut.model_validate(svc.track(db, ctx.user, tender_id))
+def track(tender_id: uuid.UUID, ctx: CurrentAuth, db: ScopedDb) -> TrackOut:
+    """US-2.3: follow the notice: it becomes a bid « à étudier » (with « Réponse », lot 3)."""
+    bid = svc.track(db, ctx.user, tender_id, create_bid=has_module(ctx.org, "reponse"))
+    return TrackOut(bid=BidOut.model_validate(bid) if bid else None)
 
 
 @router.post("/{tender_id}/dismiss")

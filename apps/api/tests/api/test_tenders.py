@@ -172,13 +172,14 @@ def test_tracking_creates_a_bid_and_dismissing_keeps_the_reason(
     c = company(make_client, outbox, queue)
     load(db, queue, outbox, notice("A", buyer_name="Ville de Lyon"), notice("B"))
     a = tender_id(db, "A")
-    bid = c.post(f"/tenders/{a}/track")
-    assert bid.status_code == 201
-    assert bid.json()["title"] == "Nettoyage A" and bid.json()["status"] == "to_review"
-    assert bid.json()["buyer_name"] == "Ville de Lyon"
-    assert c.post(f"/tenders/{a}/track").json()["id"] == bid.json()["id"]  # idempotent
+    res = c.post(f"/tenders/{a}/track")
+    assert res.status_code == 201
+    bid = res.json()["bid"]  # TrackOut (lot 3): the bid, with « Réponse aux appels d'offres »
+    assert bid["title"] == "Nettoyage A" and bid["status"] == "to_review"
+    assert bid["buyer_name"] == "Ville de Lyon"
+    assert c.post(f"/tenders/{a}/track").json()["bid"]["id"] == bid["id"]  # idempotent
     assert titles(c) == ["Nettoyage B"] and titles(c, status="tracked") == ["Nettoyage A"]
-    assert c.get(f"/tenders/{a}").json()["bid_id"] == bid.json()["id"]
+    assert c.get(f"/tenders/{a}").json()["bid_id"] == bid["id"]
     refused = c.post(f"/tenders/{a}/dismiss", json={"reason": "trop loin"})
     assert refused.json()["error"]["code"] == "tender_tracked"
 
@@ -191,7 +192,7 @@ def test_tracking_creates_a_bid_and_dismissing_keeps_the_reason(
     assert c.post(f"/tenders/{b}/dismiss", json={"reason": " "}).status_code == 422
     assert c.post(f"/tenders/{b}/restore").json()["status"] == "new"
 
-    assert c.delete(f"/bids/{bid.json()['id']}").status_code == 204
+    assert c.delete(f"/bids/{bid['id']}").status_code == 204
     back = c.get(f"/tenders/{a}").json()
     assert back["status"] == "new" and back["bid_id"] is None  # the notice returns to the list
 
@@ -202,8 +203,8 @@ def test_a_correction_updates_the_notice_and_warns_who_follows_it(
     c = company(make_client, outbox, queue)
     load(db, queue, outbox, notice("A"), notice("B"))
     a, b = tender_id(db, "A"), tender_id(db, "B")
-    bid_a = c.post(f"/tenders/{a}/track").json()
-    bid_b = c.post(f"/tenders/{b}/track").json()
+    bid_a = c.post(f"/tenders/{a}/track").json()["bid"]
+    bid_b = c.post(f"/tenders/{b}/track").json()["bid"]
     own_date = (NOW + timedelta(days=5)).isoformat()
     c.patch(f"/bids/{bid_b['id']}", json={"deadline_at": own_date})  # the user's own date
     sent = len(outbox.sent)

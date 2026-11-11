@@ -25,6 +25,7 @@ from app.db.models import (
     TenderMatch,
 )
 from app.exports.dc_forms import PROOF_LABELS, french_date
+from app.modules import has_module
 from app.services.org_data import purge_due
 from app.services.retention import RetentionReport, purge_expired
 from app.services.tenders import notify
@@ -59,9 +60,9 @@ def send_digests(db: Session, mailer: Mailer, now: datetime) -> int:
     base = get_settings().app_base_url.rstrip("/")
     sent = 0
     for profile in db.scalars(
-        select(CompanyProfile)
-        .join(Organization, Organization.id == CompanyProfile.org_id)
-        .where(Organization.suspended_at.is_(None))  # nothing leaves for a suspended company
+        select(CompanyProfile).join(Organization, Organization.id == CompanyProfile.org_id)
+        # nothing leaves for a suspended company, nor without « Veille » (lot 3)
+        .where(Organization.suspended_at.is_(None), Organization.modules.contains(["veille"]))
     ):
         threshold = (
             profile.min_score_alert if profile.min_score_alert is not None else DEFAULT_THRESHOLD
@@ -130,7 +131,7 @@ def send_expiry_alerts(db: Session, mailer: Mailer, today: date) -> int:
     ):
         assert doc.valid_until is not None
         org = orgs.get(doc.org_id)
-        if org is None or org.suspended_at is not None:
+        if org is None or org.suspended_at is not None or not has_module(org, "reponse"):
             continue  # nothing leaves for a suspended company
         days = (doc.valid_until - today).days
         if days > 30 or days < -EXPIRED_ALERT_DAYS:
