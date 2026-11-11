@@ -7,9 +7,12 @@ import pytest
 
 @pytest.fixture(autouse=True)
 def _fresh_admin_limiter() -> Iterator[None]:
-    """The admin sign-in limiter is module-level: isolate each test."""
+    """The sign-in limiters are module-level: isolate each test."""
+    from app.routers import auth as client_auth
     from app.routers.admin import auth as admin_auth
 
-    admin_auth._limiter._hits.clear()
+    for limiter in (admin_auth._limiter, client_auth._password_limiter):
+        limiter._hits.clear()
     yield
-    admin_auth._limiter._hits.clear()
+    for limiter in (admin_auth._limiter, client_auth._password_limiter):
+        limiter._hits.clear()

@@ -8,10 +8,12 @@ from app.core.config import get_settings
 from app.core.deps import CurrentAuth
 from app.core.email import Mailer, get_mailer
 from app.core.legal import TERMS_VERSION
+from app.core.ratelimit import SlidingWindowLimiter
 from app.db.models import Organization, User
 from app.db.session import get_db
 from app.integrations.recherche_entreprises import CompanyDirectory, get_company_directory
 from app.schemas.auth import (
+    ForgotPasswordIn,
     LoginIn,
     MeOut,
     MessageOut,
@@ -19,15 +21,20 @@ from app.schemas.auth import (
     RegisterIn,
     RegisterOut,
     ResendIn,
+    ResetLookupIn,
+    ResetLookupOut,
+    ResetPasswordIn,
     VerifyEmailIn,
 )
 from app.schemas.members import AcceptInvitationIn, InvitationLookupIn, InvitationOut
 from app.services import auth as svc
-from app.services import members
+from app.services import members, password_reset
 
 router = APIRouter(prefix="/auth", tags=["auth"])
 Db = Annotated[Session, Depends(get_db)]
 MailerDep = Annotated[Mailer, Depends(get_mailer)]
+# « Mot de passe oublié »: public routes that send e-mails or try tokens, per client address
+_password_limiter = SlidingWindowLimiter(max_calls=10, window_seconds=60)
 
 
 def _client_ip(request: Request) -> str | None:
@@ -114,6 +121,37 @@ def accept_invitation(
     data: AcceptInvitationIn, request: Request, response: Response, db: Db
 ) -> MeOut:
     token, user = members.accept(db, data, _client_ip(request), request.headers.get("user-agent"))
+    _set_session_cookie(response, token)
+    return _me_from(user, db.get_one(Organization, user.org_id))
+
+
+@router.post("/password/forgot", status_code=202)
+def forgot_password(
+    data: ForgotPasswordIn, request: Request, db: Db, mailer: MailerDep
+) -> MessageOut:
+    _password_limiter.check(_client_ip(request) or "unknown")
+    password_reset.request_reset(db, data.email, mailer)
+    return MessageOut(
+        message=(
+            "Si un compte existe pour cette adresse, un e-mail vient de partir. "
+            "Le lien est valable 1 heure."
+        )
+    )
+
+
+@router.post("/password/reset/lookup")
+def reset_lookup(data: ResetLookupIn, request: Request, db: Db) -> ResetLookupOut:
+    """The token goes in the body, never in a URL that access logs would keep."""
+    _password_limiter.check(_client_ip(request) or "unknown")
+    return ResetLookupOut(email=password_reset.lookup(db, data.token))
+
+
+@router.post("/password/reset")
+def reset_password(data: ResetPasswordIn, request: Request, response: Response, db: Db) -> MeOut:
+    _password_limiter.check(_client_ip(request) or "unknown")
+    token, user = password_reset.reset(
+        db, data.token, data.password, _client_ip(request), request.headers.get("user-agent")
+    )
     _set_session_cookie(response, token)
     return _me_from(user, db.get_one(Organization, user.org_id))
 

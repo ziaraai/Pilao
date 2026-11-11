@@ -50,6 +50,24 @@ class LoginIn(BaseModel):
     password: str = Field(min_length=1, max_length=256)
 
 
+class ForgotPasswordIn(BaseModel):
+    # Not EmailStr: whatever is typed gets the same answer, without telling what is wrong.
+    email: str = Field(min_length=1, max_length=320)
+
+
+class ResetLookupIn(BaseModel):
+    token: str = Field(min_length=10, max_length=200)
+
+
+class ResetLookupOut(BaseModel):
+    email: str
+
+
+class ResetPasswordIn(BaseModel):
+    token: str = Field(min_length=10, max_length=200)
+    password: str = Field(min_length=12, max_length=256)
+
+
 class ResendIn(BaseModel):
     email: EmailStr
 

@@ -206,6 +206,48 @@ def resend(
     mailer.send(message)
 
 
+def reinvite(db: Session, user: User, org: Organization, mailer: Mailer) -> bool:
+    """« Mot de passe oublié » for an account never created: a fresh invitation link instead.
+
+    Capped like ``resend``; ``False`` when the cap is reached (nothing leaves)."""
+    s = get_settings()
+    recent = db.scalar(
+        select(func.count())
+        .select_from(AuthToken)
+        .where(
+            AuthToken.user_id == user.id,
+            AuthToken.kind == INVITE_KIND,
+            AuthToken.created_at >= _now() - timedelta(hours=1),
+        )
+    )
+    if (recent or 0) >= s.email_verify_max_per_hour:
+        return False
+    token = new_token()
+    db.add(
+        AuthToken(
+            org_id=org.id,
+            user_id=user.id,
+            kind=INVITE_KIND,
+            token_hash=hash_token(token),
+            expires_at=_now() + timedelta(hours=s.invitation_ttl_hours),
+        )
+    )
+    db.commit()
+    days = s.invitation_ttl_hours // 24
+    mailer.send(
+        Email(
+            to=user.email,
+            subject=f"Créez votre accès à Pilao ({org.name})",
+            body=(
+                "Bonjour,\n\nVous avez demandé un nouveau mot de passe, mais votre accès n'est "
+                "pas encore créé. Choisissez votre mot de passe ici "
+                f"(lien valable {days} jours) :\n{s.app_base_url}/invitation?token={token}\n"
+            ),
+        )
+    )
+    return True
+
+
 def _admins(db: Session) -> int:
     return db.scalar(select(func.count()).select_from(User).where(User.role == "org_admin")) or 0
 
