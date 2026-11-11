@@ -74,6 +74,23 @@ type Options = {
   signal?: AbortSignal;
 };
 
+/** The company was suspended while a page was open: back to the sign-in page, which says so.
+ * Not from the sign-in pages themselves, which show the message where it was asked. */
+function leaveSuspendedSpace(): void {
+  if (typeof window === "undefined") return;
+  const here = window.location.pathname;
+  const signIn = [
+    "/connexion",
+    "/invitation",
+    "/verifier-email",
+    "/nouveau-mot-de-passe",
+  ];
+  if (signIn.some((p) => here.startsWith(p))) return;
+  // Full reload on purpose: nothing of the suspended space may stay in memory.
+  // eslint-disable-next-line @next/next/no-location-assign-relative-destination
+  window.location.assign("/connexion?suspendu=1");
+}
+
 export async function api<T>(path: string, options: Options = {}): Promise<T> {
   const {
     method = options.json || options.form ? "POST" : "GET",
@@ -106,6 +123,7 @@ export async function api<T>(path: string, options: Options = {}): Promise<T> {
       error?: { code: string; message: string };
       detail?: unknown;
     } | null;
+    if (body?.error?.code === "account_suspended") leaveSuspendedSpace();
     if (body?.error)
       throw new ApiError(res.status, body.error.code, body.error.message);
     if (res.status === 422)

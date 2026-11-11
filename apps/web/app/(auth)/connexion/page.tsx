@@ -6,6 +6,7 @@ import { Suspense, useState } from "react";
 
 import { Alert, Button, Field, Input } from "@/components/ui";
 import { api, ApiError } from "@/lib/api";
+import { signInNotice } from "@/lib/auth-messages";
 import { useAction } from "@/lib/hooks";
 
 function safeNext(value: string | null): string {
@@ -20,19 +21,24 @@ function LoginForm() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [unverified, setUnverified] = useState(false);
+  const [suspended, setSuspended] = useState<string | null>(null);
   const [resent, setResent] = useState(false);
   const login = useAction();
   const resend = useAction();
+  const notice = signInNotice(params);
 
   async function onSubmit(e: React.FormEvent) {
     e.preventDefault();
     setUnverified(false);
+    setSuspended(null);
     const ok = await login.run(async () => {
       try {
         return await api("/auth/login", { json: { email, password } });
       } catch (err) {
         if (err instanceof ApiError && err.code === "email_not_verified")
           setUnverified(true);
+        if (err instanceof ApiError && err.code === "account_suspended")
+          setSuspended(err.message);
         throw err;
       }
     });
@@ -44,6 +50,9 @@ function LoginForm() {
   return (
     <form onSubmit={onSubmit} className="space-y-4" noValidate>
       <h1 className="text-xl font-bold text-brand-navy">Connexion</h1>
+      {notice && !login.error && (
+        <Alert tone={notice.tone}>{notice.text}</Alert>
+      )}
       <Field label="E-mail" htmlFor="email">
         <Input
           id="email"
@@ -64,7 +73,15 @@ function LoginForm() {
           required
         />
       </Field>
-      {login.error && <Alert tone="danger">{login.error}</Alert>}
+      <p className="-mt-2 text-right text-sm">
+        <Link
+          href="/mot-de-passe-oublie"
+          className="font-semibold text-brand-navy underline"
+        >
+          Mot de passe oublié ?
+        </Link>
+      </p>
+      {login.error && <Alert tone="danger">{suspended ?? login.error}</Alert>}
       {unverified && !resent && (
         <Button
           type="button"
