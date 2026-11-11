@@ -39,6 +39,7 @@ ADMIN_GETS = [
     "/admin/ai-costs",
     "/admin/system",
     "/admin/feedback",
+    "/admin/audit",
 ]
 
 
@@ -51,6 +52,33 @@ def test_company_session_is_refused_everywhere(make_client: Factory, outbox: Out
     intruder.cookies.set("pilao_admin_session", company.cookies["pilao_session"])
     for path in ADMIN_GETS:
         assert intruder.get(path).status_code == 401, path
+
+
+def test_company_session_cannot_act_on_accounts(
+    make_client: Factory, outbox: Outbox, db: Session
+) -> None:
+    company = signed_in_client(make_client, outbox)
+    org = org_named(db, "Entreprise 1").id
+    user = uuid.uuid4()
+    for method, path in [
+        ("post", "/admin/organizations"),
+        ("post", f"/admin/organizations/{org}/suspend"),
+        ("post", f"/admin/organizations/{org}/reactivate"),
+        ("get", f"/admin/organizations/{org}/deletion"),
+        ("post", f"/admin/organizations/{org}/deletion"),
+        ("delete", f"/admin/organizations/{org}/deletion"),
+        ("post", f"/admin/organizations/{org}/users"),
+        ("post", f"/admin/organizations/{org}/users/{user}/invitation"),
+        ("post", f"/admin/organizations/{org}/users/{user}/verification"),
+        ("post", f"/admin/organizations/{org}/users/{user}/password-reset"),
+        ("patch", f"/admin/organizations/{org}/users/{user}"),
+        ("post", f"/admin/organizations/{org}/users/{user}/logout"),
+        ("post", f"/admin/organizations/{org}/users/{user}/remove"),
+        ("get", "/admin/companies/lookup?siret=12345678901234"),
+    ]:
+        assert company.request(method, path, json={}).status_code == 401, path
+    db.expire_all()
+    assert org_named(db, "Entreprise 1").suspended_at is None
 
 
 def test_admin_session_is_refused_in_the_company_space(make_client: Factory, db: Session) -> None:

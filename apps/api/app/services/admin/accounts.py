@@ -9,7 +9,7 @@ import uuid
 from datetime import UTC, datetime, timedelta
 from typing import Literal
 
-from sqlalchemy import exists, select
+from sqlalchemy import exists, func, select
 from sqlalchemy.orm import Session
 
 from app.core.admin_deps import AdminOrgContext, actor_of
@@ -17,15 +17,16 @@ from app.core.config import get_settings
 from app.core.email import Mailer
 from app.core.errors import ApiError
 from app.core.tenancy import scope_session
-from app.db.models import DataRequest, Organization, PlatformAdmin, User, UserSession
+from app.db.models import AuthToken, DataRequest, Organization, PlatformAdmin, User, UserSession
 from app.integrations.recherche_entreprises import CompanyDirectory
 from app.schemas.admin import AdminCreateOrgIn, DeletionPreviewOut, OrgDeletionOut
 from app.schemas.members import InviteIn
-from app.services import members, org_data
+from app.services import auth as company_auth
+from app.services import members, org_data, password_reset
 from app.services.actors import PlatformActor
 from app.services.admin import audit
 from app.services.admin import auth as admin_auth
-from app.services.auth import _prefill_from_registry
+from app.services.suspension import is_suspended
 from app.storage.objects import ObjectStorage
 from app.workers.queue import JobQueue
 
@@ -54,7 +55,7 @@ def create_organization(
     org = Organization(siren=data.siret[:9], siret=data.siret, name=data.name.strip())
     if directory is not None:
         db.rollback()  # no transaction held open during the registry's HTTP call
-        _prefill_from_registry(org, directory)
+        company_auth._prefill_from_registry(org, directory)
     db.add(org)
     db.flush()
     audit.record(
@@ -183,3 +184,99 @@ def cancel_deletion(ctx: AdminOrgContext, mailer: Mailer, ip: str | None) -> Non
         ctx.db, "deletion_cancelled", admin=ctx.admin, org_id=ctx.org.id, ip=ip, meta={"by": by}
     )
     org_data.cancel_deletion(ctx.db, actor_of(ctx), ctx.org, mailer)  # 404 if none; commits
+
+
+# --- A company's users -----------------------------------------------------------------------
+
+
+def _journal(ctx: AdminOrgContext, action: str, user: User, ip: str | None, **meta: str) -> None:
+    audit.record(
+        ctx.db,
+        action,
+        admin=ctx.admin,
+        org_id=ctx.org.id,
+        ip=ip,
+        meta={"user_id": str(user.id), "email": user.email, **meta},
+    )
+
+
+def _sends(ctx: AdminOrgContext) -> None:
+    """Nothing is e-mailed on behalf of a suspended company."""
+    if is_suspended(ctx.org):
+        raise ApiError(
+            409, "organization_suspended", "Entreprise suspendue : réactivez-la d'abord."
+        )
+
+
+def invite_user(ctx: AdminOrgContext, data: InviteIn, mailer: Mailer, ip: str | None) -> uuid.UUID:
+    _sends(ctx)
+    user = members.invite(ctx.db, actor_of(ctx), ctx.org, data, mailer)  # commits, then mails
+    _journal(ctx, "user_invited", user, ip, role=user.role)
+    ctx.db.commit()
+    return user.id
+
+
+def resend_invitation(
+    ctx: AdminOrgContext, user_id: uuid.UUID, mailer: Mailer, ip: str | None
+) -> None:
+    _sends(ctx)
+    members.resend(ctx.db, actor_of(ctx), ctx.org, user_id, mailer)  # commits, then mails
+    _journal(ctx, "invitation_resent", members._colleague(ctx.db, user_id), ip)
+    ctx.db.commit()
+
+
+def resend_verification(
+    ctx: AdminOrgContext, user_id: uuid.UUID, mailer: Mailer, ip: str | None
+) -> None:
+    _sends(ctx)
+    user = members._colleague(ctx.db, user_id)
+    if user.password_hash is None:
+        raise ApiError(409, "no_password", "Pas encore d'accès : renvoyez l'invitation.")
+    if user.email_verified_at is not None:
+        raise ApiError(409, "already_verified", "Adresse déjà confirmée.")
+    recent = ctx.db.scalar(
+        select(func.count())
+        .select_from(AuthToken)
+        .where(
+            AuthToken.user_id == user.id,
+            AuthToken.kind == company_auth.VERIFY_KIND,
+            AuthToken.created_at >= _now() - timedelta(hours=1),
+        )
+    )
+    if (recent or 0) >= get_settings().email_verify_max_per_hour:
+        raise ApiError(429, "too_many_emails", "Envoi déjà fait : réessayez plus tard.")
+    message = company_auth._verification_email(ctx.db, user)
+    _journal(ctx, "verification_resent", user, ip)
+    ctx.db.commit()
+    mailer.send(message)
+
+
+def send_password_reset(
+    ctx: AdminOrgContext, user_id: uuid.UUID, mailer: Mailer, ip: str | None
+) -> None:
+    _sends(ctx)
+    user = members._colleague(ctx.db, user_id)
+    if user.password_hash is None:
+        raise ApiError(409, "no_password", "Pas encore d'accès : renvoyez l'invitation.")
+    _journal(ctx, "password_reset_sent", user, ip)
+    password_reset.send_reset_link(ctx.db, user, ctx.org, mailer)  # 429 past the cap; commits
+
+
+def change_role(ctx: AdminOrgContext, user_id: uuid.UUID, role: str, ip: str | None) -> None:
+    user = members.change_role(ctx.db, actor_of(ctx), user_id, role)  # commits
+    _journal(ctx, "role_changed", user, ip, role=role)
+    ctx.db.commit()
+
+
+def logout_user(ctx: AdminOrgContext, user_id: uuid.UUID, ip: str | None) -> int:
+    closed = members.logout_everywhere(ctx.db, actor_of(ctx), user_id)  # commits
+    _journal(ctx, "user_logged_out", members._colleague(ctx.db, user_id), ip)
+    ctx.db.commit()
+    return closed
+
+
+def remove_user(ctx: AdminOrgContext, user_id: uuid.UUID, code: str, ip: str | None) -> None:
+    user = members._colleague(ctx.db, user_id)  # 404 before asking for a code
+    admin_auth.confirm_code(ctx.db, ctx.admin, ctx.session, code, ip)
+    _journal(ctx, "user_removed", user, ip)
+    members.remove(ctx.db, actor_of(ctx), user_id)  # last administrator refused; commits

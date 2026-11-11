@@ -12,7 +12,7 @@ import uuid
 from collections.abc import Sequence
 from datetime import UTC, date, datetime, timedelta
 from decimal import Decimal
-from typing import Any
+from typing import Any, Literal
 from zoneinfo import ZoneInfo
 
 from sqlalchemy import ColumnElement, and_, func, or_, select
@@ -23,6 +23,7 @@ from app.core.errors import ApiError
 from app.db.models import (
     AiCall,
     AuditLog,
+    AuthToken,
     Bid,
     CompanyProfile,
     ComplianceDocument,
@@ -34,10 +35,13 @@ from app.db.models import (
     Organization,
     TenderImport,
     User,
+    UserSession,
 )
+from app.db.models.platform import PlatformAuditLog
 from app.domain import admin_watch
 from app.domain.admin_watch import ImportState, JobIssue, OrgActivity
 from app.schemas.admin import (
+    AccountStateOut,
     ActivityRowOut,
     AiCostModelOut,
     AiCostOrgOut,
@@ -45,6 +49,8 @@ from app.schemas.admin import (
     AiCostTaskOut,
     AiMonthOut,
     AiTaskOut,
+    AuditPageOut,
+    AuditRowOut,
     CountersOut,
     FeedbackItemOut,
     FeedbackOut,
@@ -119,14 +125,21 @@ def _ai_cost_per_org(db: Session, month: date) -> dict[uuid.UUID | None, Decimal
     )
 
 
-def _deletions_requested(db: Session) -> set[uuid.UUID]:
-    return set(
-        db.scalars(
-            select(DataRequest.org_id).where(
+def _deletions_requested(db: Session) -> dict[uuid.UUID, DataRequest]:
+    """The deletion scheduled for each company, if any (one at a time)."""
+    return {
+        req.org_id: req
+        for req in db.scalars(
+            select(DataRequest).where(
                 DataRequest.kind == "deletion", DataRequest.status == "pending"
             )
         )
-    )
+    }
+
+
+def _with_access(db: Session) -> set[uuid.UUID]:
+    """The companies where someone has created their access (a password)."""
+    return set(db.scalars(select(User.org_id).where(User.password_hash.is_not(None)).distinct()))
 
 
 def job_issues(
@@ -329,10 +342,12 @@ def organizations(db: Session, now: datetime) -> list[OrganizationRowOut]:
     completeness = _per_org(db, func.max(CompanyProfile.completeness_pct), CompanyProfile)
     costs = _ai_cost_per_org(db, current_month(now))
     deletions = _deletions_requested(db)
+    with_access = _with_access(db)
     rows = [
         OrganizationRowOut(
             id=o.id,
             name=o.name,
+            siret=o.siret,
             city=o.city,
             created_at=o.created_at,
             users=users.get(o.id, 0),
@@ -342,6 +357,9 @@ def organizations(db: Session, now: datetime) -> list[OrganizationRowOut]:
             completeness_pct=completeness.get(o.id) or 0,
             ai_cost_month=euros(costs.get(o.id)),
             deletion_requested=o.id in deletions,
+            suspended=o.suspended_at is not None,
+            deletion_due_at=deletions[o.id].due_at if o.id in deletions else None,
+            invitation_pending=o.id not in with_access,
         )
         for o in orgs
     ]
@@ -394,7 +412,35 @@ def organization_detail(db: Session, org_id: uuid.UUID, now: datetime) -> Organi
         .order_by(func.sum(AiCall.cost_eur).desc())
     ).all()
     users = db.scalars(select(User).where(User.org_id == org_id).order_by(User.created_at)).all()
+    deletion = _deletions_requested(db).get(org_id)
+    invitations = {  # the latest invitation link of each person, oldest first so the last wins
+        t.user_id: t
+        for t in db.scalars(
+            select(AuthToken)
+            .where(AuthToken.org_id == org_id, AuthToken.kind == "invitation")
+            .order_by(AuthToken.created_at)
+        )
+    }
+    open_sessions = set(
+        db.scalars(
+            select(UserSession.user_id).where(
+                UserSession.org_id == org_id,
+                UserSession.revoked_at.is_(None),
+                UserSession.expires_at > now,
+            )
+        )
+    )
     return OrganizationDetailOut(
+        account=AccountStateOut(
+            suspended_at=org.suspended_at,
+            suspension_reason=org.suspension_reason,
+            deletion_due_at=deletion.due_at if deletion else None,
+            deletion_by=(
+                None
+                if deletion is None
+                else "pilao" if deletion.platform_admin_id is not None else "client"
+            ),
+        ),
         identity=OrgIdentityOut(
             name=org.name,
             siret=org.siret,
@@ -432,12 +478,16 @@ def organization_detail(db: Session, org_id: uuid.UUID, now: datetime) -> Organi
         ),
         users=[
             OrgUserOut(
+                id=u.id,
                 full_name=u.full_name,
                 email=u.email,
                 role=u.role,
                 email_verified=u.email_verified_at is not None,
                 last_login_at=u.last_login_at,
                 terms_version=u.terms_version,
+                status=_user_status(u, invitations.get(u.id), now),
+                invited_at=u.created_at if u.password_hash is None else None,
+                has_sessions=u.id in open_sessions,
             )
             for u in users
         ],
@@ -573,3 +623,63 @@ def feedback(db: Session, days: int, now: datetime) -> FeedbackOut:
         items=[FeedbackItemOut(**vars(row)) for row in items],
         time_saved=_time_saved(db),
     )
+
+
+def _user_status(
+    user: User, invitation: AuthToken | None, now: datetime
+) -> Literal["active", "unverified", "invited", "invitation_expired"]:
+    """Same reading as the company's own list of colleagues (``members.list_members``)."""
+    if user.password_hash is not None:
+        return "active" if user.email_verified_at is not None else "unverified"
+    if invitation is not None and invitation.used_at is None and invitation.expires_at > now:
+        return "invited"
+    return "invitation_expired"
+
+
+# --- Journal (lot 2) -------------------------------------------------------------------------
+
+JOURNAL_PAGE = 100
+LOGIN_ACTIONS = (
+    "login",
+    "login_failed",
+    "logout",
+    "recovery_code_used",
+    "setup_completed",
+    "access_reset",
+    "disabled",
+)
+
+
+def audit_page(
+    db: Session, kind: str, org_id: uuid.UUID | None, before: datetime | None
+) -> AuditPageOut:
+    """The platform journal, latest first, 100 lines a page; ``kind``: all, logins, accounts."""
+    query = (
+        select(PlatformAuditLog, Organization.name)
+        .outerjoin(Organization, Organization.id == PlatformAuditLog.org_id)
+        .order_by(PlatformAuditLog.at.desc(), PlatformAuditLog.id.desc())
+        .limit(JOURNAL_PAGE + 1)
+    )
+    if kind == "logins":
+        query = query.where(PlatformAuditLog.action.in_(LOGIN_ACTIONS))
+    elif kind == "accounts":
+        query = query.where(PlatformAuditLog.action.not_in(LOGIN_ACTIONS))
+    if org_id is not None:
+        query = query.where(PlatformAuditLog.org_id == org_id)
+    if before is not None:
+        query = query.where(PlatformAuditLog.at < before)
+    found = db.execute(query).all()
+    rows = [
+        AuditRowOut(
+            at=entry.at,
+            admin_email=entry.admin_email,
+            action=entry.action,
+            org_id=entry.org_id,
+            org_name=name,
+            ip=str(entry.ip) if entry.ip is not None else None,
+            meta=dict(entry.meta or {}),
+        )
+        for entry, name in found[:JOURNAL_PAGE]
+    ]
+    more = len(found) > JOURNAL_PAGE
+    return AuditPageOut(rows=rows, next_before=rows[-1].at if more else None)

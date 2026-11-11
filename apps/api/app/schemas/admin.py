@@ -120,6 +120,7 @@ class OverviewOut(BaseModel):
 class OrganizationRowOut(BaseModel):
     id: uuid.UUID
     name: str
+    siret: str
     city: str | None
     created_at: datetime
     users: int
@@ -129,6 +130,9 @@ class OrganizationRowOut(BaseModel):
     completeness_pct: int
     ai_cost_month: Decimal
     deletion_requested: bool
+    suspended: bool
+    deletion_due_at: datetime | None
+    invitation_pending: bool  # nobody of the company has created their access yet
 
 
 class OrgIdentityOut(BaseModel):
@@ -157,12 +161,23 @@ class OrgCountersOut(BaseModel):
 
 
 class OrgUserOut(BaseModel):
+    id: uuid.UUID
     full_name: str | None
     email: str
     role: str
     email_verified: bool
     last_login_at: datetime | None
     terms_version: str | None
+    status: Literal["active", "unverified", "invited", "invitation_expired"]
+    invited_at: datetime | None
+    has_sessions: bool
+
+
+class AccountStateOut(BaseModel):
+    suspended_at: datetime | None
+    suspension_reason: str | None
+    deletion_due_at: datetime | None
+    deletion_by: Literal["pilao", "client"] | None
 
 
 class AiMonthOut(BaseModel):
@@ -198,6 +213,7 @@ class FeedbackItemOut(BaseModel):
 
 class OrganizationDetailOut(BaseModel):
     identity: OrgIdentityOut
+    account: AccountStateOut
     counters: OrgCountersOut
     users: list[OrgUserOut]
     ai_months: list[AiMonthOut]  # the last six, oldest first
@@ -314,3 +330,22 @@ class OrgDeleteIn(BaseModel):
 class OrgDeletionOut(BaseModel):
     mode: Literal["immediate", "scheduled"]
     due_at: datetime | None
+
+
+class StepUpIn(BaseModel):
+    code: str = Field(min_length=1, max_length=40)
+
+
+class AuditRowOut(BaseModel):
+    at: datetime
+    admin_email: str
+    action: str
+    org_id: uuid.UUID | None
+    org_name: str | None  # empty once the company is deleted
+    ip: str | None
+    meta: dict[str, object]
+
+
+class AuditPageOut(BaseModel):
+    rows: list[AuditRowOut]
+    next_before: datetime | None  # pass it as ``before`` for the older lines
