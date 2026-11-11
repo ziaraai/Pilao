@@ -15,6 +15,7 @@ import {
 import { ExcelImport, TemplateLink } from "@/components/profile/excel-import";
 import { api } from "@/lib/api";
 import { useAction, useApi } from "@/lib/hooks";
+import { draftOf, payloadOf } from "@/lib/profile-lists";
 
 export type ColumnDef = {
   key: string;
@@ -26,7 +27,9 @@ export type ColumnDef = {
   hint?: string;
 };
 
-/** List + add + delete for one entity of the profile (moyens humains, matériel, certifications). */
+/** List + add + edit + delete for one entity of the profile (moyens humains, matériel,
+ * certifications). « Modifier » turns one line into fields; only those fields are sent, so
+ * what the table does not show (an attached file) stays as it is. */
 export function SimpleList<T extends { id: string }>({
   title,
   path,
@@ -48,19 +51,36 @@ export function SimpleList<T extends { id: string }>({
   const [draft, setDraft] = useState<Record<string, string>>(empty);
   const add = useAction();
   const remove = useAction();
+  const save = useAction();
+  const [editing, setEditing] = useState<string | null>(null);
+  const [editDraft, setEditDraft] = useState<Record<string, string>>(empty);
+
+  function startEdit(item: T) {
+    save.setError(null);
+    setEditDraft(draftOf(item as Record<string, unknown>, columns));
+    setEditing(item.id);
+  }
+
+  async function onSave(e: React.FormEvent) {
+    e.preventDefault();
+    const id = editing;
+    if (!id) return;
+    const ok = await save.run(() =>
+      api(`${path}/${id}`, {
+        method: "PUT",
+        json: payloadOf(editDraft, columns),
+      }),
+    );
+    if (ok) {
+      setEditing(null);
+      list.reload();
+      onChange();
+    }
+  }
 
   async function onAdd(e: React.FormEvent) {
     e.preventDefault();
-    const body = Object.fromEntries(
-      columns.map((c) => [
-        c.key,
-        draft[c.key].trim() === ""
-          ? null
-          : c.type === "number"
-            ? Number(draft[c.key])
-            : draft[c.key].trim(),
-      ]),
-    );
+    const body = payloadOf(draft, columns);
     if (await add.run(() => api(path, { json: body }))) {
       setDraft(empty);
       list.reload();
@@ -103,38 +123,85 @@ export function SimpleList<T extends { id: string }>({
               </tr>
             </thead>
             <tbody>
-              {list.data.map((item) => (
-                <tr key={item.id} className={tableRow}>
-                  {columns.map((c) => {
-                    const v = (item as Record<string, unknown>)[c.key];
-                    return (
-                      <td key={c.key} className="px-5 py-2 text-slate-800">
-                        {v == null || v === ""
-                          ? "—"
-                          : c.render
-                            ? c.render(v)
-                            : String(v)}
+              {list.data.map((item) =>
+                editing === item.id ? (
+                  <tr key={item.id} className="bg-sky-50">
+                    {columns.map((c, i) => (
+                      <td key={c.key} className="px-5 py-2 align-top">
+                        <Input
+                          aria-label={c.label}
+                          form={`${path}-edit`}
+                          type={c.type ?? "text"}
+                          autoFocus={i === 0}
+                          value={editDraft[c.key]}
+                          onChange={(e) =>
+                            setEditDraft((d) => ({
+                              ...d,
+                              [c.key]: e.target.value,
+                            }))
+                          }
+                        />
                       </td>
-                    );
-                  })}
-                  <td className="px-5 py-1 text-right">
-                    <Button
-                      variant="ghost"
-                      busy={remove.busy}
-                      aria-label={`Supprimer ${columns.map((c) => (item as Record<string, unknown>)[c.key]).filter(Boolean)[0] ?? ""}`}
-                      onClick={async () => {
-                        await remove.run(() =>
-                          api(`${path}/${item.id}`, { method: "DELETE" }),
-                        );
-                        list.reload();
-                        onChange();
-                      }}
-                    >
-                      Supprimer
-                    </Button>
-                  </td>
-                </tr>
-              ))}
+                    ))}
+                    <td className="whitespace-nowrap px-5 py-2 text-right align-top">
+                      <form
+                        id={`${path}-edit`}
+                        onSubmit={onSave}
+                        className="inline-flex gap-1"
+                      >
+                        <Button type="submit" busy={save.busy}>
+                          Enregistrer
+                        </Button>
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          onClick={() => setEditing(null)}
+                        >
+                          Annuler
+                        </Button>
+                      </form>
+                    </td>
+                  </tr>
+                ) : (
+                  <tr key={item.id} className={tableRow}>
+                    {columns.map((c) => {
+                      const v = (item as Record<string, unknown>)[c.key];
+                      return (
+                        <td key={c.key} className="px-5 py-2 text-slate-800">
+                          {v == null || v === ""
+                            ? "—"
+                            : c.render
+                              ? c.render(v)
+                              : String(v)}
+                        </td>
+                      );
+                    })}
+                    <td className="whitespace-nowrap px-5 py-1 text-right">
+                      <Button
+                        variant="ghost"
+                        aria-label={`Modifier ${columns.map((c) => (item as Record<string, unknown>)[c.key]).filter(Boolean)[0] ?? ""}`}
+                        onClick={() => startEdit(item)}
+                      >
+                        Modifier
+                      </Button>
+                      <Button
+                        variant="ghost"
+                        busy={remove.busy}
+                        aria-label={`Supprimer ${columns.map((c) => (item as Record<string, unknown>)[c.key]).filter(Boolean)[0] ?? ""}`}
+                        onClick={async () => {
+                          await remove.run(() =>
+                            api(`${path}/${item.id}`, { method: "DELETE" }),
+                          );
+                          list.reload();
+                          onChange();
+                        }}
+                      >
+                        Supprimer
+                      </Button>
+                    </td>
+                  </tr>
+                ),
+              )}
             </tbody>
           </table>
         </div>
@@ -175,9 +242,9 @@ export function SimpleList<T extends { id: string }>({
             {c.label} : {c.hint}
           </p>
         ))}
-      {(add.error || remove.error) && (
+      {(save.error || add.error || remove.error) && (
         <div className="mt-3">
-          <Alert tone="danger">{add.error ?? remove.error}</Alert>
+          <Alert tone="danger">{save.error ?? add.error ?? remove.error}</Alert>
         </div>
       )}
     </Card>

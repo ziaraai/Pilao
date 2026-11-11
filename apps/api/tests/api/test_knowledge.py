@@ -320,3 +320,19 @@ def test_document_stuck_in_processing_can_be_reindexed(
     )
     db.commit()
     assert c.post(f"/knowledge/{doc_id}/reindex").status_code == 202  # worker died long ago
+
+
+def test_the_type_of_a_document_can_be_changed(
+    make_client: Factory, outbox: Outbox, queue: FakeQueue
+) -> None:
+    """Sent as « Ancien mémoire » instead of « Plan type »: corrected without sending it again."""
+    c = signed_in_client(make_client, outbox)
+    doc_id = ready_doc(c, queue)
+
+    res = c.patch(f"/knowledge/{doc_id}", json={"kind": "memoir_template"})
+    assert res.status_code == 200, res.text
+    assert res.json()["kind"] == "memoir_template"
+    assert res.json()["status"] == "ready"  # nothing to read again
+    assert c.patch(f"/knowledge/{doc_id}", json={"kind": "nimporte"}).status_code == 422
+    other = signed_in_client(make_client, outbox, 2)
+    assert other.patch(f"/knowledge/{doc_id}", json={"kind": "other"}).status_code == 404

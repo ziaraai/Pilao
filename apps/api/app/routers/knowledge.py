@@ -8,9 +8,14 @@ from app.ai.embeddings import Embedder, EmbeddingError, get_embedder
 from app.ai.llm import LlmBudgetExceeded
 from app.core.deps import CurrentAuth, ScopedDb
 from app.core.errors import ApiError
-from app.db.models import KnowledgeDocument
+from app.db.models import AuditLog, KnowledgeDocument
 from app.routers.files import Storage, _scanner
-from app.schemas.knowledge import DocumentKind, KnowledgeDocumentOut, SearchHitOut
+from app.schemas.knowledge import (
+    DocumentKind,
+    KnowledgeDocumentOut,
+    KnowledgeKindIn,
+    SearchHitOut,
+)
 from app.services import knowledge as svc
 from app.storage.antivirus import VirusScanner
 from app.workers.queue import JobQueue, get_job_queue
@@ -82,6 +87,22 @@ def search(
 @router.get("/{doc_id}")
 def get_document(doc_id: uuid.UUID, db: ScopedDb) -> KnowledgeDocumentOut:
     return KnowledgeDocumentOut.model_validate(_get(db, doc_id))
+
+
+@router.patch("/{doc_id}")
+def change_kind(
+    doc_id: uuid.UUID, data: KnowledgeKindIn, ctx: CurrentAuth, db: ScopedDb
+) -> KnowledgeDocumentOut:
+    """A document sent with the wrong type (« Ancien mémoire » for the « Plan type »)."""
+    doc = _get(db, doc_id)
+    doc.kind = data.kind
+    db.add(
+        AuditLog(
+            user_id=ctx.user.id, action="update", entity="knowledge_document", entity_id=doc.id
+        )
+    )
+    db.commit()
+    return KnowledgeDocumentOut.model_validate(doc)
 
 
 @router.post("/{doc_id}/reindex", status_code=202)

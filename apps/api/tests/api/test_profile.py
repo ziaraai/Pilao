@@ -188,3 +188,50 @@ def test_tenancy_isolation_on_every_profile_endpoint(make_client: Factory, outbo
         )
         assert a.delete(f"/profile/{path}/{item_id}").status_code == 404
         assert b.get(f"/profile/{path}/{item_id}").status_code == 200  # untouched
+
+
+def test_editing_a_line_keeps_what_the_table_does_not_show(
+    make_client: Factory, outbox: Outbox
+) -> None:
+    """« Modifier » sends the columns of the table only: the attached file, the photos and
+    the other fields stay as they were (a PUT changes only the fields it carries)."""
+    from tests.api.test_vault import PDF
+
+    c = client(make_client, outbox)
+    file_id = c.post("/files", files={"file": ("fiche.pdf", PDF, "application/pdf")}).json()["id"]
+    eq = c.post(
+        "/profile/equipment",
+        json={"name": "Autolaveuse", "quantity": 2, "spec_file_id": file_id},
+    ).json()
+    cert = c.post("/profile/certifications", json={"name": "ISO 9001", "file_id": file_id}).json()
+    ref = c.post(
+        "/profile/references",
+        json={
+            "client_name": "Ville de Lyon",
+            "client_type": "public",
+            "title": "Nettoyage des écoles",
+            "description": "Trois groupes scolaires",
+            "photo_file_ids": [file_id],
+        },
+    ).json()
+
+    edited = c.put(
+        f"/profile/equipment/{eq['id']}",
+        json={"name": "Autolaveuse Tennant T5", "category": "autolaveuse", "quantity": 3},
+    )
+    assert edited.status_code == 200, edited.text
+    assert edited.json()["spec_file_id"] == file_id
+    assert edited.json()["name"] == "Autolaveuse Tennant T5"
+    cert_edit = c.put(f"/profile/certifications/{cert['id']}", json={"name": "ISO 9001:2015"})
+    assert cert_edit.json()["file_id"] == file_id
+    ref_edit = c.put(
+        f"/profile/references/{ref['id']}",
+        json={"client_name": "Ville de Lyon", "client_type": "public", "title": "Écoles"},
+    )
+    assert ref_edit.json()["photo_file_ids"] == [file_id]
+    assert ref_edit.json()["description"] == "Trois groupes scolaires"
+    # a field sent empty is emptied on purpose
+    cleared = c.put(
+        f"/profile/equipment/{eq['id']}", json={"name": "Autolaveuse", "quantity": None}
+    )
+    assert cleared.json()["quantity"] is None and cleared.json()["spec_file_id"] == file_id

@@ -48,6 +48,25 @@ export default function KnowledgePage() {
   const upload = useAction();
   const search = useAction();
   const action = useAction();
+  // « Modifier le type »: a document sent as « Ancien mémoire » instead of « Plan type »
+  const [retyping, setRetyping] = useState<{ id: string; kind: string } | null>(
+    null,
+  );
+
+  async function saveKind(e: React.FormEvent) {
+    e.preventDefault();
+    if (!retyping) return;
+    const ok = await action.run(() =>
+      api(`/knowledge/${retyping.id}`, {
+        method: "PATCH",
+        json: { kind: retyping.kind },
+      }),
+    );
+    if (ok) {
+      setRetyping(null);
+      docs.reload();
+    }
+  }
 
   async function onFiles(files: File[]) {
     for (const f of files) {
@@ -117,6 +136,36 @@ export default function KnowledgePage() {
               >
                 <div>
                   <p className="font-medium text-slate-800">{d.title}</p>
+                  {retyping?.id === d.id ? (
+                    <form
+                      onSubmit={saveKind}
+                      className="mt-1 flex flex-wrap items-center gap-2"
+                    >
+                      <Select
+                        aria-label={`Type de ${d.title}`}
+                        value={retyping.kind}
+                        onChange={(e) =>
+                          setRetyping({ id: d.id, kind: e.target.value })
+                        }
+                      >
+                        {Object.entries(KINDS).map(([value, text]) => (
+                          <option key={value} value={value}>
+                            {text}
+                          </option>
+                        ))}
+                      </Select>
+                      <Button type="submit" busy={action.busy}>
+                        Enregistrer
+                      </Button>
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        onClick={() => setRetyping(null)}
+                      >
+                        Annuler
+                      </Button>
+                    </form>
+                  ) : null}
                   <p className="text-xs text-slate-500">
                     {KINDS[d.kind] ?? d.kind} · {formatDate(d.created_at)}
                     {d.status === "ready" && ` · ${d.chunk_count} passage(s)`}
@@ -142,6 +191,16 @@ export default function KnowledgePage() {
                       Relancer
                     </Button>
                   )}
+                  <Button
+                    variant="secondary"
+                    aria-label={`Modifier le type de ${d.title}`}
+                    onClick={() => {
+                      action.setError(null);
+                      setRetyping({ id: d.id, kind: d.kind });
+                    }}
+                  >
+                    Modifier le type
+                  </Button>
                   <Button
                     variant="danger"
                     onClick={async () => {

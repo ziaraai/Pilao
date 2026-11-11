@@ -128,7 +128,9 @@ def add_crud(
             value = getattr(data, f)
             ids.extend(value if isinstance(value, list) else [value])
         svc.ensure_files_belong_to_org(db, *ids)
-        for key, value in data.model_dump().items():
+        # An update changes only the fields it carries: « Modifier » sends the columns of the
+        # table, and must keep the attached file, the photos and the rest as they were.
+        for key, value in data.model_dump(exclude_unset=action == "update").items():
             setattr(item, key, value)
         db.add(item)
         db.flush()

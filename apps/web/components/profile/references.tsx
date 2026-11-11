@@ -15,42 +15,46 @@ import {
 } from "@/components/ui";
 import { ExcelImport, TemplateLink } from "@/components/profile/excel-import";
 import { api } from "@/lib/api";
-import { formatCents, parseEuros } from "@/lib/format";
+import { formatCents } from "@/lib/format";
 import { useAction, useApi } from "@/lib/hooks";
+import {
+  EMPTY_REFERENCE,
+  type ReferenceDraft,
+  referenceDraft,
+  referencePayload,
+} from "@/lib/profile-lists";
 import type { Reference } from "@/lib/types";
 
 export function References({ onChange }: { onChange: () => void }) {
   const list = useApi<Reference[]>("/profile/references");
-  const [draft, setDraft] = useState({
-    client_name: "",
-    client_type: "public",
-    title: "",
-    department: "",
-    amount: "",
-    year: "",
-  });
+  const [draft, setDraft] = useState<ReferenceDraft>(EMPTY_REFERENCE);
+  // « Modifier » fills the form below with one reference; the others stay in the table.
+  const [editing, setEditing] = useState<string | null>(null);
   const add = useAction();
   const remove = useAction();
 
+  function startEdit(r: Reference) {
+    add.setError(null);
+    setEditing(r.id);
+    setDraft(referenceDraft(r));
+    document.getElementById("ref-client")?.focus();
+  }
+
+  function stopEdit() {
+    setEditing(null);
+    setDraft(EMPTY_REFERENCE);
+  }
+
   async function onAdd(e: React.FormEvent) {
     e.preventDefault();
-    const body = {
-      client_name: draft.client_name,
-      client_type: draft.client_type,
-      title: draft.title,
-      department: draft.department.trim() || null,
-      amount_cents: parseEuros(draft.amount),
-      year: draft.year ? Number(draft.year) : null,
-    };
-    if (await add.run(() => api("/profile/references", { json: body }))) {
-      setDraft({
-        client_name: "",
-        client_type: "public",
-        title: "",
-        department: "",
-        amount: "",
-        year: "",
-      });
+    const body = referencePayload(draft);
+    const ok = await add.run(() =>
+      editing
+        ? api(`/profile/references/${editing}`, { method: "PUT", json: body })
+        : api("/profile/references", { json: body }),
+    );
+    if (ok) {
+      stopEdit();
       list.reload();
       onChange();
     }
@@ -93,7 +97,10 @@ export function References({ onChange }: { onChange: () => void }) {
             </thead>
             <tbody>
               {list.data.map((r) => (
-                <tr key={r.id} className={tableRow}>
+                <tr
+                  key={r.id}
+                  className={editing === r.id ? "bg-sky-50" : tableRow}
+                >
                   <td className="px-3 py-2">
                     {r.client_name}{" "}
                     <span className="text-xs text-slate-500">
@@ -104,7 +111,14 @@ export function References({ onChange }: { onChange: () => void }) {
                   <td className="px-3 py-2">{r.department ?? "—"}</td>
                   <td className="px-3 py-2">{formatCents(r.amount_cents)}</td>
                   <td className="px-3 py-2">{r.year ?? "—"}</td>
-                  <td className="px-3 py-1 text-right">
+                  <td className="whitespace-nowrap px-3 py-1 text-right">
+                    <Button
+                      variant="ghost"
+                      aria-label={`Modifier ${r.client_name} — ${r.title}`}
+                      onClick={() => startEdit(r)}
+                    >
+                      Modifier
+                    </Button>
                     <Button
                       variant="ghost"
                       onClick={async () => {
@@ -182,9 +196,20 @@ export function References({ onChange }: { onChange: () => void }) {
             onChange={(e) => setDraft({ ...draft, year: e.target.value })}
           />
         </Field>
-        <Button type="submit" variant="secondary" busy={add.busy}>
-          Ajouter la référence
-        </Button>
+        {editing ? (
+          <div className="flex flex-wrap gap-2">
+            <Button type="submit" busy={add.busy}>
+              Enregistrer les modifications
+            </Button>
+            <Button type="button" variant="ghost" onClick={stopEdit}>
+              Annuler
+            </Button>
+          </div>
+        ) : (
+          <Button type="submit" variant="secondary" busy={add.busy}>
+            Ajouter la référence
+          </Button>
+        )}
       </form>
       {(add.error || remove.error) && (
         <div className="mt-3">

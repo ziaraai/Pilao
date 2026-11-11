@@ -29,3 +29,9 @@ class SearchHitOut(BaseModel):
     page_to: int | None
     content: str
     score: float
+
+
+class KnowledgeKindIn(BaseModel):
+    """« Modifier le type » of a document of the knowledge base: nothing is read again."""
+
+    kind: DocumentKind

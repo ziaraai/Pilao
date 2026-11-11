@@ -196,6 +196,16 @@ let current; // the page, for a screenshot when a step fails
     .getByRole("cell", { name: "Aspirateur Numatic", exact: true })
     .waitFor();
   await page.getByLabel("Type de matériel").waitFor();
+  // « Modifier » a line in place: the fields are filled, only this line changes
+  await page.getByRole("button", { name: "Modifier Laveur de vitres" }).click();
+  const editRow = page.locator("tr.bg-sky-50");
+  await editRow.getByLabel("Qualification").fill("Laveur de vitres en hauteur");
+  await editRow.getByLabel("Nombre").fill("4");
+  await editRow.getByRole("button", { name: "Enregistrer" }).click();
+  await page
+    .getByRole("cell", { name: "Laveur de vitres en hauteur", exact: true })
+    .waitFor();
+  await page.getByRole("cell", { name: "× 4", exact: true }).waitFor();
   await page.screenshot({ path: `${S}/04-moyens-excel.png`, fullPage: true });
   await tab("Références");
   await page.setInputFiles("#ref-import", `${S}/references.xlsx`);
@@ -205,11 +215,21 @@ let current; // the page, for a screenshot when a step fails
   await page
     .getByRole("cell", { name: "Nettoyage des écoles", exact: true })
     .waitFor();
+  // « Modifier » a reference: the form below is filled with it
+  await page
+    .getByRole("button", { name: /^Modifier .* — Nettoyage des écoles$/ })
+    .click();
+  await page.getByLabel("Année").fill("2023");
+  await page
+    .getByRole("button", { name: "Enregistrer les modifications" })
+    .click();
+  await page.getByRole("cell", { name: "2023", exact: true }).waitFor();
+  await page.getByRole("button", { name: "Ajouter la référence" }).waitFor();
   const pct = await page
     .getByRole("heading", { name: /Profil complet à/ })
     .textContent();
   step(
-    `staff added, staff/equipment/references imported from Excel (duplicates skipped, errors reported) — ${pct}`,
+    `staff added, staff/equipment/references imported from Excel (duplicates skipped, errors reported), a line and a reference edited — ${pct}`,
   );
 
   // 4b. Company identity for DC1/DC2 and the Word layout (P2-06)
@@ -469,12 +489,35 @@ let current; // the page, for a screenshot when a step fails
   await page.setInputFiles("#kb-upload", `${S}/memoire_2025.docx`);
   await page.getByRole("button", { name: "Déposer", exact: true }).click();
   await page.getByText("Prêt", { exact: true }).waitFor({ timeout: 60000 });
+  // sent with the wrong type: corrected without sending it again, then put back
+  for (const [from, to] of [
+    ["past_memoir", "qse_policy"],
+    ["qse_policy", "past_memoir"],
+  ]) {
+    await page
+      .getByRole("button", { name: /^Modifier le type de/ })
+      .first()
+      .click();
+    const select = page.getByRole("combobox", { name: /^Type de/ });
+    if ((await select.inputValue()) !== from)
+      throw new Error(`type ${from} expected`);
+    await select.selectOption(to);
+    await page
+      .getByRole("button", { name: "Enregistrer", exact: true })
+      .click();
+    await page
+      .getByText(to === "qse_policy" ? "Politique QSE ·" : "Ancien mémoire ·", {
+        exact: false,
+      })
+      .first()
+      .waitFor();
+  }
   await page.getByLabel("Recherche").fill("autolaveuses");
   await page.getByRole("button", { name: "Rechercher", exact: true }).click();
   await page
     .getByText("monobrosses professionnelles", { exact: false })
     .waitFor();
-  step("knowledge base: indexed and searchable");
+  step("knowledge base: indexed, type corrected, searchable");
 
   // 7b. Profile pre-filled from the memoir, after review (US-1.6)
   await page.goto(`${WEB}/profil?onglet=moyens`);
