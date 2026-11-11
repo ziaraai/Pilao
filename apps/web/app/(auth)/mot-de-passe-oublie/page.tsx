@@ -32,9 +32,9 @@ export default function ForgotPasswordPage() {
             Saisissez l&apos;adresse de votre compte : vous recevrez un lien
             pour choisir un nouveau mot de passe.
           </p>
-          <Field label="E-mail" htmlFor="email">
+          <Field label="E-mail" htmlFor="forgot-email">
             <Input
-              id="email"
+              id="forgot-email"
               type="email"
               autoComplete="email"
               value={email}

@@ -71,11 +71,11 @@ function ChooseNewPassword() {
       </p>
       <Field
         label="Nouveau mot de passe"
-        htmlFor="password"
+        htmlFor="new-password"
         hint={`${MIN_LENGTH} caractères au moins.`}
       >
         <Input
-          id="password"
+          id="new-password"
           type="password"
           autoComplete="new-password"
           value={password}
@@ -83,9 +83,13 @@ function ChooseNewPassword() {
           required
         />
       </Field>
-      <Field label="Le même, une seconde fois" htmlFor="again" error={mistake}>
+      <Field
+        label="Le même, une seconde fois"
+        htmlFor="new-password-again"
+        error={mistake}
+      >
         <Input
-          id="again"
+          id="new-password-again"
           type="password"
           autoComplete="new-password"
           value={again}
