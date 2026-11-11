@@ -3,7 +3,7 @@
 Rejoue le parcours complet d'un utilisateur dans Chromium (Playwright) contre la **vraie** API,
 le **vrai** worker RQ, PostgreSQL + pgvector, Redis, un S3 simulé (`moto_server`) et un faux
 modèle compatible OpenAI (`fake_openai.py`) pour l'analyse du DCE et la rédaction : inscription,
-confirmation d'e-mail, connexion, profil et import Excel, coffre-fort, dépôt du DCE, analyse avec
+confirmation d'e-mail, connexion, profil et import Excel (références, moyens humains avec une ligne en double et une ligne en erreur, matériel), coffre-fort, dépôt du DCE, analyse avec
 sources cliquables, plan du mémoire, rédaction, matrice de conformité et « compléter ce point »,
 modification d'un chapitre et restauration d'une version, DC1 téléchargé, export du dossier complet
 (ZIP avec le PDF de LibreOffice) après avertissements, base documentaire, annonces chargées par

@@ -41,7 +41,7 @@ const GROUPS: { kind: SuggestionKind; title: string; fields: Field[] }[] = [
     title: "Matériel",
     fields: [
       { key: "name", label: "Matériel" },
-      { key: "category", label: "Catégorie" },
+      { key: "category", label: "Type de matériel" },
       { key: "quantity", label: "Quantité", type: "number" },
     ],
   },

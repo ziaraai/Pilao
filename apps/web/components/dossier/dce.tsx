@@ -61,10 +61,11 @@ export function DceSection({
         multiple
         busy={deposit.busy || busy}
         onFiles={onFiles}
+        title="Glissez le DCE ici"
+        hint="Le ZIP téléchargé sur le profil acheteur, ou les pièces une par une"
       />
       <p className="mt-2 text-xs text-slate-500">
-        Le ZIP téléchargé sur le profil acheteur, ou les pièces une par une :
-        PDF, Word, Excel, LibreOffice, images (250 Mo maximum par fichier).
+        PDF, Word, Excel, LibreOffice, images : 250 Mo maximum par fichier.
       </p>
       {deposit.error && (
         <div className="mt-3">

@@ -86,6 +86,7 @@ export type ImportReport = {
   created: number;
   errors: { row: number; message: string }[];
   ignored_columns: string[];
+  skipped?: { row: number; message: string }[]; // lines already in the profile (staff, equipment)
 };
 
 export type ComplianceDoc = {

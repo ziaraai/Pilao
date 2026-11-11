@@ -148,6 +148,10 @@ function IdentityForm({ company }: { company: Company }) {
             id="company-logo"
             label="Utiliser ce logo"
             accept="image/png,image/jpeg"
+            title="Glissez votre logo ici"
+            hint="PNG ou JPEG"
+            pickLabel="Choisir le logo"
+            compact
             busy={upload.busy}
             onFiles={async ([file]) => {
               const record = await upload.run(() => uploadFile(file));

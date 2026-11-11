@@ -129,6 +129,7 @@ export default function VaultPage() {
           multiple
           busy={upload.busy}
           onFiles={onFiles}
+          hint="PDF, PNG ou JPEG — plusieurs à la fois"
         >
           <label htmlFor="vault-kind" className="sr-only">
             Type de document
@@ -148,8 +149,7 @@ export default function VaultPage() {
           </Select>
         </UploadButton>
         <p className="mt-2 text-xs text-slate-500">
-          PDF, PNG ou JPEG. Les dates sont lues automatiquement : vérifiez-les
-          avant de confirmer.
+          Les dates sont lues automatiquement : vérifiez-les avant de confirmer.
         </p>
         {upload.error && (
           <div className="mt-3">

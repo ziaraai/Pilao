@@ -205,6 +205,7 @@ function ProfileTabs() {
               title="Moyens humains"
               path="/profile/human-resources"
               onChange={completeness.reload}
+              excel={{ what: "ligne(s) de moyens humains" }}
               emptyText="Aucun moyen humain : ajoutez vos équipes (ex. 12 agents de service)."
               columns={[
                 {
@@ -226,10 +227,16 @@ function ProfileTabs() {
               title="Moyens matériels"
               path="/profile/equipment"
               onChange={completeness.reload}
+              excel={{ what: "ligne(s) de matériel" }}
               emptyText="Aucun matériel : ajoutez vos machines (ex. autolaveuse)."
               columns={[
                 { key: "name", label: "Matériel", required: true },
-                { key: "category", label: "Catégorie" },
+                {
+                  key: "category",
+                  label: "Type de matériel",
+                  placeholder: "ex. autolaveuse, monobrosse",
+                  hint: "sert à regrouper votre matériel par type dans la liste des moyens matériels du dossier.",
+                },
                 {
                   key: "quantity",
                   label: "Quantité",

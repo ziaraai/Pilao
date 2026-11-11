@@ -75,6 +75,7 @@ export default function KnowledgePage() {
           multiple
           busy={upload.busy}
           onFiles={onFiles}
+          hint="PDF, Word ou LibreOffice — 50 Mo maximum par fichier"
         >
           <label htmlFor="kb-kind" className="sr-only">
             Type de document
@@ -93,7 +94,7 @@ export default function KnowledgePage() {
           </Select>
         </UploadButton>
         <p className="mt-2 text-xs text-slate-500">
-          PDF ou Word, 50 Mo maximum. Les PDF scannés ne sont pas encore lus.
+          Les PDF scannés ne sont pas encore lus.
         </p>
         {upload.error && (
           <div className="mt-3">

@@ -169,6 +169,34 @@ let current; // the page, for a screenshot when a step fails
     .first()
     .click();
   await page.getByText("× 12").waitFor();
+  // the lists imported from Excel (US-1.3): a line already there is skipped, not doubled
+  const staffZone = page.locator("label[for='human-resources-import']");
+  await staffZone.getByText("Importer votre liste (Excel .xlsx)").waitFor();
+  await page.setInputFiles(
+    "#human-resources-import",
+    `${S}/moyens_humains.xlsx`,
+  );
+  await page.getByText("moyens_humains.xlsx prêt à être déposé").waitFor();
+  await page.getByRole("button", { name: "Importer", exact: true }).click();
+  await page
+    .getByText(
+      "1 ligne(s) de moyens humains importée(s) sur 3 ligne(s). 1 en double, non ajoutée(s).",
+    )
+    .waitFor();
+  await page.getByText("Ligne 4 : effectif illisible : « deux »").waitFor();
+  await page
+    .getByText("Ligne 2 : déjà dans votre profil : « Agent de service »")
+    .waitFor();
+  await page.setInputFiles("#equipment-import", `${S}/materiel.xlsx`);
+  await page.getByRole("button", { name: "Importer", exact: true }).click();
+  await page
+    .getByText("2 ligne(s) de matériel importée(s) sur 2 ligne(s).")
+    .waitFor();
+  await page
+    .getByRole("cell", { name: "Aspirateur Numatic", exact: true })
+    .waitFor();
+  await page.getByLabel("Type de matériel").waitFor();
+  await page.screenshot({ path: `${S}/04-moyens-excel.png`, fullPage: true });
   await tab("Références");
   await page.setInputFiles("#ref-import", `${S}/references.xlsx`);
   await page.getByRole("button", { name: "Importer", exact: true }).click();
@@ -180,7 +208,9 @@ let current; // the page, for a screenshot when a step fails
   const pct = await page
     .getByRole("heading", { name: /Profil complet à/ })
     .textContent();
-  step(`staff added, Excel import reported (1 ok, 1 error) — ${pct}`);
+  step(
+    `staff added, staff/equipment/references imported from Excel (duplicates skipped, errors reported) — ${pct}`,
+  );
 
   // 4b. Company identity for DC1/DC2 and the Word layout (P2-06)
   await tab("Identité");
@@ -449,7 +479,9 @@ let current; // the page, for a screenshot when a step fails
   // 7b. Profile pre-filled from the memoir, after review (US-1.6)
   await page.goto(`${WEB}/profil?onglet=moyens`);
   await page.getByRole("button", { name: "Lire mes documents" }).click();
-  const tennant = page.getByLabel("Matériel — Autolaveuse Tennant T5");
+  const tennant = page.getByLabel("Matériel — Autolaveuse Tennant T5", {
+    exact: true,
+  });
   await tennant.waitFor({ timeout: 60000 });
   if ((await page.getByLabel("Qualification — Agent de service").count()) > 0)
     throw new Error("a staff line already in the profile was proposed again");

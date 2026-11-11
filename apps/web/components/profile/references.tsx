@@ -2,8 +2,6 @@
 
 import { useState } from "react";
 
-import { UploadButton } from "@/components/upload";
-
 import {
   Alert,
   Button,
@@ -15,10 +13,11 @@ import {
   tableHead,
   tableRow,
 } from "@/components/ui";
-import { api, API_URL } from "@/lib/api";
+import { ExcelImport, TemplateLink } from "@/components/profile/excel-import";
+import { api } from "@/lib/api";
 import { formatCents, parseEuros } from "@/lib/format";
 import { useAction, useApi } from "@/lib/hooks";
-import type { ImportReport, Reference } from "@/lib/types";
+import type { Reference } from "@/lib/types";
 
 export function References({ onChange }: { onChange: () => void }) {
   const list = useApi<Reference[]>("/profile/references");
@@ -30,9 +29,7 @@ export function References({ onChange }: { onChange: () => void }) {
     amount: "",
     year: "",
   });
-  const [report, setReport] = useState<ImportReport | null>(null);
   const add = useAction();
-  const upload = useAction();
   const remove = useAction();
 
   async function onAdd(e: React.FormEvent) {
@@ -59,64 +56,21 @@ export function References({ onChange }: { onChange: () => void }) {
     }
   }
 
-  async function onImport(f: File) {
-    const form = new FormData();
-    form.append("file", f);
-    const result = await upload.run(() =>
-      api<ImportReport>("/profile/references/import", { form }),
-    );
-    if (result) {
-      setReport(result);
-      list.reload();
-      onChange();
-    }
-  }
-
   return (
     <Card
       title="Références de chantiers"
       color="brand"
-      actions={
-        <a
-          href={`${API_URL}/profile/references/template.xlsx`}
-          className="text-sm font-semibold text-brand-navy underline"
-        >
-          Télécharger le modèle Excel
-        </a>
-      }
+      actions={<TemplateLink path="/profile/references" />}
     >
-      <div className="mb-4 rounded-md bg-slate-50 p-3">
-        <p className="mb-2 text-sm text-slate-700">
-          Importer un fichier Excel (.xlsx)
-        </p>
-        <UploadButton
-          id="ref-import"
-          label="Importer"
-          accept=".xlsx"
-          busy={upload.busy}
-          onFiles={(files) => onImport(files[0])}
-        />
-      </div>
-      {upload.error && <Alert tone="danger">{upload.error}</Alert>}
-      {report && (
-        <div className="mb-4 space-y-2">
-          <Alert tone={report.errors.length ? "warning" : "ok"}>
-            {report.created} référence(s) importée(s) sur {report.total}{" "}
-            ligne(s).
-            {report.ignored_columns.length > 0 &&
-              ` Colonnes ignorées : ${report.ignored_columns.join(", ")}.`}
-          </Alert>
-          {report.errors.length > 0 && (
-            <ul className="list-inside list-disc text-sm text-red-800">
-              {report.errors.map((e) => (
-                <li key={e.row}>
-                  Ligne {e.row} : {e.message}
-                </li>
-              ))}
-            </ul>
-          )}
-        </div>
-      )}
+      <ExcelImport
+        id="ref-import"
+        path="/profile/references"
+        what="référence(s)"
+        onImported={() => {
+          list.reload();
+          onChange();
+        }}
+      />
       {list.data && list.data.length === 0 && (
         <Empty>
           Aucune référence : importez votre liste ou ajoutez-en une ci-dessous.

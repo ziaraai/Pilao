@@ -27,7 +27,7 @@ Objectif : savoir si la génération est assez bonne, avec quel modèle, à quel
 - [x] P1-02 FastAPI : config, DB, Alembic, modèle `organizations`, `users`, `files`, `jobs`, `ai_calls`, `audit_logs`
 - [x] P1-03 Auth (inscription, vérification e-mail, connexion), rôles, `get_current_org()`, tests de tenancy
 - [x] P1-04 Intégration Recherche d'entreprises (US-1.1) — code et tests faits, **vérification sur appel réel en attente (Q9)**
-- [x] P1-05 Profil : paramètres, moyens, certifications, références + import Excel (US-1.2, 1.3)
+- [x] P1-05 Profil : paramètres, moyens, certifications, références + import Excel (US-1.2, 1.3) ; import Excel étendu aux moyens humains et au matériel, zones de dépôt de fichiers visibles partout
 - [x] P1-05b Utilisateurs : invitation par e-mail, rôles administrateur / collaborateur, retrait (US-1.5, ADR-030)
 - [x] P1-06 Upload fichiers S3 + URL signées + antivirus
 - [x] P1-07 Base documentaire : extraction, découpage, embeddings (US-1.4)

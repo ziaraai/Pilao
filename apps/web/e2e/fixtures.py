@@ -20,4 +20,16 @@ ws.append(["Client", "Type de client (public / privé)", "Objet du marché", "Li
 ws.append(["Mairie de Villeurbanne", "public", "Nettoyage des écoles", "Villeurbanne", 69, "85 000", 2024])
 ws.append(["", "public", "Ligne sans client", None, None, None, None])
 wb.save(f"{out}/references.xlsx")
+# Staff and equipment lists (US-1.3): one line already in the profile, one new, one refused
+wb = Workbook(); ws = wb.active
+ws.append(["Qualification", "Nombre", "Précisions"])
+ws.append(["Agent de service", 12, None])
+ws.append(["Laveur de vitres", 3, "Travail en hauteur"])
+ws.append(["Encadrant de site", "deux", None])
+wb.save(f"{out}/moyens_humains.xlsx")
+wb = Workbook(); ws = wb.active
+ws.append(["Matériel", "Type de matériel", "Quantité"])
+ws.append(["Monobrosse Taski Ergodisc", "monobrosse", 2])
+ws.append(["Aspirateur Numatic", "aspirateur", 6])
+wb.save(f"{out}/materiel.xlsx")
 print("fixtures ok")

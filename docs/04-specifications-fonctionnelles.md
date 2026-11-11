@@ -30,7 +30,8 @@ Je règle mes métiers, codes CPV, mots-clés, départements, distance maximale 
 
 **US-1.3 Moyens et références**
 Je saisis mes moyens humains, matériels, certifications et références de chantiers.
-- CA1 : formulaires simples + import Excel (modèle téléchargeable) pour les références.
+- CA1 : formulaires simples + import Excel (modèle téléchargeable) pour les références, les moyens humains (qualification, nombre, précisions) et le matériel (matériel, type de matériel, quantité). Une ligne déjà présente dans le profil (même qualification, même matériel) n'est pas ajoutée une seconde fois : elle est signalée « en double » dans le compte rendu.
+- CA1 bis : le « type de matériel » (autolaveuse, monobrosse, aspirateur…) sert à regrouper le matériel par type dans la liste des moyens matériels du dossier ; un exemple et une aide sont affichés sous le champ.
 - CA2 : une référence = client, type de client (public/privé), objet, lieu, montant, année, durée, description, photos.
 - CA3 : indicateur de complétude du profil (en %), avec la liste de ce qui manque.
 
