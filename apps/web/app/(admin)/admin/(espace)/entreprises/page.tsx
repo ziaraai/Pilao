@@ -1,6 +1,8 @@
 "use client";
 
 import Link from "next/link";
+import { useSearchParams } from "next/navigation";
+import { Suspense } from "react";
 
 import {
   AdminTitle,
@@ -10,20 +12,38 @@ import {
   NUM,
   Pill,
 } from "@/components/admin/ui";
-import { Card, tableHead, tableRow } from "@/components/ui";
+import { Alert, Card, tableHead, tableRow } from "@/components/ui";
 import { useAdminApi } from "@/lib/admin-auth";
 import { formatDate, formatDateTimeShort, formatEuros } from "@/lib/format";
 import type { AdminOrganizationRow } from "@/lib/types";
 
-/** US-6.2: every company on the platform, the last active first. Read-only. */
+/** After an immediate deletion, the company page sends here with its name. */
+function DeletedNotice() {
+  const name = useSearchParams().get("supprimee");
+  return name ? <Alert tone="ok">{name} a été supprimée.</Alert> : null;
+}
+
+/** US-6.2 and lot 2: every company on the platform, the last active first. */
 export default function AdminOrganizationsPage() {
   const list = useAdminApi<AdminOrganizationRow[]>("/admin/organizations");
   return (
     <div className="space-y-6">
       <AdminTitle
         title="Entreprises"
+        readOnly={false}
         subtitle="Toutes les entreprises inscrites, la dernière active en premier."
+        actions={
+          <Link
+            href="/admin/entreprises/nouvelle"
+            className="inline-flex items-center rounded-md bg-brand-navy px-3.5 py-2 text-sm font-semibold text-white hover:bg-[#0a2a63]"
+          >
+            Créer une entreprise
+          </Link>
+        }
       />
+      <Suspense>
+        <DeletedNotice />
+      </Suspense>
       <Loaded state={list}>
         {(rows) => (
           <Card
@@ -62,11 +82,19 @@ export default function AdminOrganizationsPage() {
                           >
                             {o.name}
                           </Link>
-                          {o.deletion_requested && (
-                            <span className="ml-2">
-                              <Pill tone="danger">Suppression demandée</Pill>
-                            </span>
-                          )}
+                          <span className="ml-2 inline-flex flex-wrap gap-1 align-middle">
+                            {o.suspended && (
+                              <Pill tone="danger">Suspendue</Pill>
+                            )}
+                            {o.deletion_due_at && (
+                              <Pill tone="warning">
+                                Suppression le {formatDate(o.deletion_due_at)}
+                              </Pill>
+                            )}
+                            {o.invitation_pending && (
+                              <Pill tone="neutral">Invitation en attente</Pill>
+                            )}
+                          </span>
                         </td>
                         <td className={CELL}>{o.city ?? "—"}</td>
                         <td className={`${CELL} whitespace-nowrap`}>

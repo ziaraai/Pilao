@@ -1,8 +1,11 @@
 "use client";
 
 import Link from "next/link";
-import { useParams } from "next/navigation";
+import { useParams, useRouter } from "next/navigation";
+import { useState } from "react";
 
+import { ConfirmDialog } from "@/components/admin/dialogs";
+import { OrgUsers } from "@/components/admin/org-users";
 import {
   AdminTitle,
   CELL,
@@ -14,12 +17,175 @@ import {
   Pill,
   Tile,
 } from "@/components/admin/ui";
-import { Card, tableHead, tableRow } from "@/components/ui";
-import { useAdminApi } from "@/lib/admin-auth";
+import { Alert, Button, Card, tableHead, tableRow } from "@/components/ui";
 import { monthLabel } from "@/lib/admin";
+import { useAdminApi } from "@/lib/admin-auth";
+import { api } from "@/lib/api";
 import { formatDate, formatDateTimeShort, formatEuros } from "@/lib/format";
-import { BID_STATUS, ROLES, label } from "@/lib/labels";
-import type { AdminOrganizationDetail } from "@/lib/types";
+import { BID_STATUS, label } from "@/lib/labels";
+import type {
+  AdminDeletionPreview,
+  AdminOrganizationDetail,
+} from "@/lib/types";
+
+type Open = "suspend" | "reactivate" | "delete" | "cancel" | null;
+
+/** Lot 2: suspend, reactivate, delete, cancel a deletion — each in a confirmation window. */
+function AccountActions({
+  orgId,
+  detail,
+  onChanged,
+}: {
+  orgId: string;
+  detail: AdminOrganizationDetail;
+  onChanged: () => void;
+}) {
+  const router = useRouter();
+  const [open, setOpen] = useState<Open>(null);
+  const [preview, setPreview] = useState<AdminDeletionPreview | null>(null);
+  const account = detail.account;
+  const name = detail.identity.name;
+  const base = `/admin/organizations/${orgId}`;
+
+  async function askDeletion() {
+    setPreview(await api<AdminDeletionPreview>(`${base}/deletion`));
+    setOpen("delete");
+  }
+
+  return (
+    <div className="flex flex-wrap gap-2">
+      {account.suspended_at ? (
+        <Button onClick={() => setOpen("reactivate")}>Réactiver</Button>
+      ) : (
+        <Button variant="danger" onClick={() => setOpen("suspend")}>
+          Suspendre
+        </Button>
+      )}
+      {account.deletion_due_at ? (
+        <Button variant="secondary" onClick={() => setOpen("cancel")}>
+          Annuler la suppression
+        </Button>
+      ) : (
+        <Button variant="danger" onClick={askDeletion}>
+          Supprimer
+        </Button>
+      )}
+
+      {open === "suspend" && (
+        <ConfirmDialog
+          title={`Suspendre ${name}`}
+          confirmLabel="Suspendre l'accès"
+          danger
+          needsReason
+          onConfirm={({ reason }) =>
+            api(`${base}/suspend`, { json: { reason } }).then(onChanged)
+          }
+          onClose={() => setOpen(null)}
+        >
+          <p>
+            Ses utilisateurs sont déconnectés tout de suite et ne peuvent plus
+            se connecter. Rien n&apos;est effacé ; plus aucun e-mail ne part
+            pour l&apos;entreprise.
+          </p>
+        </ConfirmDialog>
+      )}
+      {open === "reactivate" && (
+        <ConfirmDialog
+          title={`Réactiver ${name}`}
+          confirmLabel="Réactiver"
+          onConfirm={() =>
+            api(`${base}/reactivate`, { method: "POST" }).then(onChanged)
+          }
+          onClose={() => setOpen(null)}
+        >
+          <p>
+            Ses utilisateurs pourront se connecter à nouveau, et la veille
+            reprend.
+          </p>
+        </ConfirmDialog>
+      )}
+      {open === "delete" && preview && (
+        <ConfirmDialog
+          title={`Supprimer ${name}`}
+          confirmLabel="Supprimer"
+          danger
+          needsName={name}
+          needsCode
+          onConfirm={async ({ name: typed, code }) => {
+            const res = await api<{ mode: string }>(`${base}/deletion`, {
+              json: { confirmation: typed, code },
+            });
+            if (res.mode === "immediate")
+              router.replace(
+                `/admin/entreprises?supprimee=${encodeURIComponent(name)}`,
+              );
+            else onChanged();
+          }}
+          onClose={() => setOpen(null)}
+        >
+          {preview.mode === "immediate" ? (
+            <p>
+              Personne ne s&apos;est jamais connecté à cet espace : il sera
+              effacé <strong>tout de suite, définitivement</strong>.
+            </p>
+          ) : (
+            <p>
+              L&apos;accès sera suspendu tout de suite et toutes les données
+              seront effacées le{" "}
+              <strong>
+                {preview.due_at ? formatDate(preview.due_at) : "—"}
+              </strong>
+              . Vous pourrez annuler d&apos;ici là. Ses utilisateurs sont
+              prévenus par e-mail.
+            </p>
+          )}
+        </ConfirmDialog>
+      )}
+      {open === "cancel" && (
+        <ConfirmDialog
+          title="Annuler la suppression"
+          confirmLabel="Annuler la suppression"
+          onConfirm={() =>
+            api(`${base}/deletion`, { method: "DELETE" }).then(onChanged)
+          }
+          onClose={() => setOpen(null)}
+        >
+          <p>
+            Rien ne sera effacé et ses utilisateurs sont prévenus.
+            {account.suspended_at &&
+              " L'entreprise reste suspendue : « Réactiver » pour lui rendre l'accès."}
+          </p>
+        </ConfirmDialog>
+      )}
+    </div>
+  );
+}
+
+/** Suspended, deletion scheduled: said at the top of the page. */
+function AccountState({ detail }: { detail: AdminOrganizationDetail }) {
+  const a = detail.account;
+  if (!a.suspended_at && !a.deletion_due_at) return null;
+  return (
+    <div className="space-y-3">
+      {a.suspended_at && (
+        <Alert tone="danger">
+          <strong>Suspendue</strong> depuis le{" "}
+          {formatDateTimeShort(a.suspended_at)}
+          {a.suspension_reason && <> — raison : {a.suspension_reason}</>}
+        </Alert>
+      )}
+      {a.deletion_due_at && (
+        <Alert tone="warning">
+          <strong>Suppression le {formatDate(a.deletion_due_at)}</strong>,{" "}
+          {a.deletion_by === "pilao"
+            ? "programmée par Pilao"
+            : "demandée par l'entreprise"}
+          .
+        </Alert>
+      )}
+    </div>
+  );
+}
 
 /** The cost of the last six months, as bars. */
 function CostBars({
@@ -53,7 +219,8 @@ function CostBars({
   );
 }
 
-/** US-6.2: one company. Identity, users, counters, costs — never its documents. */
+/** US-6.2 and lot 2: one company — identity, account, users, counters, costs — never its
+ * documents. */
 export default function AdminOrganizationPage() {
   const { id } = useParams<{ id: string }>();
   const detail = useAdminApi<AdminOrganizationDetail>(
@@ -76,24 +243,40 @@ export default function AdminOrganizationPage() {
             <div className="space-y-6">
               <AdminTitle
                 title={i.name}
+                readOnly={false}
+                actions={
+                  <AccountActions
+                    orgId={id}
+                    detail={d}
+                    onChanged={detail.reload}
+                  />
+                }
                 subtitle={
                   <>
                     Inscrite le {formatDate(i.created_at)} · dernière activité :{" "}
                     {i.last_activity_at
                       ? formatDateTimeShort(i.last_activity_at)
                       : "jamais"}
-                    {i.deletion_requested && (
+                    {d.account.suspended_at && (
                       <span className="ml-2">
-                        <Pill tone="danger">Suppression demandée</Pill>
+                        <Pill tone="danger">Suspendue</Pill>
                       </span>
                     )}
                   </>
                 }
               />
+              <AccountState detail={d} />
               <p className="rounded-md border border-dashed border-slate-400 bg-white px-4 py-3 text-sm text-slate-700">
                 Le contenu des mémoires, des DCE et des documents déposés
                 n&apos;est jamais affiché ici. Cette consultation est
-                enregistrée dans le journal.
+                enregistrée dans le journal (
+                <Link
+                  href={`/admin/journal?entreprise=${id}`}
+                  className="font-semibold underline"
+                >
+                  voir le journal de cette entreprise
+                </Link>
+                ).
               </p>
 
               <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 xl:grid-cols-5">
@@ -194,59 +377,13 @@ export default function AdminOrganizationPage() {
                 </Card>
               </div>
 
-              <Card
-                title="Utilisateurs"
-                color="blue"
-                flush
-                actions={
-                  <span className="text-sm font-medium">{d.users.length}</span>
-                }
-              >
-                {d.users.length === 0 ? (
-                  <p className="px-5 py-4 text-sm text-slate-600">
-                    Aucun utilisateur.
-                  </p>
-                ) : (
-                  <div className="overflow-x-auto">
-                    <table className="w-full text-sm">
-                      <thead>
-                        <tr className={tableHead}>
-                          <th className={HEAD}>Nom</th>
-                          <th className={HEAD}>E-mail</th>
-                          <th className={HEAD}>Rôle</th>
-                          <th className={HEAD}>E-mail vérifié</th>
-                          <th className={HEAD}>Dernière connexion</th>
-                          <th className={HEAD}>Conditions</th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {d.users.map((u) => (
-                          <tr key={u.email} className={tableRow}>
-                            <td className={`${CELL} font-semibold`}>
-                              {u.full_name ?? "—"}
-                            </td>
-                            <td className={CELL}>{u.email}</td>
-                            <td className={CELL}>{label(ROLES, u.role)}</td>
-                            <td className={CELL}>
-                              {u.email_verified ? "Oui" : "Non"}
-                            </td>
-                            <td className={`${CELL} whitespace-nowrap`}>
-                              {u.last_login_at
-                                ? formatDateTimeShort(u.last_login_at)
-                                : "Jamais"}
-                            </td>
-                            <td className={CELL}>
-                              {u.terms_version
-                                ? `version ${u.terms_version}`
-                                : "non acceptées"}
-                            </td>
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
-                  </div>
-                )}
-              </Card>
+              <OrgUsers
+                orgId={id}
+                orgName={i.name}
+                users={d.users}
+                suspended={d.account.suspended_at !== null}
+                onChanged={detail.reload}
+              />
 
               <div className="grid grid-cols-1 gap-6 xl:grid-cols-2">
                 <Card

@@ -45,7 +45,7 @@ export function Tile({
   );
 }
 
-/** Lot 1 of the administration only reads: said on every screen. */
+/** The screens that only read say so (the overview, costs, technical, feedback, journal). */
 export function ReadOnlyBadge() {
   return (
     <span className="inline-flex items-center gap-1.5 rounded-full bg-blue-100 px-2.5 py-0.5 align-middle text-xs font-semibold text-blue-800 ring-1 ring-inset ring-blue-300">
@@ -69,17 +69,20 @@ export function AdminTitle({
   title,
   subtitle,
   actions,
+  readOnly = true,
 }: {
   title: string;
   subtitle?: ReactNode;
   actions?: ReactNode;
+  /** The screens that only read say so; the company list and page have actions (lot 2). */
+  readOnly?: boolean;
 }) {
   return (
     <div className="mb-6 flex flex-wrap items-end justify-between gap-3">
       <div className="min-w-0">
         <h1 className="flex flex-wrap items-center gap-x-3 gap-y-1 text-2xl font-bold text-brand-navy">
           {title}
-          <ReadOnlyBadge />
+          {readOnly && <ReadOnlyBadge />}
         </h1>
         {subtitle && <p className="mt-1 text-sm text-slate-600">{subtitle}</p>}
       </div>

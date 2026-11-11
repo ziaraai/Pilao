@@ -4,7 +4,8 @@ import { useRouter } from "next/navigation";
 import { createContext, useContext, useEffect } from "react";
 
 import { adminSignInPath } from "./admin";
-import { useApi } from "./hooks";
+import { ApiError } from "./api";
+import { useAction, useApi } from "./hooks";
 import type { AdminMe } from "./types";
 
 export const AdminAuthContext = createContext<{ me: AdminMe } | null>(null);
@@ -31,4 +32,27 @@ export function useAdminApi<T>(path: string | null) {
       );
   }, [expired, router]);
   return result;
+}
+
+/**
+ * ``useAction`` for the actions of the administration. A 401 means the session ended (or was
+ * closed after five wrong codes): back to the sign-in page, then to this screen.
+ */
+export function useAdminAction() {
+  const router = useRouter();
+  const action = useAction();
+  async function run<R>(fn: () => Promise<R>): Promise<R | undefined> {
+    return action.run(async () => {
+      try {
+        return await fn();
+      } catch (err) {
+        if (err instanceof ApiError && err.status === 401)
+          router.replace(
+            adminSignInPath(window.location.pathname, window.location.search),
+          );
+        throw err;
+      }
+    });
+  }
+  return { ...action, run };
 }

@@ -609,6 +609,52 @@ export type AdminOrganizationRow = {
   completeness_pct: number;
   ai_cost_month: string;
   deletion_requested: boolean;
+  siret: string;
+  suspended: boolean;
+  deletion_due_at: string | null;
+  invitation_pending: boolean;
+};
+
+export type AdminOrgUser = {
+  id: string;
+  full_name: string | null;
+  email: string;
+  role: string;
+  email_verified: boolean;
+  last_login_at: string | null;
+  terms_version: string | null;
+  status: "active" | "unverified" | "invited" | "invitation_expired";
+  invited_at: string | null;
+  has_sessions: boolean;
+};
+
+export type AdminAccountState = {
+  suspended_at: string | null;
+  suspension_reason: string | null;
+  deletion_due_at: string | null;
+  deletion_by: "pilao" | "client" | null;
+};
+
+export type AdminDeletionPreview = {
+  mode: "immediate" | "scheduled";
+  due_at: string | null;
+  pending: boolean;
+  by: "pilao" | "client" | null;
+};
+
+export type AdminAuditRow = {
+  at: string;
+  admin_email: string;
+  action: string;
+  org_id: string | null;
+  org_name: string | null;
+  ip: string | null;
+  meta: Record<string, unknown>;
+};
+
+export type AdminAuditPage = {
+  rows: AdminAuditRow[];
+  next_before: string | null;
 };
 
 export type AdminJobIssue = {
@@ -654,14 +700,8 @@ export type AdminOrganizationDetail = {
     completeness_pct: number;
     ai_cost_month: string;
   };
-  users: {
-    full_name: string | null;
-    email: string;
-    role: string;
-    email_verified: boolean;
-    last_login_at: string | null;
-    terms_version: string | null;
-  }[];
+  account: AdminAccountState;
+  users: AdminOrgUser[];
   ai_months: { month: string; cost: string }[];
   ai_tasks: { task: string; label: string; calls: number; cost: string }[];
   job_errors: AdminJobIssue[];
