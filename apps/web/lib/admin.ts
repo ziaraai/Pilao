@@ -10,7 +10,7 @@ export const ADMIN_NAV: { href: string; label: string; icon: IconName }[] = [
   { href: "/admin/couts-ia", label: "Coûts de l'IA", icon: "results" },
   { href: "/admin/technique", label: "Technique", icon: "todo" },
   { href: "/admin/avis", label: "Avis des testeurs", icon: "documents" },
-  { href: "/admin/journal", label: "Journal", icon: "todo" },
+  { href: "/admin/journal", label: "Journal", icon: "vault" },
 ];
 
 const ACCESS_PAGES = ["/admin/connexion", "/admin/activation"];
