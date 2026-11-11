@@ -35,6 +35,7 @@ configurée : le parcours vérifie donc la saisie manuelle dans ces deux cas.
 
 Erreurs de console attendues à la fin du parcours : 1 × 422 (formulaire refusé exprès), 8 × 404
 (ressources effacées ou absentes exprès) et 1 × 403 (la page « Dossiers » refusée pendant que le
-module « Réponse » est désactivé). Avant de relancer, videz les entreprises des parcours
-précédents (`delete from organizations;` sur la base locale) : sinon la file des notes d'annonces
-ralentit le parcours.
+module « Réponse » est désactivé). Avant de relancer, videz les entreprises et les annonces des
+parcours précédents (`delete from organizations; delete from tenders where source_id like 'E2E-%';`
+sur la base locale) : sinon la file des notes ralentit le parcours, et l'annonce du parcours peut
+passer en deuxième page.

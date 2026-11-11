@@ -131,9 +131,13 @@ module inactif (403 `module_disabled`).
   proposées. Le format de la réponse ne change pas.
 - `POST /tenders/{id}/track` répond `TrackOut{bid: BidOut | None}` : `bid` vide sans Réponse (la
   correspondance passe à « suivie » sans dossier).
-- Travail de fond : `match_tenders`, `send_digests` et `tenders.notify` ne retiennent que les
-  entreprises qui ont `veille` (en plus de la règle de suspension) ; `score_org` ne note rien sans
-  `veille` ; `send_expiry_alerts` saute les entreprises sans `reponse`.
+- Travail de fond : `match_tenders`, `rematch_org`, `send_digests` et l'e-mail « Avis
+  rectificatif » ne retiennent que les entreprises qui ont `veille` (en plus de la règle de
+  suspension) ; `score_org` ne note rien sans `veille` ; `send_expiry_alerts` saute les entreprises
+  sans `reponse`. `tenders.notify`, qui envoie aussi les rappels d'attestation, ne regarde que la
+  suspension (corrigé après la revue finale : une entreprise « Réponse » seule garde ses rappels).
+- Une annonce suivie sans dossier (sans Réponse) peut être écartée ; avec Réponse, son bouton
+  devient « Créer le dossier ».
 
 ### 5.4 Administration
 

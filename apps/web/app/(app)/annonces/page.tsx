@@ -420,9 +420,19 @@ function TenderCard({
           </a>
         )}
         {t.status === "tracked" && !answers ? (
-          <span className="rounded-md bg-emerald-100 px-3 py-1.5 text-sm font-semibold text-emerald-800 ring-1 ring-inset ring-emerald-300">
-            Suivie
-          </span>
+          <>
+            <span className="rounded-md bg-emerald-100 px-3 py-1.5 text-sm font-semibold text-emerald-800 ring-1 ring-inset ring-emerald-300">
+              Suivie
+            </span>
+            {!t.bid_id && ( // followed by mistake: it may still be dismissed
+              <Button
+                variant="ghost"
+                onClick={() => setDismissing(!dismissing)}
+              >
+                Écarter
+              </Button>
+            )}
+          </>
         ) : t.status === "tracked" && t.bid_id ? (
           <Link
             href={`/dossiers/${t.bid_id}`}
@@ -457,7 +467,8 @@ function TenderCard({
                 else if (res) onChange(); // followed, without a bid
               }}
             >
-              Suivre
+              {/* followed earlier without « Réponse »: its bid is still to make */}
+              {t.status === "tracked" ? "Créer le dossier" : "Suivre"}
             </Button>
             <Button variant="ghost" onClick={() => setDismissing(!dismissing)}>
               Écarter

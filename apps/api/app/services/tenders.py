@@ -279,12 +279,22 @@ def _apply_correction(db: Session, target: Tender, item: TenderIn, mailer: Maile
             TenderMatch.tender_id == target.id, TenderMatch.status == "tracked"
         )
     ).all()
+    watching = set(  # the « Avis rectificatif » e-mail belongs to the watch (lot 3)
+        db.scalars(
+            select(Organization.id).where(
+                Organization.id.in_({m.org_id for m in tracked}),
+                Organization.modules.contains(["veille"]),
+            )
+        )
+    )
     for match in tracked:
         if "deadline_at" in changes and match.bid_id is not None:
             bid = db.get(Bid, match.bid_id)
             old = changes["deadline_at"][0]
             if bid is not None and bid.deadline_at in (None, old):
                 bid.deadline_at = target.deadline_at  # the user's own date is kept
+        if match.org_id not in watching:
+            continue
         notify(
             db,
             mailer,
@@ -307,12 +317,12 @@ def notify(
 ) -> bool:
     """E-mail every verified user of the organization, once per (kind, key).
 
-    Nothing leaves for a suspended company (not recorded either)."""
+    Nothing leaves for a suspended company (not recorded either). Which module an e-mail
+    belongs to is the caller's business (lot 3): the watch's e-mails are filtered where they
+    are made, the attestation reminders too."""
     if not db.scalar(
         select(Organization.id).where(
-            Organization.id == org_id,
-            Organization.suspended_at.is_(None),
-            Organization.modules.contains(["veille"]),  # the watch's e-mails belong to « Veille »
+            Organization.id == org_id, Organization.suspended_at.is_(None)
         )
     ):
         return False
@@ -409,7 +419,12 @@ def _watching_profiles() -> Select[CompanyProfile]:
 def rematch_org(
     db: Session, org_id: uuid.UUID, queue: JobQueue, now: datetime | None = None
 ) -> None:
-    """US-1.2 CA4: after a profile change, filter and score the open notices again."""
+    """US-1.2 CA4: after a profile change, filter and score the open notices again.
+
+    Nothing for a suspended company or one without « Veille » (lot 3): no match is made."""
+    org = db.get(Organization, org_id)
+    if org is None or org.suspended_at is not None or not has_module(org, "veille"):
+        return
     now = now or _now()
     scope_session(db, org_id)
     rules = company_filter(db.scalar(select(CompanyProfile)))
@@ -602,8 +617,9 @@ def track(db: Session, user: User, tender_id: uuid.UUID, *, create_bid: bool = T
 
 def dismiss(db: Session, user: User, tender_id: uuid.UUID, reason: str) -> TenderMatch:
     match, tender = get_match(db, tender_id)
-    if match.status == "tracked":
+    if match.status == "tracked" and match.bid_id is not None:
         raise ApiError(409, "tender_tracked", "Ce marché est suivi : supprimez d'abord le dossier.")
+    # followed without a bid (no « Réponse », lot 3): it may be dismissed like any other
     match.status, match.dismiss_reason = "dismissed", reason
     db.add(
         AuditLog(

@@ -168,3 +168,73 @@ def test_profile_without_the_watch_asks_nothing_of_it(
     assert "watch" not in without["missing_keys"]
     assert "departments" not in without["missing_keys"]
     assert without["pct"] == with_watch["pct"] + 15 + 10
+
+
+def test_reminders_reach_a_company_with_reponse_only(
+    make_client: Factory, outbox: Outbox, queue: FakeQueue, db: Session
+) -> None:
+    """Final review, finding 1: the attestation reminders belong to « Réponse », not to the
+    watch (spec §3.3): a company without « Veille » still gets them."""
+    c = company(make_client, outbox, queue)
+    doc = deposit(c).json()["id"]
+    assert confirm(c, doc, valid_until=(TODAY + timedelta(days=25)).isoformat()).status_code == 200
+    set_modules(db, "user1@example.fr", ["reponse"])
+
+    before = len(outbox.sent)
+    run_daily(db, outbox, paris(TODAY, 6))
+    assert [m.to for m in outbox.sent[before:]] == ["user1@example.fr"]
+
+
+def test_profile_change_matches_nothing_without_veille(
+    make_client: Factory,
+    outbox: Outbox,
+    queue: FakeQueue,
+    scorer: ScoreModel,  # noqa: F811
+    db: Session,
+) -> None:
+    """Final review, finding 2: saving the trades without « Veille » (or enabling the watch of a
+    suspended company) re-matches the open notices: no match may be created (spec §3.3)."""
+    from app.services.tenders import rematch_org
+    from tests.api.test_suspension import suspend
+
+    c = signed_in_client(make_client, outbox)
+    set_modules(db, "user1@example.fr", ["reponse"])
+    load(db, queue, outbox, notice("A"))
+    assert (
+        c.put(
+            "/profile",
+            json={"trades": ["nettoyage_locaux"], "departments": ["69"], "cpv_codes": ["90911200"]},
+        ).status_code
+        == 200
+    )
+    queue.drain_tenders()
+    assert db.scalar(select(TenderMatch)) is None
+
+    set_modules(db, "user1@example.fr", ["veille", "reponse"])
+    org = suspend(db, "user1@example.fr")
+    rematch_org(db, org.id, queue)
+    assert db.scalar(select(TenderMatch)) is None
+
+
+def test_followed_without_bid_can_be_dismissed(
+    make_client: Factory,
+    outbox: Outbox,
+    queue: FakeQueue,
+    scorer: ScoreModel,  # noqa: F811
+    db: Session,
+) -> None:
+    """Final review, finding 3: a notice followed without a bid (no « Réponse ») is not stuck:
+    « Écarter » works; a notice followed with a bid still asks to delete the bid first."""
+    c = company(make_client, outbox, queue)
+    load(db, queue, outbox, notice("A"), notice("B"))
+    with_bid = tender_id(db, "B")
+    assert c.post(f"/tenders/{with_bid}/track").json()["bid"] is not None
+    set_modules(db, "user1@example.fr", ["veille"])
+    a = tender_id(db, "A")
+    assert c.post(f"/tenders/{a}/track").json() == {"bid": None}
+
+    res = c.post(f"/tenders/{a}/dismiss", json={"reason": "Suivie par erreur"})
+    assert res.status_code == 200, res.text
+    assert res.json()["status"] == "dismissed"
+    refused = c.post(f"/tenders/{with_bid}/dismiss", json={"reason": "x"})
+    assert refused.json()["error"]["code"] == "tender_tracked"  # its bid is kept, untouched
