@@ -4,6 +4,7 @@ Every business router must obtain its DB session through :func:`get_scoped_db` (
 depend on :func:`get_current_org`). That is what guarantees multi-tenant isolation.
 """
 
+from collections.abc import Callable
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from typing import Annotated
@@ -19,6 +20,7 @@ from app.core.security import hash_token
 from app.core.tenancy import scope_session
 from app.db.models import Organization, User, UserSession
 from app.db.session import get_db
+from app.modules import has_module, module_disabled_error
 from app.services.suspension import is_suspended, suspended_error
 
 SAFE_METHODS = {"GET", "HEAD", "OPTIONS"}
@@ -109,3 +111,13 @@ def get_scoped_db(_: CurrentAuth, db: Annotated[Session, Depends(get_db)]) -> Se
 
 
 ScopedDb = Annotated[Session, Depends(get_scoped_db)]
+
+
+def require_module(key: str) -> Callable[[AuthContext], None]:
+    """Guard of a module's routes (lot 3): after sign-in and suspension, the module itself."""
+
+    def check(ctx: CurrentAuth) -> None:
+        if not has_module(ctx.org, key):
+            raise module_disabled_error()
+
+    return check

@@ -4,7 +4,7 @@ from typing import Annotated
 from fastapi import APIRouter, Depends, Form, Query, Response, UploadFile
 from sqlalchemy import select
 
-from app.core.deps import CurrentAuth, ScopedDb
+from app.core.deps import CurrentAuth, ScopedDb, require_module
 from app.core.errors import ApiError
 from app.db.models import ComplianceDocument
 from app.domain import vault as rules
@@ -21,7 +21,9 @@ from app.services import vault as svc
 from app.storage.antivirus import VirusScanner
 from app.workers.queue import JobQueue, get_job_queue
 
-router = APIRouter(prefix="/vault", tags=["vault"])
+router = APIRouter(
+    prefix="/vault", tags=["vault"], dependencies=[Depends(require_module("reponse"))]
+)
 Queue = Annotated[JobQueue, Depends(get_job_queue)]
 
 

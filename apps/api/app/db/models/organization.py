@@ -2,7 +2,7 @@ import uuid
 from datetime import datetime
 
 from sqlalchemy import CHAR, DateTime, String, Text
-from sqlalchemy.dialects.postgresql import UUID
+from sqlalchemy.dialects.postgresql import ARRAY, UUID
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.db.base import Base, IdMixin, TimestampMixin
@@ -33,3 +33,10 @@ class Organization(IdMixin, TimestampMixin, Base):
     # Set by the platform administration (lot 2): nobody of the company gets in, nothing leaves
     suspended_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     suspension_reason: Mapped[str | None] = mapped_column(Text)
+    # The modules the company has (lot 3, app/modules.py): both by default
+    modules: Mapped[list[str]] = mapped_column(
+        ARRAY(Text),
+        nullable=False,
+        server_default="{veille,reponse}",
+        default=lambda: ["veille", "reponse"],
+    )

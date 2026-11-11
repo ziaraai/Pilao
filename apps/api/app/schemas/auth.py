@@ -87,6 +87,7 @@ class MeOut(BaseModel):
     role: str
     org: OrgOut
     terms_current: bool = True  # False: the terms changed since this account accepted them
+    modules: list[str] = []  # the company's active modules (lot 3)
 
 
 class MessageOut(BaseModel):

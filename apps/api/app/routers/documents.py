@@ -4,7 +4,7 @@ from typing import Annotated
 from fastapi import APIRouter, Depends
 from sqlalchemy import select
 
-from app.core.deps import CurrentAuth, ScopedDb
+from app.core.deps import CurrentAuth, ScopedDb, require_module
 from app.core.errors import ApiError
 from app.db.models import Bid, File, GeneratedDocument, Memoir
 from app.exports.dc_forms import FORMS
@@ -21,7 +21,7 @@ from app.services import exports
 from app.storage.objects import ObjectStorage, get_storage
 from app.workers.queue import JobQueue, get_job_queue
 
-router = APIRouter(tags=["documents"])
+router = APIRouter(tags=["documents"], dependencies=[Depends(require_module("reponse"))])
 Storage = Annotated[ObjectStorage, Depends(get_storage)]
 Queue = Annotated[JobQueue, Depends(get_job_queue)]
 

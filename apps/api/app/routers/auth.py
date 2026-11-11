@@ -12,6 +12,7 @@ from app.core.ratelimit import SlidingWindowLimiter
 from app.db.models import Organization, User
 from app.db.session import get_db
 from app.integrations.recherche_entreprises import CompanyDirectory, get_company_directory
+from app.modules import active_modules
 from app.schemas.auth import (
     ForgotPasswordIn,
     LoginIn,
@@ -45,6 +46,7 @@ def _me_from(user: User, org: Organization) -> MeOut:
         role=user.role,
         org=OrgOut(id=org.id, name=org.name, siret=org.siret),
         terms_current=user.terms_version == TERMS_VERSION,
+        modules=active_modules(org),
     )
 
 

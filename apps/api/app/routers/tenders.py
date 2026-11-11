@@ -3,10 +3,10 @@ from datetime import UTC, date, datetime, time, timedelta
 from typing import Annotated, Literal
 from zoneinfo import ZoneInfo
 
-from fastapi import APIRouter, Query
+from fastapi import APIRouter, Depends, Query
 from sqlalchemy import or_, select
 
-from app.core.deps import CurrentAuth, ScopedDb
+from app.core.deps import CurrentAuth, ScopedDb, require_module
 from app.db.models import Tender, TenderMatch
 from app.domain.tender_filter import cpv_hits
 from app.domain.trades import TRADES
@@ -14,7 +14,9 @@ from app.schemas.bids import BidOut
 from app.schemas.tenders import DismissIn, TenderListOut, TenderMatchOut
 from app.services import tenders as svc
 
-router = APIRouter(prefix="/tenders", tags=["tenders"])
+router = APIRouter(
+    prefix="/tenders", tags=["tenders"], dependencies=[Depends(require_module("veille"))]
+)
 PARIS = ZoneInfo("Europe/Paris")
 
 

@@ -4,7 +4,7 @@ from typing import Annotated
 from fastapi import APIRouter, Depends, Query, Response, UploadFile
 from sqlalchemy import select
 
-from app.core.deps import CurrentAuth, ScopedDb
+from app.core.deps import CurrentAuth, ScopedDb, require_module
 from app.core.errors import ApiError
 from app.db.models import (
     Bid,
@@ -38,7 +38,7 @@ from app.services import dce_analysis as analysis_svc
 from app.storage.antivirus import VirusScanner
 from app.workers.queue import JobQueue, get_job_queue
 
-router = APIRouter(tags=["bids"])
+router = APIRouter(tags=["bids"], dependencies=[Depends(require_module("reponse"))])
 Queue = Annotated[JobQueue, Depends(get_job_queue)]
 
 

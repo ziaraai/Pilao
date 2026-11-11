@@ -6,7 +6,7 @@ from fastapi import APIRouter, Depends
 from sqlalchemy import select
 
 from app.ai.embeddings import Embedder, get_embedder
-from app.core.deps import CurrentAuth, ScopedDb
+from app.core.deps import CurrentAuth, ScopedDb, require_module
 from app.core.errors import ApiError
 from app.db.models import (
     Bid,
@@ -41,7 +41,7 @@ from app.services import memoir_drafting as drafting
 from app.services import memoir_editing as editing
 from app.workers.queue import JobQueue, get_job_queue
 
-router = APIRouter(tags=["memoir"])
+router = APIRouter(tags=["memoir"], dependencies=[Depends(require_module("reponse"))])
 
 
 def _bid(db: ScopedDb, bid_id: uuid.UUID) -> Bid:

@@ -6,7 +6,7 @@ from sqlalchemy import select
 
 from app.ai.embeddings import Embedder, EmbeddingError, get_embedder
 from app.ai.llm import LlmBudgetExceeded
-from app.core.deps import CurrentAuth, ScopedDb
+from app.core.deps import CurrentAuth, ScopedDb, require_module
 from app.core.errors import ApiError
 from app.db.models import AuditLog, KnowledgeDocument
 from app.routers.files import Storage, _scanner
@@ -20,7 +20,9 @@ from app.services import knowledge as svc
 from app.storage.antivirus import VirusScanner
 from app.workers.queue import JobQueue, get_job_queue
 
-router = APIRouter(prefix="/knowledge", tags=["knowledge"])
+router = APIRouter(
+    prefix="/knowledge", tags=["knowledge"], dependencies=[Depends(require_module("reponse"))]
+)
 Queue = Annotated[JobQueue, Depends(get_job_queue)]
 
 

@@ -5,7 +5,7 @@ from fastapi import APIRouter, Depends, Query, Response, UploadFile
 from pydantic import BaseModel
 from sqlalchemy import select
 
-from app.core.deps import CurrentAuth, ScopedDb
+from app.core.deps import CurrentAuth, ScopedDb, require_module
 from app.core.errors import ApiError
 from app.db.base import Base
 from app.db.models import Certification, CompanyReference, Equipment, HumanResource
@@ -168,13 +168,17 @@ def add_crud(
         return Response(status_code=204)
 
 
-@router.get("/suggestions")
+# The reading of the knowledge base belongs to « Réponse aux appels d'offres » (lot 3)
+REPONSE = Depends(require_module("reponse"))
+
+
+@router.get("/suggestions", dependencies=[REPONSE])
 def get_suggestions(ctx: CurrentAuth, db: ScopedDb) -> SuggestionsOut:
     """US-1.6: the last reading of the documents and the lines it proposes."""
     return prefill.list_suggestions(db, ctx.org)
 
 
-@router.post("/suggestions/read", status_code=202)
+@router.post("/suggestions/read", status_code=202, dependencies=[REPONSE])
 def read_documents(
     ctx: CurrentAuth,
     db: ScopedDb,
@@ -185,13 +189,13 @@ def read_documents(
     return prefill.job_out(job)
 
 
-@router.post("/suggestions/accept")
+@router.post("/suggestions/accept", dependencies=[REPONSE])
 def accept_suggestions(data: AcceptIn, ctx: CurrentAuth, db: ScopedDb) -> AcceptOut:
     """US-1.6: the lines the user checked (and completed) join the profile."""
     return prefill.accept(db, ctx.org, ctx.user.id, data.items)
 
 
-@router.post("/suggestions/{suggestion_id}/dismiss", status_code=204)
+@router.post("/suggestions/{suggestion_id}/dismiss", status_code=204, dependencies=[REPONSE])
 def dismiss_suggestion(suggestion_id: uuid.UUID, db: ScopedDb) -> Response:
     prefill.dismiss(db, suggestion_id)
     return Response(status_code=204)
