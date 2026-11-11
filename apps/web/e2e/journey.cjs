@@ -498,7 +498,10 @@ let current; // the page, for a screenshot when a step fails
       .getByRole("button", { name: /^Modifier le type de/ })
       .first()
       .click();
-    const select = page.getByRole("combobox", { name: /^Type de/ });
+    const select = page.getByRole("combobox", {
+      name: "Type de memoire_2025.docx",
+      exact: true,
+    });
     if ((await select.inputValue()) !== from)
       throw new Error(`type ${from} expected`);
     await select.selectOption(to);
