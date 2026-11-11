@@ -217,6 +217,7 @@ def test_list_columns_and_deletion_badge(make_client: Factory, outbox: Outbox, d
         "suspension_reason",
         "deletion_due_at",
         "invitation_pending",
+        "modules",
     }
 
 

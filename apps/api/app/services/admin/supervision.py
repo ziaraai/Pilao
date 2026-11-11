@@ -40,6 +40,7 @@ from app.db.models import (
 from app.db.models.platform import PlatformAuditLog
 from app.domain import admin_watch
 from app.domain.admin_watch import ImportState, JobIssue, OrgActivity
+from app.modules import active_modules
 from app.schemas.admin import (
     AccountStateOut,
     ActivityRowOut,
@@ -362,6 +363,7 @@ def organizations(db: Session, now: datetime) -> list[OrganizationRowOut]:
             suspension_reason=o.suspension_reason,
             deletion_due_at=deletions[o.id].due_at if o.id in deletions else None,
             invitation_pending=o.id not in with_access,
+            modules=active_modules(o),
         )
         for o in orgs
     ]
@@ -506,6 +508,7 @@ def organization_detail(db: Session, org_id: uuid.UUID, now: datetime) -> Organi
             job_issue_out(issue) for issue in job_issues(db, now, now - timedelta(days=30), org_id)
         ],
         feedback=[FeedbackItemOut(**vars(row)) for row in recent_feedback(db, org_id=org_id)],
+        modules=active_modules(org),
     )
 
 

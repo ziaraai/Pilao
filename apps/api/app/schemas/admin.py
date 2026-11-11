@@ -135,6 +135,7 @@ class OrganizationRowOut(BaseModel):
     suspension_reason: str | None
     deletion_due_at: datetime | None
     invitation_pending: bool  # nobody of the company has created their access yet
+    modules: list[str]  # its active modules, in the registry's order (lot 3)
 
 
 class OrgIdentityOut(BaseModel):
@@ -222,6 +223,7 @@ class OrganizationDetailOut(BaseModel):
     ai_tasks: list[AiTaskOut]  # this month
     job_errors: list[JobIssueOut]  # 30 days
     feedback: list[FeedbackItemOut]
+    modules: list[str]
 
 
 class AiCostOrgOut(BaseModel):
@@ -353,3 +355,22 @@ class AuditRowOut(BaseModel):
 class AuditPageOut(BaseModel):
     rows: list[AuditRowOut]
     next_cursor: str | None  # pass it as ``cursor`` for the older lines
+
+
+class ModuleOut(BaseModel):
+    """A module of the registry, for the catalogue (lot 3)."""
+
+    key: str
+    name: str
+    description: str
+    contents: list[str]
+    nav: list[str]
+    organizations: int  # how many companies have it
+
+
+class ModuleToggleIn(BaseModel):
+    enabled: bool
+
+
+class ModulesOut(BaseModel):
+    modules: list[str]

@@ -18,6 +18,9 @@ from app.schemas.admin import (
     AuditPageOut,
     CreatedOut,
     DeletionPreviewOut,
+    ModuleOut,
+    ModulesOut,
+    ModuleToggleIn,
     OrgDeleteIn,
     OrgDeletionOut,
     StepUpIn,
@@ -25,7 +28,7 @@ from app.schemas.admin import (
 )
 from app.schemas.members import InviteIn, RoleIn
 from app.services.admin import accounts as svc
-from app.services.admin import supervision
+from app.services.admin import modules, supervision
 from app.storage.objects import ObjectStorage, get_storage
 from app.workers.queue import JobQueue, get_job_queue
 
@@ -148,6 +151,25 @@ def remove_user(user_id: uuid.UUID, data: StepUpIn, request: Request, ctx: Admin
     """POST, not DELETE: the code travels in the body."""
     svc.remove_user(ctx, user_id, data.code, client_ip(request))
     return Response(status_code=204)
+
+
+# --- Modules (lot 3) -------------------------------------------------------------------------
+
+
+@router.get("/modules")
+def module_catalog(db: AdminReadDb) -> list[ModuleOut]:
+    return modules.catalog(db)
+
+
+@router.put("/organizations/{org_id}/modules/{key}")
+def set_module(
+    key: str,
+    data: ModuleToggleIn,
+    request: Request,
+    ctx: AdminOrg,
+    queue: Annotated[JobQueue, Depends(get_job_queue)],
+) -> ModulesOut:
+    return ModulesOut(modules=modules.set_module(ctx, key, data.enabled, queue, client_ip(request)))
 
 
 # --- Journal ---------------------------------------------------------------------------------

@@ -40,6 +40,7 @@ ADMIN_GETS = [
     "/admin/system",
     "/admin/feedback",
     "/admin/audit",
+    "/admin/modules",
 ]
 
 
@@ -74,11 +75,13 @@ def test_company_session_cannot_act_on_accounts(
         ("patch", f"/admin/organizations/{org}/users/{user}"),
         ("post", f"/admin/organizations/{org}/users/{user}/logout"),
         ("post", f"/admin/organizations/{org}/users/{user}/remove"),
+        ("put", f"/admin/organizations/{org}/modules/reponse"),
         ("get", "/admin/companies/lookup?siret=12345678901234"),
     ]:
         assert company.request(method, path, json={}).status_code == 401, path
     db.expire_all()
     assert org_named(db, "Entreprise 1").suspended_at is None
+    assert org_named(db, "Entreprise 1").modules == ["veille", "reponse"]
 
 
 def test_admin_session_is_refused_in_the_company_space(make_client: Factory, db: Session) -> None:
