@@ -19,6 +19,7 @@ from app.db.models import (
 )
 from app.domain import completeness
 from app.domain.trades import defaults_for
+from app.modules import has_module
 from app.schemas.profile import CompanyIn, ProfileIn
 from app.workers.queue import JobQueue
 
@@ -79,7 +80,8 @@ def compute_completeness(
             equipment=counts["equipment"],
             certifications=counts["certifications"],
             references=counts["references"],
-        )
+        ),
+        watch=has_module(org, "veille"),
     )
 
 

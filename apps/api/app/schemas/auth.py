@@ -88,6 +88,7 @@ class MeOut(BaseModel):
     org: OrgOut
     terms_current: bool = True  # False: the terms changed since this account accepted them
     modules: list[str] = []  # the company's active modules (lot 3)
+    support_email: str | None = None  # whom to write to, e.g. for a module not enabled
 
 
 class MessageOut(BaseModel):

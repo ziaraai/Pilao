@@ -47,6 +47,17 @@ def test_me_lists_modules(make_client: Factory, outbox: Outbox) -> None:
     assert c.get("/auth/me").json()["modules"] == ["veille", "reponse"]
 
 
+def test_me_gives_the_support_address(
+    make_client: Factory, outbox: Outbox, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """The card « Ce module n'est pas activé » says whom to write to (spec §3.2)."""
+    c = signed_in_client(make_client, outbox)
+    monkeypatch.setattr(get_settings(), "support_email", None)
+    assert c.get("/auth/me").json()["support_email"] is None
+    monkeypatch.setattr(get_settings(), "support_email", "aide@pilao.test")
+    assert c.get("/auth/me").json()["support_email"] == "aide@pilao.test"
+
+
 @pytest.mark.parametrize(("module", "method", "path"), ROUTES)
 def test_disabled_module_refused(
     make_client: Factory, outbox: Outbox, db: Session, module: str, method: str, path: str

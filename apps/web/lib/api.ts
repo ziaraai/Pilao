@@ -91,6 +91,22 @@ function leaveSuspendedSpace(): void {
   window.location.assign("/connexion?suspendu=1");
 }
 
+/** A module was turned off while one of its pages was open: reload, and the page then shows
+ * the card « Ce module n'est pas activé » (lot 3). At most once in 30 seconds, so that a page
+ * still asking after the reload never loops. */
+function reloadForModules(): void {
+  if (typeof window === "undefined") return;
+  const key = "pilao_module_reload";
+  try {
+    const last = Number(window.sessionStorage.getItem(key) ?? 0);
+    if (Date.now() - last < 30_000) return;
+    window.sessionStorage.setItem(key, String(Date.now()));
+  } catch {
+    return; // no storage: no way to tell a loop from a first time, stay on the page
+  }
+  window.location.reload();
+}
+
 export async function api<T>(path: string, options: Options = {}): Promise<T> {
   const {
     method = options.json || options.form ? "POST" : "GET",
@@ -124,6 +140,7 @@ export async function api<T>(path: string, options: Options = {}): Promise<T> {
       detail?: unknown;
     } | null;
     if (body?.error?.code === "account_suspended") leaveSuspendedSpace();
+    if (body?.error?.code === "module_disabled") reloadForModules();
     if (body?.error)
       throw new ApiError(res.status, body.error.code, body.error.message);
     if (res.status === 422)

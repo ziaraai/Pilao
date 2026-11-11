@@ -17,10 +17,12 @@ import {
   Select,
 } from "@/components/ui";
 import { api } from "@/lib/api";
+import { useMe } from "@/lib/auth";
 import { formatCents, formatDateTime, parseEuros } from "@/lib/format";
 import { useAction, useApi } from "@/lib/hooks";
+import { hasModule } from "@/lib/modules";
 import type { Tone } from "@/lib/labels";
-import type { Bid, TenderList, TenderMatch, Trade } from "@/lib/types";
+import type { TenderList, TenderMatch, Trade, TrackOut } from "@/lib/types";
 
 type Status = TenderMatch["status"];
 const TABS: { status: Status; label: string }[] = [
@@ -309,6 +311,8 @@ function TenderCard({
   onChange: () => void;
 }) {
   const router = useRouter();
+  const { me } = useMe();
+  const answers = hasModule(me.modules, "reponse"); // without it, « Suivre » makes no bid
   const [dismissing, setDismissing] = useState(false);
   const [reason, setReason] = useState(REASONS[0]);
   const [other, setOther] = useState("");
@@ -415,7 +419,11 @@ function TenderCard({
             Dossier de consultation
           </a>
         )}
-        {t.status === "tracked" && t.bid_id ? (
+        {t.status === "tracked" && !answers ? (
+          <span className="rounded-md bg-emerald-100 px-3 py-1.5 text-sm font-semibold text-emerald-800 ring-1 ring-inset ring-emerald-300">
+            Suivie
+          </span>
+        ) : t.status === "tracked" && t.bid_id ? (
           <Link
             href={`/dossiers/${t.bid_id}`}
             className="rounded-md bg-brand-navy px-3 py-1.5 text-sm font-semibold text-white"
@@ -440,10 +448,13 @@ function TenderCard({
             <Button
               busy={action.busy}
               onClick={async () => {
-                const bid = await action.run(() =>
-                  api<Bid>(`/tenders/${t.tender_id}/track`, { method: "POST" }),
+                const res = await action.run(() =>
+                  api<TrackOut>(`/tenders/${t.tender_id}/track`, {
+                    method: "POST",
+                  }),
                 );
-                if (bid) router.push(`/dossiers/${bid.id}`);
+                if (res?.bid) router.push(`/dossiers/${res.bid.id}`);
+                else if (res) onChange(); // followed, without a bid
               }}
             >
               Suivre

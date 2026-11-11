@@ -41,17 +41,21 @@ function toForm(p: Profile): Form {
 }
 
 /** The profile's watch settings, or its revenue (`part`): two tabs, one PUT /profile, so
- * each sends the other's values as they are saved. */
+ * each sends the other's values as they are saved. Without the « Veille » module (`watch`),
+ * only the trades are shown (they also serve the memoirs); the watch settings are sent back
+ * as they are saved. */
 export function WatchSettings({
   profile,
   trades,
   onSaved,
   part = "watch",
+  watch = true,
 }: {
   profile: Profile;
   trades: Trade[];
   onSaved: (p: Profile) => void;
   part?: "watch" | "revenue";
+  watch?: boolean;
 }) {
   const [form, setForm] = useState<Form>(() => toForm(profile));
   const [saved, setSaved] = useState(false);
@@ -151,7 +155,12 @@ export function WatchSettings({
     );
 
   return (
-    <Card title="Paramètres de veille" id="veille" color="green" icon="tenders">
+    <Card
+      title={watch ? "Paramètres de veille" : "Vos métiers"}
+      id="veille"
+      color="green"
+      icon="tenders"
+    >
       <form onSubmit={onSubmit} className="space-y-5" noValidate>
         <fieldset>
           <legend className="text-sm font-medium text-slate-800">
@@ -181,90 +190,96 @@ export function WatchSettings({
               </label>
             ))}
           </div>
-          <label className="mt-3 flex items-center gap-2 text-sm text-slate-700">
-            <input
-              type="checkbox"
-              checked={form.applyDefaults}
-              onChange={(e) =>
-                setForm((f) => ({ ...f, applyDefaults: e.target.checked }))
-              }
-            />
-            Ajouter les codes CPV et mots-clés habituels de ces métiers
-          </label>
+          {watch && (
+            <label className="mt-3 flex items-center gap-2 text-sm text-slate-700">
+              <input
+                type="checkbox"
+                checked={form.applyDefaults}
+                onChange={(e) =>
+                  setForm((f) => ({ ...f, applyDefaults: e.target.checked }))
+                }
+              />
+              Ajouter les codes CPV et mots-clés habituels de ces métiers
+            </label>
+          )}
         </fieldset>
-        <div className="grid gap-4 sm:grid-cols-2">
-          <Field
-            label="Codes CPV"
-            htmlFor="cpv"
-            hint="Séparés par des virgules, 8 chiffres (ex. 90911200)."
-          >
-            <Textarea
-              id="cpv"
-              rows={2}
-              value={form.cpv}
-              onChange={set("cpv")}
-            />
-          </Field>
-          <Field
-            label="Départements"
-            htmlFor="departments"
-            hint="Ex. 69, 01, 2A, 974."
-          >
-            <Textarea
-              id="departments"
-              rows={2}
-              value={form.departments}
-              onChange={set("departments")}
-            />
-          </Field>
-          <Field label="Mots-clés recherchés" htmlFor="include">
-            <Textarea
-              id="include"
-              rows={2}
-              value={form.include}
-              onChange={set("include")}
-            />
-          </Field>
-          <Field
-            label="Mots-clés à exclure"
-            htmlFor="exclude"
-            hint="Ex. désamiantage."
-          >
-            <Textarea
-              id="exclude"
-              rows={2}
-              value={form.exclude}
-              onChange={set("exclude")}
-            />
-          </Field>
-          <Field label="Montant minimum (€ HT)" htmlFor="min">
-            <Input
-              id="min"
-              inputMode="decimal"
-              value={form.min}
-              onChange={set("min")}
-            />
-          </Field>
-          <Field label="Montant maximum (€ HT)" htmlFor="max">
-            <Input
-              id="max"
-              inputMode="decimal"
-              value={form.max}
-              onChange={set("max")}
-            />
-          </Field>
-        </div>
-        <Field label="Seuil d'alerte (score sur 100)" htmlFor="minScore">
-          <Input
-            id="minScore"
-            type="number"
-            min={0}
-            max={100}
-            value={form.minScore}
-            onChange={set("minScore")}
-            className="max-w-32"
-          />
-        </Field>
+        {watch && (
+          <>
+            <div className="grid gap-4 sm:grid-cols-2">
+              <Field
+                label="Codes CPV"
+                htmlFor="cpv"
+                hint="Séparés par des virgules, 8 chiffres (ex. 90911200)."
+              >
+                <Textarea
+                  id="cpv"
+                  rows={2}
+                  value={form.cpv}
+                  onChange={set("cpv")}
+                />
+              </Field>
+              <Field
+                label="Départements"
+                htmlFor="departments"
+                hint="Ex. 69, 01, 2A, 974."
+              >
+                <Textarea
+                  id="departments"
+                  rows={2}
+                  value={form.departments}
+                  onChange={set("departments")}
+                />
+              </Field>
+              <Field label="Mots-clés recherchés" htmlFor="include">
+                <Textarea
+                  id="include"
+                  rows={2}
+                  value={form.include}
+                  onChange={set("include")}
+                />
+              </Field>
+              <Field
+                label="Mots-clés à exclure"
+                htmlFor="exclude"
+                hint="Ex. désamiantage."
+              >
+                <Textarea
+                  id="exclude"
+                  rows={2}
+                  value={form.exclude}
+                  onChange={set("exclude")}
+                />
+              </Field>
+              <Field label="Montant minimum (€ HT)" htmlFor="min">
+                <Input
+                  id="min"
+                  inputMode="decimal"
+                  value={form.min}
+                  onChange={set("min")}
+                />
+              </Field>
+              <Field label="Montant maximum (€ HT)" htmlFor="max">
+                <Input
+                  id="max"
+                  inputMode="decimal"
+                  value={form.max}
+                  onChange={set("max")}
+                />
+              </Field>
+            </div>
+            <Field label="Seuil d'alerte (score sur 100)" htmlFor="minScore">
+              <Input
+                id="minScore"
+                type="number"
+                min={0}
+                max={100}
+                value={form.minScore}
+                onChange={set("minScore")}
+                className="max-w-32"
+              />
+            </Field>
+          </>
+        )}
         {errors}
         {saved && <Alert tone="ok">Paramètres enregistrés.</Alert>}
         <Button type="submit" busy={save.busy}>

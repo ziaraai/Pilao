@@ -7,6 +7,7 @@ from sqlalchemy.orm import Session
 
 from app.db.models import Bid, TenderMatch
 from app.services.alerts import run_daily
+from tests.api.helpers import signed_in_client
 from tests.api.test_alerts import mails_to, paris
 from tests.api.test_modules import set_modules
 from tests.api.test_tenders import (  # noqa: F401 - the scorer fixture
@@ -150,3 +151,20 @@ def test_background_skips_without_reponse(
     before = len(outbox.sent)
     run_daily(db, outbox, paris(TODAY, 6))
     assert outbox.sent[before:] == []  # no reminder about an attestation
+
+
+def test_profile_without_the_watch_asks_nothing_of_it(
+    make_client: Factory, outbox: Outbox, db: Session
+) -> None:
+    """The CPV codes, keywords and departments are hidden without « Veille » (spec §3.2): the
+    profile no longer asks for them, so it can reach 100 % and « Pour bien démarrer » ends."""
+    c = signed_in_client(make_client, outbox)
+    c.put("/profile", json={"trades": ["vitrerie"]})
+    with_watch = c.get("/profile/completeness").json()
+    assert "watch" in with_watch["missing_keys"] and "departments" in with_watch["missing_keys"]
+
+    set_modules(db, "user1@example.fr", ["reponse"])
+    without = c.get("/profile/completeness").json()
+    assert "watch" not in without["missing_keys"]
+    assert "departments" not in without["missing_keys"]
+    assert without["pct"] == with_watch["pct"] + 15 + 10

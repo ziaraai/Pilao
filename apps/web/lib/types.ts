@@ -7,6 +7,8 @@ export type Me = {
   role: string;
   org: { id: string; name: string; siret: string };
   terms_current: boolean;
+  modules: string[]; // the active modules (lot 3)
+  support_email: string | null;
 };
 
 export type CompanyLookup = {
@@ -759,3 +761,6 @@ export type AdminFeedback = {
   items: AdminFeedbackItem[];
   time_saved: AdminTimeSaved[];
 };
+
+/** « Suivre » a notice: its bid, or none for a company without « Réponse » (lot 3). */
+export type TrackOut = { bid: Bid | null };

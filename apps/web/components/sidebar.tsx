@@ -5,24 +5,18 @@ import { usePathname } from "next/navigation";
 import { useState } from "react";
 
 import { FeedbackButton } from "@/components/feedback";
-import { Icon, type IconName } from "@/components/icon";
+import { Icon } from "@/components/icon";
 import { Logo } from "@/components/logo";
-
-const NAV: { href: string; label: string; icon: IconName }[] = [
-  { href: "/tableau-de-bord", label: "Tableau de bord", icon: "dashboard" },
-  { href: "/annonces", label: "Annonces", icon: "tenders" },
-  { href: "/dossiers", label: "Dossiers", icon: "bids" },
-  { href: "/coffre-fort", label: "Coffre-fort", icon: "vault" },
-  { href: "/documents", label: "Base documentaire", icon: "documents" },
-  { href: "/profil", label: "Profil", icon: "profile" },
-];
+import { visibleNav } from "@/lib/modules";
 
 /** The main menu: a column on the left of the screen; on a phone, a top bar that opens it. */
 export function Sidebar({
   orgName,
+  modules,
   onLogout,
 }: {
   orgName: string;
+  modules: string[];
   onLogout: () => void;
 }) {
   const pathname = usePathname();
@@ -70,7 +64,7 @@ export function Sidebar({
           aria-label="Navigation principale"
           className="flex-1 space-y-1 overflow-y-auto px-3 py-2"
         >
-          {NAV.map((item) => {
+          {visibleNav(modules).map((item) => {
             const active = pathname.startsWith(item.href);
             return (
               <Link

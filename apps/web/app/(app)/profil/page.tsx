@@ -14,6 +14,7 @@ import { Alert, Card, Loading, PageTitle } from "@/components/ui";
 import { useMe } from "@/lib/auth";
 import { formatDate } from "@/lib/format";
 import { useApi } from "@/lib/hooks";
+import { hasModule } from "@/lib/modules";
 import type { Completeness, Profile, Trade } from "@/lib/types";
 
 // One tab per part of the profile; `keys` are the completeness items it holds.
@@ -50,6 +51,8 @@ export default function ProfilePage() {
 
 function ProfileTabs() {
   const { me } = useMe();
+  const watch = hasModule(me.modules, "veille"); // without it, only the trades of that tab
+  const answers = hasModule(me.modules, "reponse"); // the prefill reads its document base
   const router = useRouter();
   const pathname = usePathname();
   const params = useSearchParams();
@@ -134,12 +137,14 @@ function ProfileTabs() {
         </p>
       </Card>
 
-      <ProfilePrefill
-        onAdded={() => {
-          completeness.reload();
-          setVersion((v) => v + 1);
-        }}
-      />
+      {answers && (
+        <ProfilePrefill
+          onAdded={() => {
+            completeness.reload();
+            setVersion((v) => v + 1);
+          }}
+        />
+      )}
 
       <div
         role="tablist"
@@ -165,7 +170,7 @@ function ProfileTabs() {
               onKeyDown={(e) => onKeyDown(e, i)}
               className={`-mb-0.5 inline-flex shrink-0 items-center gap-2 whitespace-nowrap rounded-t-md border-b-2 px-3 py-2.5 text-sm ${selected ? "border-brand-green bg-[#dcfbf1] font-bold text-brand-navy" : "border-transparent font-medium text-slate-700 hover:bg-white hover:text-slate-900"}`}
             >
-              {t.label}
+              {t.id === "veille" && !watch ? "Métiers" : t.label}
               {missing > 0 && (
                 <span
                   className="rounded-full bg-amber-100 px-1.5 text-xs font-semibold text-amber-900"
@@ -191,6 +196,7 @@ function ProfileTabs() {
           <WatchSettings
             key={current} // a fresh form from the saved profile on each tab
             part={current === "veille" ? "watch" : "revenue"}
+            watch={watch}
             profile={profile.data}
             trades={trades.data}
             onSaved={(p) => {

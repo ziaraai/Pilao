@@ -11,6 +11,7 @@ import { api } from "@/lib/api";
 import { AuthContext } from "@/lib/auth";
 import { useAction, useApi } from "@/lib/hooks";
 import { formatDate } from "@/lib/format";
+import { DEFAULT_MODULES, hasModule } from "@/lib/modules";
 import type { Deletion, Me, VaultSummary } from "@/lib/types";
 
 export function AppShell({ children }: { children: React.ReactNode }) {
@@ -40,6 +41,13 @@ export function AppShell({ children }: { children: React.ReactNode }) {
     );
   }
 
+  // An API older than the modules (lot 3) omits them: the company then has every module.
+  const current: Me = {
+    ...me.data,
+    modules: me.data.modules ?? DEFAULT_MODULES,
+    support_email: me.data.support_email ?? null,
+  };
+
   async function logout() {
     await api("/auth/logout", { method: "POST" }).catch(() => undefined);
     // Full reload on purpose: no data of this session may stay in memory (Cache Components
@@ -49,14 +57,18 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   }
 
   return (
-    <AuthContext.Provider value={{ me: me.data, refresh: me.reload }}>
+    <AuthContext.Provider value={{ me: current, refresh: me.reload }}>
       <div className="min-h-screen bg-slate-100 lg:flex">
-        <Sidebar orgName={me.data.org.name} onLogout={logout} />
+        <Sidebar
+          orgName={current.org.name}
+          modules={current.modules}
+          onLogout={logout}
+        />
         <div className="flex min-w-0 flex-1 flex-col">
           <DeletionBanner />
-          <VaultBanner />
+          {hasModule(current.modules, "reponse") && <VaultBanner />}
           <main className="mx-auto w-full max-w-6xl flex-1 px-4 py-8 lg:px-8">
-            {me.data.terms_current !== false ? ( // an older API omits it: never block
+            {current.terms_current !== false ? ( // an older API omits it: never block
               children
             ) : (
               <TermsUpdate onAccepted={me.reload} />

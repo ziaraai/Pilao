@@ -37,7 +37,12 @@ class Completeness:
     missing_keys: list[str]  # the same items, as CRITERIA keys (the profile tab to open)
 
 
-def compute(f: Facts) -> Completeness:
+# Asked only of a company with the « Veille » module: they only steer the watch (lot 3).
+WATCH_ONLY = ("watch", "departments")
+
+
+def compute(f: Facts, *, watch: bool = True) -> Completeness:
+    """``watch``: the company has « Veille »; without it, the watch settings count as given."""
     ok = {
         "identity": f.has_address and f.has_naf,
         "trades": f.trades > 0,
@@ -49,6 +54,8 @@ def compute(f: Facts) -> Completeness:
         "certifications": f.certifications > 0,
         "references": f.references >= 3,
     }
+    if not watch:
+        ok.update(dict.fromkeys(WATCH_ONLY, True))
     pct = sum(w for k, w, _ in CRITERIA if ok[k])
     return Completeness(
         pct=pct,

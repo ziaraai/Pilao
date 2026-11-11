@@ -16,14 +16,15 @@ import { api } from "@/lib/api";
 import { useMe } from "@/lib/auth";
 import { formatCents, formatDateTimeShort, formatDuration } from "@/lib/format";
 import { useAction, useApi } from "@/lib/hooks";
+import { hasModule } from "@/lib/modules";
 import type {
-  Bid,
   BidProgress,
   BidStage,
   Dashboard,
   DashboardAction,
   DashboardStep,
   TenderMatch,
+  TrackOut,
   VaultSummary,
 } from "@/lib/types";
 
@@ -55,6 +56,13 @@ const TILE: Record<Color, string> = {
     "border-slate-300 border-l-slate-400 bg-white text-slate-600 hover:bg-slate-50",
 };
 const ROW = "px-5 py-3 even:bg-slate-50";
+const TILE_COLUMNS = [
+  "",
+  "lg:grid-cols-1",
+  "lg:grid-cols-2",
+  "lg:grid-cols-3",
+  "lg:grid-cols-4",
+];
 
 const today = new Intl.DateTimeFormat("fr-FR", {
   weekday: "long",
@@ -63,11 +71,14 @@ const today = new Intl.DateTimeFormat("fr-FR", {
   timeZone: "Europe/Paris",
 });
 
-/** US-5.3: counters, what to do now, the new notices, the bids in progress, the results. */
+/** US-5.3: counters, what to do now, the new notices, the bids in progress, the results.
+ * Only the blocks of the company's modules (lot 3): the watch, the answers. */
 export default function DashboardPage() {
   const { me } = useMe();
+  const veille = hasModule(me.modules, "veille");
+  const reponse = hasModule(me.modules, "reponse");
   const board = useApi<Dashboard>("/dashboard");
-  const vault = useApi<VaultSummary>("/vault/summary");
+  const vault = useApi<VaultSummary>(reponse ? "/vault/summary" : null);
   if (board.error && !board.data)
     return <Alert tone="danger">{board.error}</Alert>;
   if (!board.data) return <Loading />;
@@ -91,42 +102,52 @@ export default function DashboardPage() {
         </p>
       </div>
 
-      <div className="grid grid-cols-2 gap-3 lg:grid-cols-4 lg:gap-4">
+      <div
+        className={`grid grid-cols-2 gap-3 lg:gap-4 ${TILE_COLUMNS[1 + (veille ? 1 : 0) + (reponse ? 2 : 0)]}`}
+      >
         <Tile
           href="#a-faire"
           color={urgent ? "red" : "slate"}
           count={urgent}
           label={urgent > 1 ? "urgences à traiter" : "urgence à traiter"}
         />
-        <Tile
-          href="/annonces"
-          color="green"
-          count={d.new_tenders}
-          label={d.new_tenders > 1 ? "nouvelles annonces" : "nouvelle annonce"}
-        />
-        <Tile
-          href="/dossiers"
-          color="blue"
-          count={inProgress}
-          label={inProgress > 1 ? "dossiers en cours" : "dossier en cours"}
-        />
-        <Tile
-          href="/coffre-fort"
-          color={toRenew ? "amber" : "slate"}
-          count={toRenew}
-          label={
-            toRenew > 1
-              ? "attestations à renouveler"
-              : "attestation à renouveler"
-          }
-        />
+        {veille && (
+          <Tile
+            href="/annonces"
+            color="green"
+            count={d.new_tenders}
+            label={
+              d.new_tenders > 1 ? "nouvelles annonces" : "nouvelle annonce"
+            }
+          />
+        )}
+        {reponse && (
+          <>
+            <Tile
+              href="/dossiers"
+              color="blue"
+              count={inProgress}
+              label={inProgress > 1 ? "dossiers en cours" : "dossier en cours"}
+            />
+            <Tile
+              href="/coffre-fort"
+              color={toRenew ? "amber" : "slate"}
+              count={toRenew}
+              label={
+                toRenew > 1
+                  ? "attestations à renouveler"
+                  : "attestation à renouveler"
+              }
+            />
+          </>
+        )}
       </div>
 
       {(d.actions.length > 0 || !starting) && <Actions actions={d.actions} />}
       {starting && <GettingStarted steps={d.getting_started} />}
-      <Tenders d={d} />
-      <Bids bids={d.bids} />
-      <Results d={d} />
+      {veille && <Tenders d={d} onTracked={board.reload} />}
+      {reponse && <Bids bids={d.bids} />}
+      {reponse && <Results d={d} />}
     </div>
   );
 }
@@ -321,7 +342,7 @@ function GettingStarted({ steps }: { steps: DashboardStep[] }) {
 // fixed side columns: every row is its own grid, the column titles must line up
 const TENDER_GRID = "md:grid md:grid-cols-[4.5rem_minmax(0,1fr)_9.5rem_9.5rem]";
 
-function Tenders({ d }: { d: Dashboard }) {
+function Tenders({ d, onTracked }: { d: Dashboard; onTracked: () => void }) {
   return (
     <Card
       flush
@@ -366,7 +387,7 @@ function Tenders({ d }: { d: Dashboard }) {
           />
           <ul className="divide-y divide-slate-200">
             {d.best_tenders.map((t) => (
-              <TenderRow key={t.tender_id} tender={t} />
+              <TenderRow key={t.tender_id} tender={t} onTracked={onTracked} />
             ))}
           </ul>
         </>
@@ -394,7 +415,13 @@ function Score({ score }: { score: number | null }) {
   );
 }
 
-function TenderRow({ tender: t }: { tender: TenderMatch }) {
+function TenderRow({
+  tender: t,
+  onTracked,
+}: {
+  tender: TenderMatch;
+  onTracked: () => void;
+}) {
   const router = useRouter();
   const track = useAction();
   const meta = [
@@ -430,10 +457,14 @@ function TenderRow({ tender: t }: { tender: TenderMatch }) {
           disabled={track.busy}
           aria-busy={track.busy || undefined}
           onClick={async () => {
-            const bid = await track.run(() =>
-              api<Bid>(`/tenders/${t.tender_id}/track`, { method: "POST" }),
+            const res = await track.run(() =>
+              api<TrackOut>(`/tenders/${t.tender_id}/track`, {
+                method: "POST",
+              }),
             );
-            if (bid) router.push(`/dossiers/${bid.id}`);
+            // without « Réponse », the notice is followed and no bid is made
+            if (res?.bid) router.push(`/dossiers/${res.bid.id}`);
+            else if (res) onTracked();
           }}
           className="inline-flex shrink-0 items-center rounded-md bg-brand-navy px-3.5 py-1.5 text-sm font-semibold text-white hover:bg-[#0a2a63] disabled:opacity-50"
         >
