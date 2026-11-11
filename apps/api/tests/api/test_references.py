@@ -131,6 +131,7 @@ def test_import_converts_values(make_client: Factory, outbox: Outbox) -> None:
         "created": 2,
         "errors": [],
         "ignored_columns": [],
+        "skipped": [],
     }
     refs = {r["client_name"]: r for r in c.get("/profile/references").json()}
     lyon = refs["Mairie de Lyon"]

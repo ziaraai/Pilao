@@ -30,9 +30,11 @@ from app.schemas.profile import (
     TradeOut,
 )
 from app.schemas.profile_prefill import AcceptIn, AcceptOut, ReadJobOut, SuggestionsOut
+from app.services import means_import as means
 from app.services import profile as svc
 from app.services import profile_prefill as prefill
 from app.services import reference_import as xl
+from app.services import sheet_import as sheets
 from app.workers.queue import JobQueue, get_job_queue
 
 router = APIRouter(prefix="/profile", tags=["profile"])
@@ -193,14 +195,77 @@ def dismiss_suggestion(suggestion_id: uuid.UUID, db: ScopedDb) -> Response:
     return Response(status_code=204)
 
 
+XLSX = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+
+
+def _means_routes(
+    path: str, model: Any, sheet: Any, name_field: str, entity: str, filename: str
+) -> None:
+    """Excel template and import of a list of means (staff, equipment), like the references.
+
+    Declared before the generic CRUD so "/<path>/template.xlsx" is not read as an item id.
+    """
+
+    @router.get(f"/{path}/template.xlsx", name=f"{path}_template")
+    def template(_: CurrentAuth) -> Response:
+        return Response(
+            sheets.build_template(sheet),
+            media_type=XLSX,
+            headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+        )
+
+    # Plain ``def``: parsing and the DB session are blocking (run in the thread pool).
+    @router.post(f"/{path}/import", name=f"{path}_import")
+    def import_rows(
+        file: UploadFile,
+        ctx: CurrentAuth,
+        db: ScopedDb,
+        dry_run: Annotated[bool, Query()] = False,
+    ) -> ImportReportOut:
+        """Add the new valid lines, skip those already in the profile, report the others."""
+        results, ignored = sheets.parse_workbook(file.file.read(sheets.MAX_BYTES + 1), sheet)
+        existing = list(db.scalars(select(getattr(model, name_field))))  # this company's only
+        rows = means.sort_rows(results, existing, name_field)
+        if not dry_run and rows.new:
+            for r in rows.new:
+                assert r.data is not None
+                db.add(model(**r.data.model_dump()))
+            svc.audit(
+                db,
+                ctx.user.id,
+                "import",
+                entity,
+                meta={"created": len(rows.new), "skipped": len(rows.skipped)},
+            )
+            db.flush()
+            svc.refresh_completeness(db, ctx.org)
+            db.commit()
+        return ImportReportOut(
+            dry_run=dry_run,
+            total=len(results),
+            created=0 if dry_run else len(rows.new),
+            errors=[ImportErrorOut(row=r.row, message=r.error or "") for r in rows.errors],
+            ignored_columns=ignored,
+            skipped=[ImportErrorOut(row=r.row, message=r.error or "") for r in rows.skipped],
+        )
+
+
+_means_routes(
+    "human-resources",
+    HumanResource,
+    means.STAFF,
+    "qualification",
+    "human_resource",
+    "modele-moyens-humains-pilao.xlsx",
+)
+_means_routes(
+    "equipment", Equipment, means.EQUIPMENT, "name", "equipment", "modele-materiel-pilao.xlsx"
+)
 add_crud("human-resources", HumanResource, HumanResourceIn, HumanResourceOut)
 add_crud("equipment", Equipment, EquipmentIn, EquipmentOut, file_fields=("spec_file_id",))
 add_crud(
     "certifications", Certification, CertificationIn, CertificationOut, file_fields=("file_id",)
 )
-
-
-XLSX = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
 
 
 # Declared before the generic CRUD so "/references/template.xlsx" is not read as an item id.

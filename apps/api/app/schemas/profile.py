@@ -199,6 +199,7 @@ class ImportReportOut(BaseModel):
     created: int
     errors: list[ImportErrorOut]
     ignored_columns: list[str] = Field(default_factory=list)
+    skipped: list[ImportErrorOut] = Field(default_factory=list)  # duplicates, with the reason
 
 
 Short = Annotated[str, StringConstraints(strip_whitespace=True, max_length=200)]

@@ -1,30 +1,29 @@
 """Excel template and import for company references (US-1.3 CA1).
 
-Hardening: .xlsx only (zip magic bytes), size and row caps, read-only/data-only parsing (no
-formula evaluation, no external links followed), every row validated by ``ReferenceIn``.
+The reading is shared with the staff and equipment lists (``sheet_import``); this module
+holds what is particular to references: the columns, client type, amount, CPV codes.
 """
 
-import io
 import re
-import unicodedata
-import zipfile
-from dataclasses import dataclass
-from decimal import Decimal, InvalidOperation
+from decimal import Decimal
 from typing import Any
 
-from openpyxl import Workbook, load_workbook
-from openpyxl.styles import Font, PatternFill
-from openpyxl.utils import get_column_letter
-from pydantic import ValidationError
-
-from app.core.errors import ApiError
 from app.schemas.profile import ReferenceIn
+from app.services.sheet_import import (
+    MAX_BYTES,
+    MAX_ROWS,
+    MAX_SCANNED_ROWS,
+    RowResult,
+    Sheet,
+    decimal,
+    integer,
+    norm,
+    text,
+)
+from app.services.sheet_import import build_template as _build
+from app.services.sheet_import import parse_workbook as _parse
 
-MAX_BYTES = 5 * 1024 * 1024
-MAX_ROWS = 500
-# Physical rows read (blank lines included) and header cells read, whatever the sheet claims.
-MAX_SCANNED_ROWS = 20 * MAX_ROWS
-MAX_COLUMNS = 100
+__all__ = ["MAX_BYTES", "MAX_ROWS", "MAX_SCANNED_ROWS", "build_template", "parse_workbook"]
 
 # (field, header shown in the template, required)
 COLUMNS: tuple[tuple[str, str, bool], ...] = (
@@ -41,15 +40,66 @@ COLUMNS: tuple[tuple[str, str, bool], ...] = (
 )
 
 
-def _norm(text: str) -> str:
-    text = unicodedata.normalize("NFKD", text).encode("ascii", "ignore").decode().lower()
-    return re.sub(r"[^a-z0-9]+", " ", text).strip()
+def _amount_cents(value: Any) -> int | None:
+    if value is None or str(value).strip() == "":
+        return None
+    raw = str(value).replace("\xa0", "").replace(" ", "").replace("€", "").replace(",", ".")
+    euros = decimal(raw, value, "montant")
+    if euros < 0:
+        raise ValueError("le montant ne peut pas être négatif")
+    return int((euros * 100).quantize(Decimal(1)))
 
 
-_HEADER_KEYS = {_norm(label): field for field, label, _ in COLUMNS}
-# Also accept the short forms people type by hand.
-_HEADER_KEYS.update(
-    {
+def _client_type(value: Any) -> str:
+    key = norm(str(value or ""))
+    if key in ("public", "publique"):
+        return "public"
+    if key in ("prive", "privee", "private"):
+        return "private"
+    raise ValueError("type de client : « public » ou « privé »")
+
+
+def _cpv_list(value: Any) -> list[str]:
+    return [p for p in re.split(r"[,;\s]+", str(value or "")) if p]
+
+
+def _department(value: Any) -> str | None:
+    s = text(value)
+    if s is None:
+        return None
+    return s.zfill(2) if s.isdigit() and len(s) == 1 else s  # Excel turns "01" into 1
+
+
+def _row_to_reference(values: dict[str, Any]) -> ReferenceIn:
+    return ReferenceIn(
+        client_name=text(values.get("client_name")) or "",
+        client_type=_client_type(values.get("client_type")),
+        title=text(values.get("title")) or "",
+        location=text(values.get("location")),
+        department=_department(values.get("department")),
+        amount_cents=_amount_cents(values.get("amount")),
+        year=integer(values.get("year"), "année"),
+        duration_months=integer(values.get("duration_months"), "durée"),
+        description=text(values.get("description")),
+        cpv_codes=_cpv_list(values.get("cpv_codes")),
+    )
+
+
+REFERENCES: Sheet[ReferenceIn] = Sheet(
+    title="Références",
+    columns=COLUMNS,
+    to_model=_row_to_reference,
+    help_lines=(
+        "Une ligne = une référence (un chantier ou un marché réalisé).",
+        "Colonnes obligatoires : Client, Type de client, Objet du marché.",
+        "Type de client : « public » ou « privé ».",
+        "Département : 2 chiffres (75), 2A/2B ou 3 chiffres pour l'outre-mer (974).",
+        "Montant : en euros HT, par exemple 125000 ou 125 000,50.",
+        "Ne modifiez pas la ligne d'en-tête. 500 lignes maximum par import.",
+        "Seules les informations saisies ici seront utilisées dans vos mémoires.",
+    ),
+    # Also accept the short forms people type by hand.
+    aliases={
         "client": "client_name",
         "objet": "title",
         "montant": "amount",
@@ -63,208 +113,14 @@ _HEADER_KEYS.update(
         "duree mois": "duration_months",
         "lieu": "location",
         "annee": "year",
-    }
+    },
+    model_to_column={"amount_cents": "amount"},
 )
 
 
 def build_template() -> bytes:
-    wb = Workbook()
-    ws = wb.create_sheet("Références", 0)
-    wb.remove(wb["Sheet"])
-    ws.append([label for _, label, _ in COLUMNS])
-    for col, (_, label, _) in enumerate(COLUMNS, start=1):
-        cell = ws.cell(row=1, column=col)
-        cell.font = Font(bold=True, color="FFFFFF")
-        cell.fill = PatternFill("solid", fgColor="011844")
-        ws.column_dimensions[get_column_letter(col)].width = max(18, len(label) + 4)
-    help_ws = wb.create_sheet("Mode d'emploi")
-    for line in (
-        "Une ligne = une référence (un chantier ou un marché réalisé).",
-        "Colonnes obligatoires : Client, Type de client, Objet du marché.",
-        "Type de client : « public » ou « privé ».",
-        "Département : 2 chiffres (75), 2A/2B ou 3 chiffres pour l'outre-mer (974).",
-        "Montant : en euros HT, par exemple 125000 ou 125 000,50.",
-        "Ne modifiez pas la ligne d'en-tête. 500 lignes maximum par import.",
-        "Seules les informations saisies ici seront utilisées dans vos mémoires.",
-    ):
-        help_ws.append([line])
-    help_ws.column_dimensions["A"].width = 100
-    out = io.BytesIO()
-    wb.save(out)
-    return out.getvalue()
+    return _build(REFERENCES)
 
 
-@dataclass
-class RowResult:
-    row: int
-    data: ReferenceIn | None = None
-    error: str | None = None
-
-
-def _text(value: Any) -> str | None:
-    if value is None:
-        return None
-    s = str(value).strip()
-    return s or None
-
-
-def _amount_cents(value: Any) -> int | None:
-    if value is None or str(value).strip() == "":
-        return None
-    raw = str(value).replace("\xa0", "").replace(" ", "").replace("€", "").replace(",", ".")
-    euros = _decimal(raw, value, "montant")
-    if euros < 0:
-        raise ValueError("le montant ne peut pas être négatif")
-    return int((euros * 100).quantize(Decimal(1)))
-
-
-# Far above any real amount, year or duration; keeps int()/quantize() cheap and in range
-# ("1e999999999" would otherwise build a billion-digit integer or overflow the context).
-_MAX_ADJUSTED_EXPONENT = 15
-
-
-def _decimal(raw: str, value: Any, label: str) -> Decimal:
-    """Parse a finite, reasonably sized decimal, or raise a ``ValueError`` for the row."""
-    try:
-        number = Decimal(raw)
-    except InvalidOperation:
-        raise ValueError(f"{label} illisible : « {value} »") from None
-    if not number.is_finite() or number.adjusted() > _MAX_ADJUSTED_EXPONENT:
-        raise ValueError(f"{label} illisible : « {value} »")
-    return number
-
-
-def _int(value: Any, label: str) -> int | None:
-    if value is None or str(value).strip() == "":
-        return None
-    number = _decimal(str(value).strip().replace(",", "."), value, label)
-    if number != number.to_integral_value():
-        raise ValueError(f"{label} doit être un nombre entier")
-    return int(number)
-
-
-def _client_type(value: Any) -> str:
-    key = _norm(str(value or ""))
-    if key in ("public", "publique"):
-        return "public"
-    if key in ("prive", "privee", "private"):
-        return "private"
-    raise ValueError("type de client : « public » ou « privé »")
-
-
-def _cpv_list(value: Any) -> list[str]:
-    return [p for p in re.split(r"[,;\s]+", str(value or "")) if p]
-
-
-def _department(value: Any) -> str | None:
-    s = _text(value)
-    if s is None:
-        return None
-    return s.zfill(2) if s.isdigit() and len(s) == 1 else s  # Excel turns "01" into 1
-
-
-def _row_to_reference(values: dict[str, Any]) -> ReferenceIn:
-    return ReferenceIn(
-        client_name=_text(values.get("client_name")) or "",
-        client_type=_client_type(values.get("client_type")),
-        title=_text(values.get("title")) or "",
-        location=_text(values.get("location")),
-        department=_department(values.get("department")),
-        amount_cents=_amount_cents(values.get("amount")),
-        year=_int(values.get("year"), "année"),
-        duration_months=_int(values.get("duration_months"), "durée"),
-        description=_text(values.get("description")),
-        cpv_codes=_cpv_list(values.get("cpv_codes")),
-    )
-
-
-# ``ReferenceIn`` field -> template column, where the names differ.
-_MODEL_TO_COLUMN = {"amount_cents": "amount"}
-
-
-def _friendly(exc: ValidationError) -> str:
-    parts = []
-    for err in exc.errors():
-        field = str(err["loc"][0]) if err["loc"] else "ligne"
-        field = _MODEL_TO_COLUMN.get(field, field)
-        label = next((lbl for f, lbl, _ in COLUMNS if f == field), field)
-        parts.append(f"{label} : {_french(err)}")
-    return " ; ".join(parts)
-
-
-def _french(err: Any) -> str:
-    """The user reads this report: Pydantic's English messages are translated."""
-    msg = str(err["msg"])
-    if msg.startswith("Value error, "):
-        return msg.removeprefix("Value error, ")  # our own validators speak French
-    kind, ctx = str(err.get("type", "")), err.get("ctx") or {}
-    if kind == "string_too_short":
-        return (
-            "champ obligatoire"
-            if ctx.get("min_length") == 1
-            else f"{ctx.get('min_length')} caractères minimum"
-        )
-    if kind == "string_too_long":
-        return f"{ctx.get('max_length')} caractères maximum"
-    if kind in ("greater_than_equal", "greater_than"):
-        return f"doit être au moins {ctx.get('ge', ctx.get('gt'))}"
-    if kind in ("less_than_equal", "less_than"):
-        return f"doit être au plus {ctx.get('le', ctx.get('lt'))}"
-    if kind == "missing":
-        return "champ obligatoire"
-    return "valeur invalide"
-
-
-def parse_workbook(content: bytes) -> tuple[list[RowResult], list[str]]:
-    """Return the parsed rows and the names of the columns that were not recognized."""
-    if len(content) > MAX_BYTES:
-        raise ApiError(413, "file_too_large", "Fichier trop volumineux (5 Mo maximum).")
-    if not content.startswith(b"PK") or not zipfile.is_zipfile(io.BytesIO(content)):
-        raise ApiError(422, "bad_file", "Le fichier doit être un classeur Excel (.xlsx).")
-    try:
-        wb = load_workbook(io.BytesIO(content), read_only=True, data_only=True)
-    except Exception:  # noqa: BLE001 - any parser failure on an untrusted file is a 422
-        raise ApiError(422, "bad_file", "Impossible de lire ce classeur Excel.") from None
-    try:
-        return _parse_sheet(wb.worksheets[0])
-    except ApiError:
-        raise
-    except Exception:  # noqa: BLE001 - rows are parsed lazily: a corrupt row fails here
-        raise ApiError(422, "bad_file", "Impossible de lire ce classeur Excel.") from None
-    finally:
-        wb.close()
-
-
-def _parse_sheet(ws: Any) -> tuple[list[RowResult], list[str]]:
-    header = next(ws.iter_rows(max_row=1, max_col=MAX_COLUMNS, values_only=True), None)
-    if header is None:
-        raise ApiError(422, "empty_file", "Le classeur est vide.")
-    mapping = {
-        i: _HEADER_KEYS[_norm(str(h))]
-        for i, h in enumerate(header)
-        if h and _norm(str(h)) in _HEADER_KEYS
-    }
-    ignored = [str(h) for i, h in enumerate(header) if h and i not in mapping]
-    missing = [lbl for f, lbl, req in COLUMNS if req and f not in mapping.values()]
-    if missing:
-        raise ApiError(422, "missing_columns", f"Colonnes manquantes : {', '.join(missing)}.")
-
-    results: list[RowResult] = []
-    # Only the recognized columns are read, and blank lines count toward a physical cap:
-    # a few kilobytes of zipped XML can otherwise expand into millions of empty rows/cells.
-    rows = ws.iter_rows(min_row=2, max_col=max(mapping) + 1, values_only=True)
-    for number, row in enumerate(rows, start=2):
-        if number > MAX_SCANNED_ROWS + 1:
-            raise ApiError(422, "too_many_rows", f"{MAX_ROWS} lignes maximum par import.")
-        values = {mapping[i]: v for i, v in enumerate(row) if i in mapping}
-        if all(_text(v) is None for v in values.values()):
-            continue  # blank line
-        if len(results) >= MAX_ROWS:
-            raise ApiError(422, "too_many_rows", f"{MAX_ROWS} lignes maximum par import.")
-        try:
-            results.append(RowResult(number, data=_row_to_reference(values)))
-        except ValidationError as exc:
-            results.append(RowResult(number, error=_friendly(exc)))
-        except ValueError as exc:
-            results.append(RowResult(number, error=str(exc)))
-    return results, ignored
+def parse_workbook(content: bytes) -> tuple[list[RowResult[ReferenceIn]], list[str]]:
+    return _parse(content, REFERENCES)
