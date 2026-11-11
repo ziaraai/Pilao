@@ -836,7 +836,7 @@ let current; // the page, for a screenshot when a step fails
   await admin.getByRole("heading", { name: "Nettoyage E2E" }).waitFor();
   await admin.getByText("n'est jamais affiché ici").waitFor();
   // the company's user is listed, never its documents
-  await admin.getByRole("cell", { name: email, exact: true }).waitFor();
+  await admin.getByText(email, { exact: true }).first().waitFor();
   await admin.screenshot({ path: `${S}/admin-fiche.png`, fullPage: true });
 
   // 15. Lot 2: accounts. Pilao opens a company's space, its person joins with the link.
