@@ -910,7 +910,8 @@ let current; // the page, for a screenshot when a step fails
   const forgot = await forgotContext.newPage();
   await forgot.goto(`${WEB}/connexion`);
   await forgot.getByRole("link", { name: "Mot de passe oublié ?" }).click();
-  await forgot.getByLabel("E-mail").fill(boss);
+  // by role: the sign-in page stays in the DOM, hidden (Next), with its own « E-mail »
+  await forgot.getByRole("textbox", { name: "E-mail" }).fill(boss);
   await forgot.getByRole("button", { name: "Recevoir un lien" }).click();
   await forgot.getByText("Si un compte existe pour cette adresse").waitFor();
   await forgot.waitForTimeout(500);
