@@ -44,6 +44,24 @@ def _csrf_check(request: Request) -> None:
     raise ApiError(403, "csrf", "Origine de la requête non autorisée.")
 
 
+def _refuse_closed_session(db: Session, token: str) -> None:
+    """A session closed by a suspension: the page says why, rather than « Connexion requise »."""
+    closed = db.scalar(
+        select(UserSession).where(
+            UserSession.token_hash == hash_token(token),
+            UserSession.expires_at > datetime.now(UTC),
+        )
+    )
+    if closed is not None:
+        org = db.scalar(
+            select(Organization)
+            .join(User, User.org_id == Organization.id)
+            .where(User.id == closed.user_id)
+        )
+        if org is not None and is_suspended(org):
+            raise suspended_error()
+
+
 def get_auth_context(request: Request, db: Annotated[Session, Depends(get_db)]) -> AuthContext:
     token = request.cookies.get(get_settings().session_cookie_name)
     if not token:
@@ -56,6 +74,7 @@ def get_auth_context(request: Request, db: Annotated[Session, Depends(get_db)]) 
         )
     )
     if session is None:
+        _refuse_closed_session(db, token)
         raise ApiError(401, "not_authenticated", "Connexion requise.")
     _csrf_check(request)
     user = db.get_one(User, session.user_id)

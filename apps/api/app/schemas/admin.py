@@ -9,7 +9,9 @@ from datetime import datetime
 from decimal import Decimal
 from typing import Literal
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, EmailStr, Field, field_validator
+
+from app.schemas.auth import siret_ok
 
 
 class SetupLookupIn(BaseModel):
@@ -260,3 +262,55 @@ class FeedbackOut(BaseModel):
     days: int
     items: list[FeedbackItemOut]
     time_saved: list[TimeSavedRowOut]
+
+
+# --- Lot 2: accounts -------------------------------------------------------------------
+
+
+class AdminCreateOrgIn(BaseModel):
+    siret: str
+    name: str = Field(min_length=1, max_length=300)
+    contact_name: str = Field(min_length=1, max_length=200)
+    contact_email: EmailStr
+
+    @field_validator("siret")
+    @classmethod
+    def _siret(cls, v: str) -> str:
+        v = "".join(v.split())
+        if not siret_ok(v):
+            raise ValueError("SIRET invalide")
+        return v
+
+
+class CreatedOut(BaseModel):
+    id: uuid.UUID
+
+
+class SuspendIn(BaseModel):
+    reason: str = Field(min_length=1, max_length=500)
+
+    @field_validator("reason")
+    @classmethod
+    def _reason(cls, v: str) -> str:
+        if not v.strip():
+            raise ValueError("Indiquez la raison de la suspension.")
+        return v.strip()
+
+
+class DeletionPreviewOut(BaseModel):
+    """What « Supprimer » would do now, or the deletion already scheduled."""
+
+    mode: Literal["immediate", "scheduled"]
+    due_at: datetime | None
+    pending: bool
+    by: Literal["pilao", "client"] | None
+
+
+class OrgDeleteIn(BaseModel):
+    confirmation: str = Field(min_length=1, max_length=300)
+    code: str = Field(min_length=1, max_length=40)
+
+
+class OrgDeletionOut(BaseModel):
+    mode: Literal["immediate", "scheduled"]
+    due_at: datetime | None

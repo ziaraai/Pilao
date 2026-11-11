@@ -162,6 +162,42 @@ def _consume_code(
     return False
 
 
+def confirm_code(
+    db: Session,
+    admin: PlatformAdmin,
+    session: PlatformAdminSession,
+    code: str,
+    ip: str | None,
+) -> None:
+    """The authenticator code (or a recovery code) asked again before an irreversible action.
+
+    A wrong code is journaled; the fifth one within the sign-in window closes the session, so
+    that someone at an unlocked computer cannot try codes. The caller commits on success."""
+    now = _now()
+    if _consume_code(db, admin, code, ip, now):
+        return
+    audit.record(db, "step_up_failed", admin=admin, ip=ip, at=now)
+    s = get_settings()
+    failures = (
+        db.scalar(
+            select(func.count())
+            .select_from(PlatformAuditLog)
+            .where(
+                PlatformAuditLog.action == "step_up_failed",
+                PlatformAuditLog.admin_id == admin.id,
+                PlatformAuditLog.at >= now - timedelta(minutes=s.login_window_minutes),
+            )
+        )
+        or 0
+    )
+    if failures >= s.admin_login_max_failures:
+        session.revoked_at = now
+        db.commit()
+        raise ApiError(401, "not_authenticated", "Connexion requise.")
+    db.commit()
+    raise ApiError(400, "invalid_code", "Code incorrect.")
+
+
 def login(
     db: Session,
     email: str,
