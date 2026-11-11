@@ -110,6 +110,7 @@ Les fichiers déposés sont stockés sur le disque du serveur, dans le volume `p
     - Téléphone changé ou perdu : un code de secours remplace une fois le code à 6 chiffres. Sans code de secours, relancez la même commande : l'accès est réinitialisé (mot de passe, application, codes, sessions) et un nouveau lien s'affiche.
     - Fermer un compte tout de suite : la même commande avec `--disable`.
     - Changer `APP_SECRET_KEY` rend les secrets des applications d'authentification illisibles : relancez alors la commande pour chaque super admin.
+14. **Adresse de contact** (lot 2) : `SUPPORT_EMAIL=contact@votre-domaine.fr` dans `secrets.env`, puis redémarrer. Elle s'affiche dans « Contactez Pilao : … » (entreprise suspendue) et à la fin des e-mails de suppression envoyés au nom de Pilao. Sans elle, le message dit seulement « Contactez Pilao. »
 
 ### Au quotidien
 

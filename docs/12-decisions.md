@@ -413,3 +413,16 @@ Format : numéro, date, décision, raison, statut. Ajouter une entrée pour chaq
 - **Contexte** : l'exploitant veut pouvoir ajouter plus tard d'autres modules (CRM, gestion de stock…) et les ouvrir entreprise par entreprise. Deux voies : des modules dans le code de Pilao, activés par le super admin, ou de vrais plugins installés et mis à jour à part (comme le plugin de Ziara dans son application hôte).
 - **Décision** : modules internes. Chaque module est un bloc séparé du code (écrans, données, entrée de menu), déclaré dans un registre ; le super admin l'active par entreprise ou par formule ; tout est mis en ligne ensemble. Le produit actuel devient le module « Appels d'offres ». Des plugins installables ne seraient utiles qu'avec des développeurs tiers ou une boutique de modules ; des modules bien séparés pourront le devenir. Conception au lot 3 de l'administration.
 - **Statut** : validé (principe) ; à concevoir.
+
+## ADR-042 — Gestion des comptes depuis l'administration : les règles de l'espace client, au nom de Pilao
+- **Date** : 2026-11-11
+- **Contexte** : lot 2 du back-office (ADR-040). L'exploitant doit créer, suspendre, réactiver et supprimer des entreprises et dépanner leurs utilisateurs, sans entrer dans leur espace ni lire leur contenu. Spécification : `docs/superpowers/specs/2026-11-11-administration-lot2-comptes-design.md`.
+- **Décision** :
+  - Les actions passent par les **règles existantes** de l'espace client (`services/members.py`, `services/org_data.py`), qui prennent un auteur : un utilisateur de l'entreprise, ou Pilao (`PlatformActor`). Une seule règle pour tous (dernier administrateur, plafonds d'envoi, adresse unique). Dans l'historique de l'entreprise, une action de Pilao n'a pas d'utilisateur et porte `meta.by = "pilao"`.
+  - Chaque route qui agit sur une entreprise travaille dans une session **limitée à cette entreprise** (`AdminOrg`, la même barrière que l'espace client) ; la supervision reste en lecture seule.
+  - **Suspendre** bloque l'accès sans rien effacer (sessions fermées, liens refusés, aucun envoi, veille arrêtée) ; réactiver rend tout.
+  - **Supprimer** : tout de suite si personne de l'entreprise ne s'est jamais connecté (décidé sous verrou de la ligne de l'entreprise), sinon suspension et effacement à 30 jours, annulable. Annuler laisse l'entreprise suspendue : la réactivation est un geste à part.
+  - Le **code de l'application** est redemandé avant l'irréversible (supprimer, retirer) ; 5 codes faux en 15 minutes ferment la session.
+  - L'exploitant ne choisit jamais un mot de passe et ne se connecte jamais à la place d'un utilisateur : il envoie des liens (invitation, confirmation, nouveau mot de passe). « Mot de passe oublié ? » est ouvert à tous.
+- **Alternatives écartées** : des fonctions propres à l'administration (les règles divergeraient) ; « se connecter en tant que » (contraire à la promesse de ne jamais lire le contenu d'un client).
+- **Statut** : validé (lot 2 livré).

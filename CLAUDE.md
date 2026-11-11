@@ -67,7 +67,7 @@ Ce fichier est le point d'entrée. Lis-le en entier au début de chaque session,
 ## 6. Phase en cours
 
 Phases 1 (socle) et 2 (mémoire, documents, export) faites ; Phase 3 (veille) faite : TED et BOAMP importés toutes les 2 h (ADR-036, `docs/10-roadmap-taches.md`).
-Administration de la plateforme (back-office du SaaS, ADR-040) : lot 1 fait (compte super admin séparé, supervision en lecture seule sur `/admin`) ; lots 2 à 5 à concevoir (comptes, modules ADR-041, formules et crédits, réglages).
+Administration de la plateforme (back-office du SaaS, ADR-040) : lot 1 fait (compte super admin séparé, supervision en lecture seule sur `/admin`) ; lot 2 fait (créer, suspendre, réactiver, supprimer une entreprise, dépanner ses utilisateurs, journal ; « Mot de passe oublié ? » côté client, ADR-042) ; lots 3 à 5 à concevoir (modules ADR-041, formules et crédits, réglages).
 En attente : **Phase 0 — test des modèles d'IA** (clé OpenRouter, 3 vrais DCE + mémoires techniques + plan type envoyés par Abdraouf, à placer dans `samples/` — dossier **non versionné**, ajouté au `.gitignore`).
 
 ## 7. Commandes (à compléter quand le repo sera initialisé)

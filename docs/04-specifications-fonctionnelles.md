@@ -55,6 +55,12 @@ L'administrateur invite des collaborateurs par e-mail.
 - CA3 : l'entreprise garde toujours au moins un administrateur ; personne ne retire son propre accès.
 - CA4 : retirer un collaborateur ferme ses sessions ; son travail reste dans les dossiers.
 
+**US-1.6 Mot de passe oublié**
+Un utilisateur qui a oublié son mot de passe le change seul.
+- CA1 : « Mot de passe oublié ? » sous le champ de la page de connexion ; l'adresse saisie reçoit toujours la même réponse (« Si un compte existe pour cette adresse, un e-mail vient de partir. Le lien est valable 1 heure. »), que le compte existe ou non.
+- CA2 : le lien vaut 1 heure et sert une fois ; 5 envois par heure au plus pour une adresse. Un compte invité qui n'a jamais créé son accès reçoit une nouvelle invitation ; une entreprise suspendue ne reçoit rien.
+- CA3 : le nouveau mot de passe (12 caractères, deux saisies) ferme toutes les autres sessions, confirme l'adresse et connecte l'utilisateur.
+
 ---
 
 ## Module 2 — Veille des appels d'offres
@@ -169,7 +175,7 @@ L'utilisateur indique gagné / perdu, le montant proposé, le classement et les 
 
 ## Module 6 — Administration de la plateforme
 
-Le back-office de l'exploitant de Pilao, en cinq lots (ADR-040) : 1. accès et supervision en lecture seule (**fait**) ; 2. gestion des comptes ; 3. socle des modules (ADR-041) ; 4. formules et crédits ; 5. réglages de la plateforme (modèles d'IA, clés API, imports). Conception du lot 1 : `docs/superpowers/specs/2026-11-10-administration-lot1-supervision-design.md`.
+Le back-office de l'exploitant de Pilao, en cinq lots (ADR-040) : 1. accès et supervision en lecture seule (**fait**) ; 2. gestion des comptes (**fait**, ADR-042) ; 3. socle des modules (ADR-041) ; 4. formules et crédits ; 5. réglages de la plateforme (modèles d'IA, clés API, imports). Conceptions : `docs/superpowers/specs/2026-11-10-administration-lot1-supervision-design.md`, `docs/superpowers/specs/2026-11-11-administration-lot2-comptes-design.md`.
 
 **US-6.1 Accès du super admin**
 L'exploitant a un compte à lui, séparé de tout compte d'entreprise, sur `app.pilao.pro/admin`.
@@ -181,14 +187,39 @@ L'exploitant a un compte à lui, séparé de tout compte d'entreprise, sur `app.
 - CA6 La vue d'ensemble rappelle la date de la connexion précédente, et le nombre de codes de secours restants quand il en manque.
 
 **US-6.2 Supervision (lecture seule)**
-Cinq écrans, avec la pastille « Lecture seule » : vue d'ensemble (compteurs, « À surveiller », activité des 7 jours, imports, temps gagné), entreprises et fiche d'une entreprise, coûts de l'IA par mois (par entreprise, tâche et modèle), technique (imports, tâches en erreur ou bloquées), avis des testeurs (7, 30 ou 90 jours).
+Cinq écrans de lecture, avec la pastille « Lecture seule » : vue d'ensemble (compteurs, « À surveiller », activité des 7 jours, imports, temps gagné), entreprises et fiche d'une entreprise, coûts de l'IA par mois (par entreprise, tâche et modèle), technique (imports, tâches en erreur ou bloquées), avis des testeurs (7, 30 ou 90 jours).
 - CA1 « À surveiller » : en rouge, un import en erreur ou sans réussite depuis 6 heures, une tâche en erreur sur 24 heures ou bloquée depuis 30 minutes, plus de 20 % d'appels à l'IA en échec sur 24 heures (10 appels au moins) ; en orange, une entreprise inscrite depuis plus de 10 jours et sans activité depuis 10 jours.
 - CA2 La base refuse toute écriture depuis ces écrans (transaction en lecture seule).
 - CA3 Jamais affiché ni renvoyé : le texte d'un mémoire, d'un DCE ou d'un document, un fichier, le titre d'un dossier, les lignes du profil (moyens, références, chiffre d'affaires).
 - CA4 Jours et mois en heure de Paris ; un appel à l'IA sans entreprise est rangé sous « Plateforme ».
 
 **US-6.3 Journal de l'administration**
-Chaque création ou réinitialisation d'accès, activation, connexion (réussie ou non), code de secours utilisé, déconnexion, fermeture de compte et ouverture de la fiche d'une entreprise est enregistrée (`platform_audit_logs`), et gardée 12 mois. Son écran de consultation arrive avec le lot 2.
+Chaque création ou réinitialisation d'accès, activation, connexion (réussie ou non), code de secours utilisé, déconnexion, fermeture de compte et ouverture de la fiche d'une entreprise est enregistrée (`platform_audit_logs`), et gardée 12 mois. Depuis le lot 2, chaque action sur un compte aussi (US-6.4 à US-6.7), et l'écran **Journal** (`/admin/journal`) les montre, les plus récentes en premier, 100 lignes par page, filtrées par type (connexions, comptes) et par entreprise ; une entreprise supprimée reste nommée « Entreprise supprimée ». Jamais de contenu : l'utilisateur concerné, une raison, un mode.
+
+**US-6.4 Créer une entreprise**
+L'exploitant ouvre lui-même l'espace d'une entreprise (après une démo, par exemple) ; l'inscription libre reste ouverte.
+- CA1 SIRET (cherché dans l'annuaire, saisie à la main s'il est injoignable), nom de l'entreprise, nom et e-mail du responsable.
+- CA2 Le responsable, administrateur sans mot de passe, reçoit « Pilao a ouvert l'espace de {entreprise} » avec un lien de 7 jours vers la page d'invitation : mot de passe, conditions, puis son espace.
+- CA3 SIRET déjà inscrit : « Ce SIRET a déjà un compte : {nom}. » avec un lien vers sa fiche ; e-mail déjà utilisé refusé.
+
+**US-6.5 Suspendre et réactiver**
+- CA1 « Suspendre » demande une raison (visible seulement dans l'administration) ; les sessions de l'entreprise sont fermées tout de suite ; rien n'est effacé.
+- CA2 Une entreprise suspendue : connexion refusée après le bon mot de passe avec « L'accès de votre entreprise à Pilao est suspendu. Contactez Pilao[ : SUPPORT_EMAIL]. » ; une page ouverte renvoie à la connexion avec ce message ; liens d'invitation, de confirmation et de mot de passe refusés ; aucun e-mail ne part ; la veille ne lui crée ni correspondance ni score, pas d'alerte, pas de rappel.
+- CA3 « Réactiver » rend l'accès et la veille rattrape les annonces ouvertes. Refusé tant qu'une suppression programmée par Pilao est en cours (l'annuler d'abord).
+
+**US-6.6 Supprimer**
+- CA1 Le nom recopié et le code de l'application d'authentification sont demandés ; la fenêtre annonce le mode.
+- CA2 Personne de l'entreprise ne s'est jamais connecté : effacement immédiat (fichiers, puis données ; preuve dans `purge_logs`), sans e-mail.
+- CA3 Sinon : suspension, e-mail aux utilisateurs, effacement dans 30 jours par la purge horaire ; « Annuler la suppression » d'ici là (aussi pour une suppression demandée par le client), l'entreprise restant suspendue jusqu'à « Réactiver ».
+
+**US-6.7 Les utilisateurs d'une entreprise**
+- CA1 Sur la fiche : état de chacun (actif, e-mail non confirmé, invitation envoyée, invitation expirée), dernière connexion, sessions ouvertes.
+- CA2 Ajouter un utilisateur (invitation de « L'équipe Pilao »), renvoyer l'invitation ou l'e-mail de confirmation, envoyer un lien « nouveau mot de passe », changer le rôle, déconnecter partout, retirer (code de l'application demandé). Jamais le dernier administrateur ; 5 envois par heure et par utilisateur.
+- CA3 Pour une entreprise suspendue, rien n'est envoyé : seuls le rôle, la déconnexion et le retrait restent possibles.
+- CA4 L'exploitant ne choisit jamais un mot de passe, ne se connecte jamais à la place d'un utilisateur et ne lit jamais le contenu d'une entreprise ; dans l'historique de l'entreprise, ses actions sont au nom de Pilao.
+
+**US-6.8 Code redemandé**
+Avant l'irréversible (supprimer une entreprise, retirer un utilisateur), le code à 6 chiffres de l'application ou un code de secours est redemandé. Un code faux : « Code incorrect. » ; au 5ᵉ en 15 minutes, la session d'administration est fermée.
 
 ---
 

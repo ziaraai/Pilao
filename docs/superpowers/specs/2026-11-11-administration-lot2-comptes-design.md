@@ -1,7 +1,7 @@
 # Administration de la plateforme, lot 2 : gestion des comptes — conception
 
 - **Date** : 2026-11-11
-- **Statut** : à valider.
+- **Statut** : validé et livré (lot 2).
 - **Stories** : US-6.4 à US-6.8 (nouvelles), US-1.6 « Mot de passe oublié » (nouvelle, espace client).
 - **S'appuie sur** : le lot 1 (`2026-11-10-administration-lot1-supervision-design.md`), ADR-040.
 

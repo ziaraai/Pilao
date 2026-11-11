@@ -13,6 +13,8 @@ organizations (
   brand_color text null,                       -- couleur des titres des documents Word
   phone text, contact_email text,              -- pré-remplissage DC1/DC2 (saisis une fois)
   signatory_name text, signatory_role text,    -- personne habilitée à engager l'entreprise
+  suspended_at timestamptz null,               -- suspendue par l'administration (lot 2)
+  suspension_reason text null,                 -- raison saisie par Pilao, jamais montrée au client
   created_at, updated_at
 )
 
@@ -226,6 +228,14 @@ ai_calls (
 )
 
 audit_logs ( id, org_id, user_id, action text, entity text, entity_id uuid, at timestamptz, meta jsonb )
+  -- une action de Pilao depuis l'administration : user_id vide, meta = {"by": "pilao"} (lot 2)
+
+auth_tokens ( id, org_id, user_id, kind text, token_hash char(64) unique, expires_at, used_at )
+  -- kind : email_verify (48 h), invitation (7 jours), password_reset (1 heure, lot 2)
+
+data_requests ( id, org_id, kind text, status text, due_at, requested_by -> users set null,
+                platform_admin_id -> platform_admins set null,   -- suppression programmée par Pilao
+                file_id, error )
 ```
 
 ## Points d'attention

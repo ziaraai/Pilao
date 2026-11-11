@@ -796,6 +796,7 @@ let current; // the page, for a screenshot when a step fails
   const codes = admin.getByLabel("Codes de secours").locator("li");
   await codes.first().waitFor();
   if ((await codes.count()) !== 8) throw new Error("8 recovery codes expected");
+  const recovery = await codes.allInnerTexts(); // asked again before the irreversible (lot 2)
   await admin.getByLabel("J'ai noté mes codes").check();
   await admin.getByRole("button", { name: "Ouvrir l'administration" }).click();
   await admin.waitForURL(`${WEB}/admin`);
@@ -837,6 +838,159 @@ let current; // the page, for a screenshot when a step fails
   // the company's user is listed, never its documents
   await admin.getByRole("cell", { name: email, exact: true }).waitFor();
   await admin.screenshot({ path: `${S}/admin-fiche.png`, fullPage: true });
+
+  // 15. Lot 2: accounts. Pilao opens a company's space, its person joins with the link.
+  const lastLink = (pattern) => {
+    const all = [...fs.readFileSync(`${S}/api.log`, "utf8").matchAll(pattern)];
+    return all[all.length - 1][1];
+  };
+  const createCompany = async (siretPrefix, name, email) => {
+    await admin.goto(`${WEB}/admin/entreprises`);
+    await admin.getByRole("link", { name: "Créer une entreprise" }).click();
+    await admin.getByLabel("SIRET").fill(luhnSiret(siretPrefix));
+    await admin.getByRole("button", { name: "Rechercher" }).click();
+    await admin.getByText("Annuaire injoignable").waitFor(); // no registry here
+    await admin.getByLabel("Nom de l'entreprise").fill(name);
+    await admin.getByLabel("Nom du responsable").fill("Jean Patron");
+    await admin.getByLabel("E-mail du responsable").fill(email);
+    await admin
+      .getByRole("button", { name: "Créer et envoyer l'invitation" })
+      .click();
+    await admin.getByRole("heading", { name }).waitFor();
+  };
+  const boss = `patron${n}@example.fr`;
+  await createCompany(
+    `7${String(n).padStart(6, "0")}654321`.slice(0, 13),
+    `Propreté ${n}`,
+    boss,
+  );
+  await admin.waitForTimeout(500);
+  const bossContext = await browser.newContext({ locale: "fr-FR" });
+  const bossPage = await bossContext.newPage();
+  await bossPage.goto(
+    lastLink(/(http:\/\/localhost:3000\/invitation\?token=\S+)/g),
+  );
+  await bossPage
+    .getByRole("heading", { name: `Rejoindre Propreté ${n}` })
+    .waitFor();
+  await bossPage.getByLabel("Mot de passe").fill("correct-horse-battery");
+  await bossPage.getByLabel("J'accepte les", { exact: false }).check();
+  await bossPage.getByRole("button", { name: "Créer mon accès" }).click();
+  await bossPage.waitForURL(`${WEB}/tableau-de-bord`);
+
+  // Suspended: the page already open is sent to sign-in, which says why.
+  await admin.reload();
+  await admin.getByRole("button", { name: "Suspendre" }).click();
+  await admin.getByLabel("Raison").fill("Essai du parcours");
+  await admin.getByRole("button", { name: "Suspendre l'accès" }).click();
+  await admin.getByText("Essai du parcours").waitFor();
+  await bossPage.goto(`${WEB}/dossiers`);
+  await bossPage.waitForURL(/\/connexion\?suspendu=1/);
+  await bossPage
+    .getByText("L'accès de votre entreprise à Pilao est suspendu.")
+    .waitFor();
+  await bossPage.getByLabel("E-mail").fill(boss);
+  await bossPage.getByLabel("Mot de passe").fill("correct-horse-battery");
+  await bossPage.getByRole("button", { name: "Se connecter" }).click();
+  await bossPage.getByText("Contactez Pilao", { exact: false }).waitFor();
+  await admin.getByRole("button", { name: "Réactiver" }).click();
+  await admin
+    .getByRole("dialog")
+    .getByRole("button", { name: "Réactiver" })
+    .click();
+  await admin.getByRole("button", { name: "Suspendre" }).waitFor();
+  await bossPage.getByRole("button", { name: "Se connecter" }).click();
+  await bossPage.waitForURL(`${WEB}/tableau-de-bord`);
+  step(
+    "company created from the administration, its person joined; suspended (the open page sent to sign-in, with the message), reactivated",
+  );
+
+  // « Mot de passe oublié ? »: a link by e-mail, a new password, the other sessions closed.
+  const forgotContext = await browser.newContext({ locale: "fr-FR" });
+  const forgot = await forgotContext.newPage();
+  await forgot.goto(`${WEB}/connexion`);
+  await forgot.getByRole("link", { name: "Mot de passe oublié ?" }).click();
+  await forgot.getByLabel("E-mail").fill(boss);
+  await forgot.getByRole("button", { name: "Recevoir un lien" }).click();
+  await forgot.getByText("Si un compte existe pour cette adresse").waitFor();
+  await forgot.waitForTimeout(500);
+  await forgot.goto(
+    lastLink(/(http:\/\/localhost:3000\/nouveau-mot-de-passe\?token=\S+)/g),
+  );
+  await forgot.getByText(`Pour le compte ${boss}`).waitFor();
+  if (forgot.url().includes("token="))
+    throw new Error("the token stayed in the address bar");
+  await forgot
+    .getByLabel("Nouveau mot de passe")
+    .fill("un-nouveau-mot-de-passe");
+  await forgot
+    .getByLabel("Le même, une seconde fois")
+    .fill("un-nouveau-mot-de-passe");
+  await forgot.getByRole("button", { name: "Enregistrer" }).click();
+  await forgot.waitForURL(`${WEB}/tableau-de-bord`);
+  await bossPage.goto(`${WEB}/dossiers`);
+  await bossPage.waitForURL(/\/connexion\?suite=/); // its session was closed
+  await forgotContext.close();
+  await bossContext.close();
+  step(
+    "forgotten password: link by e-mail, new password, other sessions closed",
+  );
+
+  // A user added, then removed with a recovery code; the journal tells it all.
+  await admin.goto(`${WEB}/admin/entreprises`);
+  await admin.getByRole("link", { name: `Propreté ${n}`, exact: true }).click();
+  await admin.getByRole("button", { name: "Ajouter un utilisateur" }).click();
+  await admin.getByLabel("E-mail", { exact: true }).fill(`aide${n}@example.fr`);
+  await admin.getByRole("button", { name: "Inviter" }).click();
+  await admin.getByText(`Invitation envoyée à aide${n}@example.fr.`).waitFor();
+  await admin
+    .getByRole("row", { name: new RegExp(`aide${n}@example.fr`) })
+    .getByRole("button", { name: "Retirer" })
+    .click();
+  await admin
+    .getByLabel("Code de l'application d'authentification")
+    .fill(recovery[0]);
+  await admin.getByRole("button", { name: "Retirer l'utilisateur" }).click();
+  await admin.getByText(`aide${n}@example.fr a été retiré`).waitFor();
+  await admin.screenshot({ path: `${S}/admin-comptes.png`, fullPage: true });
+  await admin.getByRole("link", { name: "Journal", exact: true }).click();
+  await admin.getByRole("heading", { name: "Journal" }).waitFor();
+  await admin.getByRole("button", { name: "Comptes" }).click();
+  for (const action of [
+    "Utilisateur retiré",
+    "Utilisateur invité",
+    "Entreprise réactivée",
+    "Entreprise suspendue",
+    "Entreprise créée",
+  ])
+    await admin
+      .getByRole("cell", { name: action, exact: true })
+      .first()
+      .waitFor();
+  await admin.screenshot({ path: `${S}/admin-journal.png`, fullPage: true });
+
+  // A space nobody ever entered goes at once.
+  await createCompany(
+    `6${String(n).padStart(6, "0")}987654`.slice(0, 13),
+    `Jamais ${n}`,
+    `jamais${n}@example.fr`,
+  );
+  await admin.getByRole("button", { name: "Supprimer" }).click();
+  await admin.getByText("tout de suite, définitivement").waitFor();
+  await admin
+    .getByLabel(`Recopiez le nom de l'entreprise : Jamais ${n}`)
+    .fill(`Jamais ${n}`);
+  await admin
+    .getByLabel("Code de l'application d'authentification")
+    .fill(recovery[1]);
+  await admin
+    .getByRole("dialog")
+    .getByRole("button", { name: "Supprimer" })
+    .click();
+  await admin.getByText(`Jamais ${n} a été supprimée.`).waitFor();
+  step(
+    "a user added then removed with a code, the journal read, a never-used company deleted at once",
+  );
   // the account closed from the server: the next screen asks to sign in again
   execFileSync(PY, ["-m", "app.cli", "admin-access", adminEmail, "--disable"], {
     cwd: `${__dirname}/../../api`,
