@@ -15,6 +15,7 @@ organizations (
   signatory_name text, signatory_role text,    -- personne habilitée à engager l'entreprise
   suspended_at timestamptz null,               -- suspendue par l'administration (lot 2)
   suspension_reason text null,                 -- raison saisie par Pilao, jamais montrée au client
+  modules text[] not null default '{veille,reponse}',  -- modules actifs (lot 3, ADR-041 ; clés de app/modules.py)
   created_at, updated_at
 )
 

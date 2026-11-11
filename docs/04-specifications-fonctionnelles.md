@@ -175,7 +175,7 @@ L'utilisateur indique gagné / perdu, le montant proposé, le classement et les 
 
 ## Module 6 — Administration de la plateforme
 
-Le back-office de l'exploitant de Pilao, en cinq lots (ADR-040) : 1. accès et supervision en lecture seule (**fait**) ; 2. gestion des comptes (**fait**, ADR-042) ; 3. socle des modules (ADR-041) ; 4. formules et crédits ; 5. réglages de la plateforme (modèles d'IA, clés API, imports). Conceptions : `docs/superpowers/specs/2026-11-10-administration-lot1-supervision-design.md`, `docs/superpowers/specs/2026-11-11-administration-lot2-comptes-design.md`.
+Le back-office de l'exploitant de Pilao, en cinq lots (ADR-040) : 1. accès et supervision en lecture seule (**fait**) ; 2. gestion des comptes (**fait**, ADR-042) ; 3. socle des modules (**fait**, ADR-041) ; 4. formules et crédits ; 5. réglages de la plateforme (modèles d'IA, clés API, imports). Conceptions : `docs/superpowers/specs/2026-11-10-administration-lot1-supervision-design.md`, `docs/superpowers/specs/2026-11-11-administration-lot2-comptes-design.md`, `docs/superpowers/specs/2026-11-11-administration-lot3-modules-design.md`.
 
 **US-6.1 Accès du super admin**
 L'exploitant a un compte à lui, séparé de tout compte d'entreprise, sur `app.pilao.pro/admin`.
@@ -220,6 +220,17 @@ L'exploitant ouvre lui-même l'espace d'une entreprise (après une démo, par ex
 
 **US-6.8 Code redemandé**
 Avant l'irréversible (supprimer une entreprise, retirer un utilisateur), le code à 6 chiffres de l'application ou un code de secours est redemandé. Un code faux : « Code incorrect. » ; au 5ᵉ en 15 minutes, la session d'administration est fermée.
+
+**US-6.9 Les modules d'une entreprise**
+Pilao est fait de modules : « Veille des annonces » (menu Annonces) et « Réponse aux appels d'offres » (menus Dossiers, Coffre-fort, Base documentaire). Le Tableau de bord et le Profil sont communs. Par défaut, toute entreprise a les deux.
+- CA1 Sur la fiche d'une entreprise, carte « Modules » : pour chacun, son état (« Activé », « Désactivé ») et un bouton. « Désactiver » demande confirmation (« Ses utilisateurs ne verront plus ce module. Rien n'est effacé : vous pourrez le réactiver. ») ; « Activer » agit tout de suite, et activer la Veille relance la recherche des annonces ouvertes pour l'entreprise. Chaque changement est au journal (« Module activé », « Module désactivé »).
+- CA2 La liste des entreprises a une colonne « Modules » (« Veille », « Réponse », ou « Aucun »).
+- CA3 Côté entreprise, un module désactivé disparaît du menu et du tableau de bord. Ses pages, ouvertes par un lien ou un favori, affichent « Ce module n'est pas activé pour votre entreprise. Contactez Pilao[ : SUPPORT_EMAIL]. » ; une page déjà ouverte se recharge pour l'afficher. Le serveur refuse ses routes (403 `module_disabled`), après la règle de suspension.
+- CA4 Sans Veille : pas de correspondance, pas de note d'IA, pas d'e-mail du matin, pas d'avis rectificatif ; dans le Profil, l'onglet « Métiers » ne garde que les métiers, et le profil ne demande plus les réglages de veille pour être complet. Sans Réponse : « Suivre » une annonce la marque comme suivie sans créer de dossier, pas de rappel d'attestation, pas de « Pré-remplir depuis vos documents » ; « Nouveau dossier » reste possible avec Réponse seule.
+- CA5 Rien n'est effacé : réactiver un module rend tout tel quel.
+
+**US-6.10 Le catalogue des modules**
+Écran « Modules » (`/admin/modules`, lecture seule) : chaque module, ce qu'il contient, ses entrées de menu et le nombre d'entreprises qui l'ont activé. Ajouter un module plus tard (CRM, stock) = son code et une entrée du registre (`app/modules.py`).
 
 ---
 

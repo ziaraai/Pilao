@@ -87,7 +87,7 @@ Reste à faire :
 - [ ] P4-06 Administration de la plateforme (back-office du SaaS, US-6.x, ADR-040), en cinq lots :
   - [x] Lot 1 — compte super admin séparé (mot de passe + code TOTP, créé par `admin-access`) et supervision en lecture seule : vue d'ensemble, entreprises et fiche, coûts de l'IA, technique, avis
   - [x] Lot 2 — gestion des comptes : créer une entreprise, suspendre et réactiver, supprimer (tout de suite si jamais utilisée, sinon dans 30 jours), dépanner les utilisateurs, écran du journal ; « Mot de passe oublié ? » pour les clients (ADR-042)
-  - [ ] Lot 3 — socle des modules : modules internes activables par entreprise, le produit actuel devient le module « Appels d'offres » (ADR-041)
+  - [x] Lot 3 — socle des modules (ADR-041) : deux modules, « Veille des annonces » et « Réponse aux appels d'offres », activés par défaut ; carte « Modules » de la fiche, colonne de la liste, écran « Modules » ; menu, pages, tableau de bord, profil et travail de fond qui suivent les modules actifs ; rien n'est effacé (US-6.9, US-6.10)
   - [ ] Lot 4 — formules et crédits : une formule = des modules + des crédits ; attribution à la main (dépend de P4-05), Stripe plus tard
   - [ ] Lot 5 — réglages de la plateforme : modèle d'IA par tâche, clés API chiffrées en base, imports
 

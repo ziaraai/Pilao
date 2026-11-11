@@ -1,7 +1,7 @@
 # Administration de la plateforme, lot 3 : le socle des modules — conception
 
 - **Date** : 2026-11-11
-- **Statut** : à valider.
+- **Statut** : validé et livré.
 - **Stories** : US-6.9 (modules d'une entreprise), US-6.10 (catalogue des modules) ; ADR-041 précisé.
 - **S'appuie sur** : lots 1 et 2 (`2026-11-10-administration-lot1-supervision-design.md`,
   `2026-11-11-administration-lot2-comptes-design.md`), ADR-040, ADR-041, ADR-042.

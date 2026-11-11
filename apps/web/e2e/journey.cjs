@@ -956,6 +956,8 @@ let current; // the page, for a screenshot when a step fails
   const forgot = await forgotContext.newPage();
   await forgot.goto(`${WEB}/connexion`);
   await forgot.getByRole("link", { name: "Mot de passe oublié ?" }).click();
+  // the page must be shown before typing: the sign-in form stays a moment (client navigation)
+  await forgot.getByRole("button", { name: "Recevoir un lien" }).waitFor();
   // by role: the sign-in page stays in the DOM, hidden (Next), with its own « E-mail »
   await forgot.getByRole("textbox", { name: "E-mail" }).fill(boss);
   await forgot.getByRole("button", { name: "Recevoir un lien" }).click();
@@ -1037,6 +1039,66 @@ let current; // the page, for a screenshot when a step fails
   await admin.getByText(`Jamais ${n} a été supprimée.`).waitFor();
   step(
     "a user added then removed with a code, the journal read, a never-used company deleted at once",
+  );
+
+  // 16. Lot 3: modules. « Réponse » turned off for the company of the journey: its menu
+  // entry still shown leads to the card, the menu then loses it; turned on, all comes back.
+  await page.goto(`${WEB}/tableau-de-bord`);
+  await page.getByRole("heading", { name: /^Bonjour/ }).waitFor();
+  const menu = page.getByRole("navigation", { name: "Navigation principale" });
+  await admin.goto(`${WEB}/admin/entreprises`);
+  await admin
+    .getByRole("row", { name: /Nettoyage E2E/ })
+    .getByText("Réponse", { exact: true })
+    .waitFor(); // the « Modules » column
+  await admin
+    .getByRole("link", { name: "Nettoyage E2E", exact: true })
+    .first()
+    .click();
+  await admin.getByRole("heading", { name: "Nettoyage E2E" }).waitFor();
+  await admin
+    .getByRole("button", { name: "Désactiver Réponse aux appels d'offres" })
+    .click();
+  await admin
+    .getByText("Rien n'est effacé : vous pourrez le réactiver.")
+    .waitFor();
+  await admin
+    .getByRole("dialog")
+    .getByRole("button", { name: "Désactiver" })
+    .click();
+  await admin.getByText("« Réponse aux appels d'offres » désactivé.").waitFor();
+  await menu.getByRole("link", { name: "Dossiers" }).click(); // the menu loaded before
+  await page
+    .getByText("Ce module n'est pas activé pour votre entreprise.")
+    .first()
+    .waitFor();
+  await menu.getByRole("link", { name: "Annonces" }).waitFor();
+  if (await menu.getByRole("link", { name: "Dossiers" }).count())
+    throw new Error("« Dossiers » still in the menu without « Réponse »");
+  await page.screenshot({ path: `${S}/module-non-active.png`, fullPage: true });
+  await admin.screenshot({
+    path: `${S}/admin-modules-fiche.png`,
+    fullPage: true,
+  });
+  await admin
+    .getByRole("button", { name: "Activer Réponse aux appels d'offres" })
+    .click();
+  await admin.getByText("« Réponse aux appels d'offres » activé.").waitFor();
+  await page.reload();
+  await menu.getByRole("link", { name: "Dossiers" }).click();
+  await page
+    .getByRole("heading", { name: "Dossiers de réponse" })
+    .first()
+    .waitFor();
+  await admin.getByRole("link", { name: "Modules", exact: true }).click();
+  await admin.getByRole("heading", { name: "Modules" }).first().waitFor();
+  await admin.getByRole("heading", { name: "Veille des annonces" }).waitFor();
+  await admin
+    .getByRole("heading", { name: "Réponse aux appels d'offres" })
+    .waitFor();
+  await admin.screenshot({ path: `${S}/admin-modules.png`, fullPage: true });
+  step(
+    "« Réponse » turned off: the menu entry leads to the card, then leaves the menu; turned on again; the catalogue read",
   );
   // the account closed from the server: the next screen asks to sign in again
   execFileSync(PY, ["-m", "app.cli", "admin-access", adminEmail, "--disable"], {

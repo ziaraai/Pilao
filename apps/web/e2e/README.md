@@ -8,7 +8,7 @@ sources cliquables, plan du mémoire, rédaction, matrice de conformité et « c
 modification d'un chapitre et restauration d'une version, DC1 téléchargé, export du dossier complet
 (ZIP avec le PDF de LibreOffice) après avertissements, base documentaire, annonces chargées par
 `python -m app.cli load-tenders` puis filtrées, notées, écartée ou suivie, résultat du dossier,
-tableau de bord, puis l'administration de la plateforme (accès créé par `python -m app.cli admin-access`, activation avec un code TOTP calculé par le parcours, nouvelle connexion, les cinq écrans et la fiche de l'entreprise ; lot 2 : création d'une entreprise et arrivée de son responsable par le lien, suspension (la page ouverte renvoie à la connexion avec le message) et réactivation, « Mot de passe oublié ? » de bout en bout, ajout puis retrait d'un utilisateur avec un code de secours, journal, suppression immédiate d'une entreprise jamais utilisée ; refus d'une session d'entreprise), déconnexion. Le parcours lance la CLI : exécutez-le avec les variables ci-dessus. Le worker
+tableau de bord, puis l'administration de la plateforme (accès créé par `python -m app.cli admin-access`, activation avec un code TOTP calculé par le parcours, nouvelle connexion, les cinq écrans et la fiche de l'entreprise ; lot 2 : création d'une entreprise et arrivée de son responsable par le lien, suspension (la page ouverte renvoie à la connexion avec le message) et réactivation, « Mot de passe oublié ? » de bout en bout, ajout puis retrait d'un utilisateur avec un code de secours, journal, suppression immédiate d'une entreprise jamais utilisée ; lot 3 : « Réponse aux appels d'offres » désactivé pour l'entreprise du parcours — son entrée de menu mène à la carte « Ce module n'est pas activé », puis quitte le menu — réactivé, catalogue des modules ; refus d'une session d'entreprise), déconnexion. Le parcours lance la CLI : exécutez-le avec les variables ci-dessus. Le worker
 a besoin de LibreOffice (`libreoffice-writer-nogui`) pour le PDF.
 
 ```bash
@@ -32,3 +32,9 @@ node e2e/journey.cjs $W                            # captures dans $W/*.png
 
 L'annuaire des entreprises pointe vers un port fermé et la lecture IA des attestations n'est pas
 configurée : le parcours vérifie donc la saisie manuelle dans ces deux cas.
+
+Erreurs de console attendues à la fin du parcours : 1 × 422 (formulaire refusé exprès), 8 × 404
+(ressources effacées ou absentes exprès) et 1 × 403 (la page « Dossiers » refusée pendant que le
+module « Réponse » est désactivé). Avant de relancer, videz les entreprises des parcours
+précédents (`delete from organizations;` sur la base locale) : sinon la file des notes d'annonces
+ralentit le parcours.

@@ -411,8 +411,13 @@ Format : numéro, date, décision, raison, statut. Ajouter une entrée pour chaq
 ## ADR-041 — Des modules internes activables, pas des plugins installables
 - **Date** : 2026-11-10
 - **Contexte** : l'exploitant veut pouvoir ajouter plus tard d'autres modules (CRM, gestion de stock…) et les ouvrir entreprise par entreprise. Deux voies : des modules dans le code de Pilao, activés par le super admin, ou de vrais plugins installés et mis à jour à part (comme le plugin de Ziara dans son application hôte).
-- **Décision** : modules internes. Chaque module est un bloc séparé du code (écrans, données, entrée de menu), déclaré dans un registre ; le super admin l'active par entreprise ou par formule ; tout est mis en ligne ensemble. Le produit actuel devient le module « Appels d'offres ». Des plugins installables ne seraient utiles qu'avec des développeurs tiers ou une boutique de modules ; des modules bien séparés pourront le devenir. Conception au lot 3 de l'administration.
-- **Statut** : validé (principe) ; à concevoir.
+- **Décision** : modules internes. Chaque module est un bloc séparé du code (écrans, données, entrée de menu), déclaré dans un registre ; le super admin l'active par entreprise ou par formule ; tout est mis en ligne ensemble. Des plugins installables ne seraient utiles qu'avec des développeurs tiers ou une boutique de modules ; des modules bien séparés pourront le devenir.
+- **Précisé au lot 3** (2026-11-11, `docs/superpowers/specs/2026-11-11-administration-lot3-modules-design.md`) :
+  - Le produit actuel fait **deux modules** : `veille` « Veille des annonces » (menu Annonces) et `reponse` « Réponse aux appels d'offres » (Dossiers, Coffre-fort, Base documentaire). Tableau de bord et Profil sont communs. Par défaut, toute entreprise a les deux.
+  - Un **registre dans le code** (`app/modules.py`) et une liste par entreprise (`organizations.modules text[]`) ; pas une colonne par module, pas de service externe.
+  - Une **barrière** par routeur (`require_module`, 403 `module_disabled`, après la suspension) ; le travail de fond d'un module saute les entreprises qui ne l'ont pas (veille, notes, e-mail du matin, avis rectificatifs ; rappels d'attestation).
+  - Désactiver **masque, n'efface rien** : réactiver rend tout ; activer la Veille relance la recherche des annonces ouvertes. Chaque changement est au journal.
+- **Statut** : réalisé (lot 3 livré) ; le lot 4 construira les formules sur ce socle.
 
 ## ADR-042 — Gestion des comptes depuis l'administration : les règles de l'espace client, au nom de Pilao
 - **Date** : 2026-11-11

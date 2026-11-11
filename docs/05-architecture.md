@@ -34,10 +34,11 @@ pilao/
 │   ├── web/                               # Next.js
 │   │   ├── app/(auth)/ app/(app)/ app/(admin)/   # (admin) : l'administration de la plateforme (ADR-040)
 │   │   │   ├── dashboard/  tenders/  bids/[id]/  profile/  vault/  settings/
-│   │   ├── components/ (admin/ : coquille et blocs de l'administration)  lib/api.ts  lib/admin.ts
+│   │   ├── components/ (admin/ : coquille et blocs de l'administration ; module-gate.tsx)  lib/api.ts  lib/admin.ts  lib/modules.ts
 │   └── api/                               # FastAPI + worker
 │       ├── app/
 │       │   ├── main.py
+│       │   ├── modules.py   registre des modules (veille, reponse) — ADR-041
 │       │   ├── core/        config.py, security.py, tenancy.py, logging.py, crypto.py, admin_deps.py
 │       │   ├── db/          base.py, session.py, models/*.py
 │       │   ├── schemas/     pydantic (miroir de /schemas/*.json)
@@ -125,6 +126,7 @@ SMTP_URL=...
 ## Principes
 
 - **Multi-tenant par ligne** : `org_id` partout + dépendance FastAPI `get_current_org()` qui injecte le filtre. Tests automatiques qui vérifient qu'un utilisateur de l'org A ne voit rien de l'org B.
+- **Modules** (ADR-041, lot 3) : `app/modules.py` déclare chaque module (clé, nom, contenu, entrées de menu) ; `organizations.modules` liste ceux d'une entreprise. La dépendance `require_module(clé)` (`core/deps.py`), posée sur le routeur entier d'un module, refuse ses routes (403 `module_disabled`) après la connexion et la suspension ; le travail de fond d'un module saute les entreprises qui ne l'ont pas. Côté web, `lib/modules.ts` filtre le menu et `ModuleGate` remplace les pages d'un module absent par une carte. Ajouter un module = son code + une entrée de `MODULES`.
 - **Couche IA unique** : `app/ai/llm.py` expose `complete(task, messages, schema=None)` ; le modèle est choisi par tâche via la config. Journalisation des coûts dans `ai_calls`.
 - **Prompts en fichiers** : chargés depuis `/prompts` avec un numéro de version dans l'en-tête ; la version est enregistrée avec chaque résultat.
 - **Fichiers** : jamais servis directement ; URL signées à durée courte.
