@@ -27,7 +27,7 @@ function Journal() {
   const before = params.get("avant") ?? "";
   const query = new URLSearchParams({ kind });
   if (org) query.set("org_id", org);
-  if (before) query.set("before", before);
+  if (before) query.set("cursor", before);
   const page = useAdminApi<AdminAuditPage>(`/admin/audit?${query}`);
   const orgs = useAdminApi<AdminOrganizationRow[]>("/admin/organizations");
 
@@ -94,8 +94,8 @@ function Journal() {
                     </tr>
                   </thead>
                   <tbody>
-                    {p.rows.map((r, i) => (
-                      <tr key={`${r.at}-${i}`} className={tableRow}>
+                    {p.rows.map((r) => (
+                      <tr key={r.id} className={tableRow}>
                         <td className={`${CELL} whitespace-nowrap`}>
                           {formatDateTimeShort(r.at)}
                         </td>
@@ -129,17 +129,17 @@ function Journal() {
                 </table>
               </div>
             )}
-            {(p.next_before || before) && (
+            {(p.next_cursor || before) && (
               <div className="flex flex-wrap gap-3 px-5 py-3">
                 {before && (
                   <Button variant="secondary" onClick={() => go({ avant: "" })}>
                     Les plus récentes
                   </Button>
                 )}
-                {p.next_before && (
+                {p.next_cursor && (
                   <Button
                     variant="secondary"
-                    onClick={() => go({ avant: p.next_before ?? "" })}
+                    onClick={() => go({ avant: p.next_cursor ?? "" })}
                   >
                     Plus anciennes
                   </Button>

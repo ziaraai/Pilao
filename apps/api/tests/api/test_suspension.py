@@ -154,3 +154,64 @@ def test_expiry_alerts_skip_suspended(
     before = len(outbox.sent)
     run_daily(db, outbox, paris(TODAY, 6))
     assert outbox.sent[before:] == []
+
+
+def test_correction_mail_skips_suspended(
+    make_client: Factory,
+    outbox: Outbox,
+    queue: FakeQueue,
+    scorer: ScoreModel,  # noqa: F811
+    db: Session,
+) -> None:
+    c = company(make_client, outbox, queue)
+    load(db, queue, outbox, notice("A"))
+    tender = db.scalar(select(TenderMatch.tender_id))
+    assert c.post(f"/tenders/{tender}/track").status_code == 201
+    suspend(db, "user1@example.fr")
+    sent = len(outbox.sent)
+
+    later = datetime.now(UTC) + timedelta(days=40)
+    load(
+        db,
+        queue,
+        outbox,
+        notice("A-RECT", notice_type="correction", corrects="A", deadline_at=later),
+    )
+    assert outbox.sent[sent:] == []  # « Avis rectificatif » is not sent to a suspended company
+
+
+def test_backlog_is_not_scored_once_suspended(
+    make_client: Factory,
+    outbox: Outbox,
+    queue: FakeQueue,
+    scorer: ScoreModel,  # noqa: F811
+    db: Session,
+) -> None:
+    from app.services.tenders import score_org
+
+    company(make_client, outbox, queue)
+    queue.pending_score.clear() if hasattr(queue, "pending_score") else None
+    org = suspend(db, "user1@example.fr")
+    # matches created before the suspension, still waiting for their score
+    from app.db.models import Tender
+    from tests.api.test_tenders import NOW
+
+    for i in range(3):
+        db.add(
+            Tender(
+                source="boamp",
+                source_id=f"S{i}",
+                title=f"Nettoyage S{i}",
+                departments=["69"],
+                cpv_codes=["90911200"],
+                published_at=NOW,
+                deadline_at=NOW + timedelta(days=20),
+            )
+        )
+    db.flush()
+    for t in db.scalars(select(Tender)).all():
+        db.add(TenderMatch(org_id=org.id, tender_id=t.id, reasons=[]))
+    db.commit()
+
+    assert score_org(db, org.id) == 0
+    assert scorer.prompts == []  # no AI cost for a suspended company

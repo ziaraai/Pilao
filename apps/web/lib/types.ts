@@ -643,6 +643,7 @@ export type AdminDeletionPreview = {
 };
 
 export type AdminAuditRow = {
+  id: string;
   at: string;
   admin_email: string;
   action: string;
@@ -654,7 +655,7 @@ export type AdminAuditRow = {
 
 export type AdminAuditPage = {
   rows: AdminAuditRow[];
-  next_before: string | null;
+  next_cursor: string | null; // pass it back as ``cursor`` for the older lines
 };
 
 export type AdminJobIssue = {

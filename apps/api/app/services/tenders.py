@@ -304,7 +304,15 @@ def _apply_correction(db: Session, target: Tender, item: TenderIn, mailer: Maile
 def notify(
     db: Session, mailer: Mailer, org_id: uuid.UUID, kind: str, key: str, subject: str, body: str
 ) -> bool:
-    """E-mail every verified user of the organization, once per (kind, key)."""
+    """E-mail every verified user of the organization, once per (kind, key).
+
+    Nothing leaves for a suspended company (not recorded either)."""
+    if db.scalar(
+        select(Organization.id).where(
+            Organization.id == org_id, Organization.suspended_at.is_not(None)
+        )
+    ):
+        return False
     if db.scalar(
         select(Notification.id).where(
             Notification.org_id == org_id, Notification.kind == kind, Notification.key == key
@@ -455,6 +463,9 @@ def score_org(
     """
     now = now or _now()
     scope_session(db, org_id)
+    org = db.get(Organization, org_id)
+    if org is None or org.suspended_at is not None:
+        return 0  # no AI cost for a suspended company, backlog included
     profile = db.scalar(select(CompanyProfile))
     if profile is None:
         return 0

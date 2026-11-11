@@ -146,8 +146,10 @@ def delete(
     if org_data.pending_deletion(db) is not None:
         raise ApiError(409, "deletion_pending", "La suppression est déjà programmée.")
     admin_auth.confirm_code(db, ctx.admin, ctx.session, code, ip)
-    # Decided under the company's row lock: a first sign-in cannot slip in between.
-    db.execute(select(Organization.id).where(Organization.id == org.id).with_for_update())
+    # Decided with the company's users locked: a sign-in that already wrote its time is seen
+    # (the lock waits for it), a later one waits for the erasure. Decision, journal line and
+    # erasure are one transaction.
+    db.execute(select(User.id).where(User.org_id == org.id).with_for_update())
     if never_used(db, org.id):
         audit.record(
             db,
@@ -157,8 +159,8 @@ def delete(
             ip=ip,
             meta={"mode": "immediate", "name": org.name},
         )
-        db.commit()
         if not org_data.erase_organization(db, org.id, storage, requested_at=_now()):
+            db.rollback()  # nothing claims it is gone; the code is not spent either
             raise ApiError(
                 503, "erasure_interrupted", "Suppression des fichiers interrompue : réessayez."
             )

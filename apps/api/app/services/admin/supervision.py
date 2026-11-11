@@ -650,10 +650,24 @@ LOGIN_ACTIONS = (
 )
 
 
+def _cursor(at: datetime, line_id: uuid.UUID) -> str:
+    return f"{at.isoformat()}|{line_id}"
+
+
+def _parse_cursor(cursor: str) -> tuple[datetime, uuid.UUID]:
+    try:
+        at, line_id = cursor.split("|")
+        return datetime.fromisoformat(at), uuid.UUID(line_id)
+    except ValueError:
+        raise ApiError(422, "invalid_cursor", "Page du journal invalide.") from None
+
+
 def audit_page(
-    db: Session, kind: str, org_id: uuid.UUID | None, before: datetime | None
+    db: Session, kind: str, org_id: uuid.UUID | None, cursor: str | None
 ) -> AuditPageOut:
-    """The platform journal, latest first, 100 lines a page; ``kind``: all, logins, accounts."""
+    """The platform journal, latest first, 100 lines a page; ``kind``: all, logins, accounts.
+
+    The cursor is (time, id): lines written at the same instant are never skipped."""
     query = (
         select(PlatformAuditLog, Organization.name)
         .outerjoin(Organization, Organization.id == PlatformAuditLog.org_id)
@@ -666,11 +680,18 @@ def audit_page(
         query = query.where(PlatformAuditLog.action.not_in(LOGIN_ACTIONS))
     if org_id is not None:
         query = query.where(PlatformAuditLog.org_id == org_id)
-    if before is not None:
-        query = query.where(PlatformAuditLog.at < before)
+    if cursor is not None:
+        at, line_id = _parse_cursor(cursor)
+        query = query.where(
+            or_(
+                PlatformAuditLog.at < at,
+                and_(PlatformAuditLog.at == at, PlatformAuditLog.id < line_id),
+            )
+        )
     found = db.execute(query).all()
     rows = [
         AuditRowOut(
+            id=entry.id,
             at=entry.at,
             admin_email=entry.admin_email,
             action=entry.action,
@@ -682,4 +703,5 @@ def audit_page(
         for entry, name in found[:JOURNAL_PAGE]
     ]
     more = len(found) > JOURNAL_PAGE
-    return AuditPageOut(rows=rows, next_before=rows[-1].at if more else None)
+    last = rows[-1] if more else None
+    return AuditPageOut(rows=rows, next_cursor=_cursor(last.at, last.id) if last else None)

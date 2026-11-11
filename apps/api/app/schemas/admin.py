@@ -337,6 +337,7 @@ class StepUpIn(BaseModel):
 
 
 class AuditRowOut(BaseModel):
+    id: uuid.UUID
     at: datetime
     admin_email: str
     action: str
@@ -348,4 +349,4 @@ class AuditRowOut(BaseModel):
 
 class AuditPageOut(BaseModel):
     rows: list[AuditRowOut]
-    next_before: datetime | None  # pass it as ``before`` for the older lines
+    next_cursor: str | None  # pass it as ``cursor`` for the older lines

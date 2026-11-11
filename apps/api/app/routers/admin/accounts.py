@@ -4,7 +4,6 @@ Each route that acts on a company takes :data:`AdminOrg`, a session scoped to th
 """
 
 import uuid
-from datetime import datetime
 from typing import Annotated, Literal
 
 from fastapi import APIRouter, Depends, Query, Request, Response
@@ -156,6 +155,6 @@ def journal(
     db: AdminReadDb,
     kind: Literal["all", "logins", "accounts"] = "all",
     org_id: uuid.UUID | None = None,
-    before: datetime | None = None,
+    cursor: str | None = None,
 ) -> AuditPageOut:
-    return supervision.audit_page(db, kind, org_id, before)
+    return supervision.audit_page(db, kind, org_id, cursor)

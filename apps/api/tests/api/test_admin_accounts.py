@@ -3,15 +3,16 @@
 from collections.abc import Callable
 from datetime import UTC, datetime, timedelta
 
+import pytest
 from fastapi.testclient import TestClient
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from app.db.models import DataRequest, Organization, PlatformAuditLog, PurgeLog, User
+from app.db.models import DataRequest, File, Organization, PlatformAuditLog, PurgeLog, User
 from app.services.admin.access import grant_access
 from tests.api.admin_helpers import ADMIN_EMAIL, ADMIN_PASSWORD, code
 from tests.api.helpers import PASSWORD, register_payload, signed_in_client, valid_siret
-from tests.conftest import FakeQueue, Outbox
+from tests.conftest import FakeQueue, MemoryStorage, Outbox
 
 Factory = Callable[[], TestClient]
 NEW_SIRET = valid_siret("9876543210")
@@ -300,3 +301,39 @@ def test_other_org_untouched(make_client: Factory, outbox: Outbox, db: Session) 
         ).status_code
         == 404
     )
+
+
+def test_failed_erasure_leaves_everything_and_no_journal_line(
+    make_client: Factory,
+    outbox: Outbox,
+    storage: MemoryStorage,
+    db: Session,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    client, secret, _ = admin(make_client, db)
+    org_id = create(client).json()["id"]
+    storage.objects["orgs/x/file"] = b"x"
+    db.add(
+        File(
+            org_id=org_id,
+            storage_key="orgs/x/file",
+            filename="f.pdf",
+            mime="application/pdf",
+            size_bytes=1,
+            sha256="0" * 64,
+        )
+    )
+    db.commit()
+
+    def down(key: str) -> None:
+        raise RuntimeError("storage down")
+
+    monkeypatch.setattr(storage, "delete", down)
+    res = client.post(
+        f"/admin/organizations/{org_id}/deletion",
+        json={"confirmation": "Propreté Test", "code": code(secret)},
+    )
+    assert res.status_code == 503
+    db.expire_all()
+    assert db.get(Organization, org_id) is not None
+    assert journal(db, "organization_deleted") == []  # nothing claims it is gone
