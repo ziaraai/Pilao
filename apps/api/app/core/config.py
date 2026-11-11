@@ -84,6 +84,8 @@ class Settings(BaseSettings):
     invitation_ttl_hours: int = 24 * 7  # link sent to an invited colleague
     max_users_per_org: int = 25  # guard; the real limit will come with the plans (Q3)
     feedback_email: str = ""  # the team's inbox: every feedback is mailed there at once
+    support_email: str = ""  # shown in « Contactez Pilao : … » (suspended account, e-mails)
+    password_reset_ttl_minutes: int = 60  # « Mot de passe oublié » link
     # Outgoing e-mail (ADR-032): any SMTP server; empty host = console outside production
     smtp_host: str = ""
     smtp_port: int = 587

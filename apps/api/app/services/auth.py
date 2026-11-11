@@ -14,6 +14,7 @@ from app.core.security import hash_password, hash_token, needs_rehash, new_token
 from app.db.models import AuditLog, AuthToken, LoginAttempt, Organization, User, UserSession
 from app.integrations.recherche_entreprises import CompanyDirectory, CompanyLookupUnavailable
 from app.schemas.auth import RegisterIn
+from app.services.suspension import is_suspended, suspended_error
 
 VERIFY_KIND = "email_verify"
 logger = logging.getLogger("pilao.auth")
@@ -145,6 +146,8 @@ def verify_email(db: Session, token: str) -> None:
     if row is None or row.used_at is not None or row.expires_at < _now():
         raise ApiError(400, "invalid_token", "Lien invalide ou expiré.")
     user = db.get_one(User, row.user_id)
+    if is_suspended(db.get_one(Organization, user.org_id)):
+        raise suspended_error()
     row.used_at = _now()
     user.email_verified_at = user.email_verified_at or _now()
     _audit(db, user, "verify_email", "user", user.id)
@@ -156,6 +159,8 @@ def resend_verification(db: Session, email: str, mailer: Mailer) -> None:
     user = db.scalar(select(User).where(User.email == email))
     if user is None or user.email_verified_at is not None or user.password_hash is None:
         return  # an invited colleague has no password yet: the invitation link is the way in
+    if is_suspended(db.get_one(Organization, user.org_id)):
+        return  # nothing leaves for a suspended company
     s = get_settings()
     recent = db.scalar(
         select(func.count())
@@ -203,6 +208,9 @@ def login(
     if not ok or user is None:
         db.commit()
         raise ApiError(401, "invalid_credentials", "E-mail ou mot de passe incorrect.")
+    if is_suspended(db.get_one(Organization, user.org_id)):
+        db.commit()  # the attempt is kept; the message only shows after the right password
+        raise suspended_error()
     if user.email_verified_at is None:
         db.commit()
         raise ApiError(403, "email_not_verified", "Veuillez d'abord confirmer votre e-mail.")

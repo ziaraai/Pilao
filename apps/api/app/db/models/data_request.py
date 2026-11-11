@@ -28,6 +28,10 @@ class DataRequest(IdMixin, TimestampMixin, OrgScoped, Base):
     requested_by: Mapped[uuid.UUID | None] = mapped_column(
         UUID(as_uuid=True), ForeignKey("users.id", ondelete="SET NULL")
     )
+    # A deletion scheduled by Pilao from the administration (``requested_by`` is then empty)
+    platform_admin_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("platform_admins.id", ondelete="SET NULL")
+    )
 
 
 class PurgeLog(IdMixin, TimestampMixin, Base):

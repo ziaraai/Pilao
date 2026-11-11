@@ -58,7 +58,11 @@ def send_digests(db: Session, mailer: Mailer, now: datetime) -> int:
         return 0
     base = get_settings().app_base_url.rstrip("/")
     sent = 0
-    for profile in db.scalars(select(CompanyProfile)):
+    for profile in db.scalars(
+        select(CompanyProfile)
+        .join(Organization, Organization.id == CompanyProfile.org_id)
+        .where(Organization.suspended_at.is_(None))  # nothing leaves for a suspended company
+    ):
         threshold = (
             profile.min_score_alert if profile.min_score_alert is not None else DEFAULT_THRESHOLD
         )
@@ -125,6 +129,8 @@ def send_expiry_alerts(db: Session, mailer: Mailer, today: date) -> int:
         )
     ):
         assert doc.valid_until is not None
+        if orgs[doc.org_id].suspended_at is not None:
+            continue  # nothing leaves for a suspended company
         days = (doc.valid_until - today).days
         if days > 30 or days < -EXPIRED_ALERT_DAYS:
             continue  # too early, or expired long before (no e-mail about old history)

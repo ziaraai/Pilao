@@ -14,7 +14,7 @@ from dataclasses import dataclass, field
 from datetime import UTC, datetime, timedelta
 from typing import Any
 
-from sqlalchemy import or_, select, update
+from sqlalchemy import Select, or_, select, update
 from sqlalchemy.orm import Session
 
 from app.ai import llm
@@ -27,6 +27,7 @@ from app.db.models import (
     Bid,
     CompanyProfile,
     Notification,
+    Organization,
     Tender,
     TenderMatch,
     User,
@@ -345,7 +346,7 @@ def match_tenders(
         return 0
     created = 0
     to_score: set[uuid.UUID] = set()
-    for profile in db.scalars(select(CompanyProfile)):
+    for profile in db.scalars(_watching_profiles()):
         rules = company_filter(profile)
         if not rules.watches_something:
             continue
@@ -383,6 +384,15 @@ def match_tenders(
     for org_id in to_score:
         _enqueue_score(queue, org_id)
     return created
+
+
+def _watching_profiles() -> Select[CompanyProfile]:
+    """The profiles the watch works for: a suspended company gets no match, hence no score."""
+    return (
+        select(CompanyProfile)
+        .join(Organization, Organization.id == CompanyProfile.org_id)
+        .where(Organization.suspended_at.is_(None))
+    )
 
 
 def rematch_org(

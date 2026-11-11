@@ -1,6 +1,7 @@
 import uuid
+from datetime import datetime
 
-from sqlalchemy import CHAR, String, Text
+from sqlalchemy import CHAR, DateTime, String, Text
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import Mapped, mapped_column
 
@@ -29,3 +30,6 @@ class Organization(IdMixin, TimestampMixin, Base):
     contact_email: Mapped[str | None] = mapped_column(Text)
     signatory_name: Mapped[str | None] = mapped_column(Text)
     signatory_role: Mapped[str | None] = mapped_column(Text)
+    # Set by the platform administration (lot 2): nobody of the company gets in, nothing leaves
+    suspended_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    suspension_reason: Mapped[str | None] = mapped_column(Text)

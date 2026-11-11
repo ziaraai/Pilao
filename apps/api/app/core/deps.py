@@ -19,6 +19,7 @@ from app.core.security import hash_token
 from app.core.tenancy import scope_session
 from app.db.models import Organization, User, UserSession
 from app.db.session import get_db
+from app.services.suspension import is_suspended, suspended_error
 
 SAFE_METHODS = {"GET", "HEAD", "OPTIONS"}
 
@@ -59,6 +60,8 @@ def get_auth_context(request: Request, db: Annotated[Session, Depends(get_db)]) 
     _csrf_check(request)
     user = db.get_one(User, session.user_id)
     org = db.get_one(Organization, user.org_id)
+    if is_suspended(org):
+        raise suspended_error()
     # From here on, the session only sees (and may only write) this organization's rows.
     scope_session(db, org.id)
     return AuthContext(user=user, org=org, session=session)

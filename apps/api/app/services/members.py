@@ -29,6 +29,7 @@ from app.core.security import hash_password, hash_token, new_token
 from app.db.models import AuditLog, AuthToken, Organization, User
 from app.schemas.members import AcceptInvitationIn, InvitationOut, InviteIn, MemberOut
 from app.services.auth import open_session
+from app.services.suspension import is_suspended, suspended_error
 
 INVITE_KIND = "invitation"
 INVALID_LINK = (
@@ -214,6 +215,8 @@ def _valid_link(db: Session, token: str, lock: bool = False) -> tuple[AuthToken,
         or user.password_hash is not None
     ):
         raise ApiError(410, "invitation_invalid", INVALID_LINK)
+    if is_suspended(db.get_one(Organization, user.org_id)):
+        raise suspended_error()
     return row, user
 
 
