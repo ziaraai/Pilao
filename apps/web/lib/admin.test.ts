@@ -7,6 +7,7 @@ import {
   adminSignInPath,
   auditDetail,
   auditLabel,
+  moduleShort,
   safeAdminNext,
   userActions,
 } from "./admin";
@@ -47,7 +48,7 @@ describe("administration", () => {
     ).toBe("/admin/technique");
   });
 
-  it("has six screens, the overview first, the journal last", () => {
+  it("has seven screens, the overview first, the modules last", () => {
     expect(ADMIN_NAV.map((n) => n.href)).toEqual([
       "/admin",
       "/admin/entreprises",
@@ -55,7 +56,9 @@ describe("administration", () => {
       "/admin/technique",
       "/admin/avis",
       "/admin/journal",
+      "/admin/modules",
     ]);
+    expect(ADMIN_NAV[6].label).toBe("Modules");
   });
 
   it("names the journal's actions in French", () => {
@@ -63,6 +66,14 @@ describe("administration", () => {
     expect(auditLabel("user_removed")).toBe("Utilisateur retiré");
     expect(auditLabel("login_failed")).toBe("Connexion refusée");
     expect(auditLabel("something_new")).toBe("something_new");
+    expect(auditLabel("module_enabled")).toBe("Module activé");
+    expect(auditLabel("module_disabled")).toBe("Module désactivé");
+  });
+
+  it("names the modules shortly in the companies list", () => {
+    expect(moduleShort("veille")).toBe("Veille");
+    expect(moduleShort("reponse")).toBe("Réponse");
+    expect(moduleShort("crm")).toBe("crm");
   });
 
   it("sums up a journal line's details, never more", () => {
@@ -77,6 +88,9 @@ describe("administration", () => {
       "Propreté · effacement dans 30 jours",
     );
     expect(auditDetail({ left: 3 })).toBe("3 codes de secours restants");
+    expect(
+      auditDetail({ module: "reponse", name: "Réponse aux appels d'offres" }),
+    ).toBe("Réponse aux appels d'offres");
     expect(auditDetail({ by: "cli" })).toBe("—");
     expect(auditDetail({})).toBe("—");
   });

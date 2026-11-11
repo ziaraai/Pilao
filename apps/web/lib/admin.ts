@@ -11,6 +11,7 @@ export const ADMIN_NAV: { href: string; label: string; icon: IconName }[] = [
   { href: "/admin/technique", label: "Technique", icon: "todo" },
   { href: "/admin/avis", label: "Avis des testeurs", icon: "documents" },
   { href: "/admin/journal", label: "Journal", icon: "vault" },
+  { href: "/admin/modules", label: "Modules", icon: "start" },
 ];
 
 const ACCESS_PAGES = ["/admin/connexion", "/admin/activation"];
@@ -61,10 +62,22 @@ export const AUDIT_LABELS: Record<string, string> = {
   user_logged_out: "Utilisateur déconnecté partout",
   user_removed: "Utilisateur retiré",
   step_up_failed: "Code refusé",
+  module_enabled: "Module activé",
+  module_disabled: "Module désactivé",
 };
 
 export function auditLabel(action: string): string {
   return AUDIT_LABELS[action] ?? action;
+}
+
+/** A module's short name, for the pills of the companies list (lot 3). */
+const MODULE_SHORT: Record<string, string> = {
+  veille: "Veille",
+  reponse: "Réponse",
+};
+
+export function moduleShort(key: string): string {
+  return MODULE_SHORT[key] ?? key;
 }
 
 export type UserAction =

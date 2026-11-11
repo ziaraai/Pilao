@@ -617,6 +617,17 @@ export type AdminOrganizationRow = {
   suspension_reason: string | null;
   deletion_due_at: string | null;
   invitation_pending: boolean;
+  modules: string[]; // its active modules (lot 3)
+};
+
+/** A module of the registry, in the administration's catalogue (lot 3). */
+export type AdminModule = {
+  key: string;
+  name: string;
+  description: string;
+  contents: string[];
+  nav: string[];
+  organizations: number;
 };
 
 /** A company or a user created from the administration. */
@@ -714,6 +725,7 @@ export type AdminOrganizationDetail = {
   ai_tasks: { task: string; label: string; calls: number; cost: string }[];
   job_errors: AdminJobIssue[];
   feedback: AdminFeedbackItem[];
+  modules: string[];
 };
 
 export type AdminAiCosts = {

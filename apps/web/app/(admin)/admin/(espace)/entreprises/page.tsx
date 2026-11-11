@@ -13,6 +13,7 @@ import {
   Pill,
 } from "@/components/admin/ui";
 import { Alert, Card, tableHead, tableRow } from "@/components/ui";
+import { moduleShort } from "@/lib/admin";
 import { useAdminApi } from "@/lib/admin-auth";
 import { formatDate, formatDateTimeShort, formatEuros } from "@/lib/format";
 import type { AdminOrganizationRow } from "@/lib/types";
@@ -70,6 +71,7 @@ export default function AdminOrganizationsPage() {
                       <th className={NUM}>Mémoires</th>
                       <th className={NUM}>Profil</th>
                       <th className={NUM}>IA ce mois</th>
+                      <th className={HEAD}>Modules</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -120,6 +122,19 @@ export default function AdminOrganizationsPage() {
                         <td className={NUM}>{o.memoirs}</td>
                         <td className={NUM}>{o.completeness_pct} %</td>
                         <td className={NUM}>{formatEuros(o.ai_cost_month)}</td>
+                        <td className={CELL}>
+                          <span className="inline-flex flex-wrap gap-1">
+                            {o.modules.length === 0 ? (
+                              <Pill tone="neutral">Aucun</Pill>
+                            ) : (
+                              o.modules.map((m) => (
+                                <Pill key={m} tone="ok">
+                                  {moduleShort(m)}
+                                </Pill>
+                              ))
+                            )}
+                          </span>
+                        </td>
                       </tr>
                     ))}
                   </tbody>

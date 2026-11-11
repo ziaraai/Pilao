@@ -5,6 +5,7 @@ import { useParams, useRouter, useSearchParams } from "next/navigation";
 import { useState } from "react";
 
 import { ConfirmDialog } from "@/components/admin/dialogs";
+import { OrgModules } from "@/components/admin/org-modules";
 import { OrgUsers } from "@/components/admin/org-users";
 import {
   AdminTitle,
@@ -400,6 +401,12 @@ export default function AdminOrganizationPage() {
                 orgName={i.name}
                 users={d.users}
                 suspended={d.account.suspended_at !== null}
+                onChanged={detail.reload}
+              />
+
+              <OrgModules
+                orgId={id}
+                modules={d.modules}
                 onChanged={detail.reload}
               />
 
