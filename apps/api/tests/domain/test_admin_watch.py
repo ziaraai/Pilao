@@ -100,6 +100,7 @@ def test_labels() -> None:
     assert set(TASK_LABELS) == {
         "dce_extraction",
         "memoir_generation",
+        "memoir_regeneration",
         "tender_scoring",
         "profile_extraction",
         "compliance_reading",

@@ -7,6 +7,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.db.models import Job
+from app.services import credits
 
 
 def set_job_status(
@@ -26,3 +27,5 @@ def set_job_status(
         job.finished_at = now
         if status == "done":
             job.progress = 100
+    if status == "error":
+        credits.refund_failed(db, job)  # lot 4: a failed work gives its credits back

@@ -128,7 +128,7 @@ class GoNoGoOut(BaseModel):
 
 class AnalysisOut(BaseModel):
     id: uuid.UUID
-    status: Literal["pending", "processing", "ready", "error"]
+    status: Literal["pending", "processing", "ready", "error", "waiting_credits"]
     error: str | None
     dce_version: int
     data: dict[str, Any] | None

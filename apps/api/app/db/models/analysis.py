@@ -13,7 +13,9 @@ class DceAnalysis(IdMixin, TimestampMixin, OrgScoped, Base):
 
     __tablename__ = "dce_analyses"
     __table_args__ = (
-        CheckConstraint("status in ('pending','processing','ready','error')", name="status"),
+        CheckConstraint(
+            "status in ('pending','processing','ready','error','waiting_credits')", name="status"
+        ),
         Index("ix_dce_analyses_bid_id_created_at", "bid_id", "created_at"),
     )
 

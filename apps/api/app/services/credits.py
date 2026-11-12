@@ -9,12 +9,21 @@ import uuid
 from dataclasses import dataclass
 from datetime import UTC, datetime
 
-from sqlalchemy import case, func, select
-from sqlalchemy.orm import Session
+from sqlalchemy import case, exists, func, select
+from sqlalchemy.orm import Session, aliased
 
 from app.core.config import get_settings
 from app.core.errors import ApiError
-from app.db.models import Bid, CreditEntry, CreditPrice, Organization, Plan, PlatformAdmin, User
+from app.db.models import (
+    Bid,
+    CreditEntry,
+    CreditPrice,
+    Job,
+    Organization,
+    Plan,
+    PlatformAdmin,
+    User,
+)
 from app.domain.credits import (
     Balance,
     InsufficientCredits,
@@ -208,6 +217,50 @@ def grant(
     db.add(entry)
     db.flush()
     return entry
+
+
+# The works whose failure gives back their charge: job kind -> (paid action, history line).
+REFUNDED_JOBS = {
+    "analyze_dce": ("dce_analysis", "Remboursé : l'analyse n'a pas abouti."),
+    "draft_memoir_section": ("chapter_regeneration", "Remboursé : la régénération n'a pas abouti."),
+    "profile_prefill": ("profile_prefill", "Remboursé : la lecture n'a pas abouti."),
+}
+DRAFTING_REFUND = "Remboursé : la rédaction n'a pas abouti."
+
+
+def refund_latest(
+    db: Session, action: str, ref_id: uuid.UUID, since: datetime | None, reason: str
+) -> CreditEntry | None:
+    """Give back the latest charge of ``action`` for ``ref_id`` (made since ``since``) that was
+    not given back yet."""
+    given_back = aliased(CreditEntry)
+    query = (
+        select(CreditEntry)
+        .where(
+            CreditEntry.kind == "charge",
+            CreditEntry.action == action,
+            CreditEntry.ref_id == ref_id,
+            ~exists().where(given_back.refund_of == CreditEntry.id),
+        )
+        .order_by(CreditEntry.at.desc())
+    )
+    if since is not None:
+        query = query.where(CreditEntry.at >= since)
+    for entry in db.scalars(query):
+        back = refund(db, entry, reason)
+        if back is not None:
+            return back
+    return None
+
+
+def refund_failed(db: Session, job: Job) -> None:
+    """A work that ends in error gives back what its launch took (called by ``set_job_status``).
+    Only a charge made for this very work counts: one made before it started is not touched."""
+    found = REFUNDED_JOBS.get(job.kind)
+    if found is None or job.ref_id is None:
+        return
+    action, reason = found
+    refund_latest(db, action, job.ref_id, job.created_at, reason)
 
 
 # ---------- history --------------------------------------------------------------------------

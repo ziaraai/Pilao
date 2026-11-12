@@ -54,6 +54,7 @@ from app.schemas.profile_prefill import (
     SuggestionOut,
     SuggestionsOut,
 )
+from app.services import credits
 from app.services import profile as profile_svc
 from app.services.jobs import set_job_status
 from app.services.knowledge import document_blocks
@@ -174,7 +175,9 @@ def _ready_documents(db: Session) -> list[KnowledgeDocument]:
     )
 
 
-def request_read(db: Session, org: Organization, queue: JobQueue) -> Job:
+def request_read(
+    db: Session, org: Organization, queue: JobQueue, user_id: uuid.UUID | None = None
+) -> Job:
     """Start a reading of the knowledge base (one at a time per company)."""
     if not _ready_documents(db):
         raise ApiError(
@@ -189,6 +192,8 @@ def request_read(db: Session, org: Organization, queue: JobQueue) -> Job:
         raise ApiError(409, "already_running", "Une lecture est déjà en cours.")
     job = Job(kind=JOB_KIND, ref_id=org.id, org_id=org.id, status="pending")
     db.add(job)
+    db.flush()
+    credits.charge(db, org, "profile_prefill", user_id=user_id, ref_id=org.id)  # lot 4
     db.commit()
     try:
         queue.enqueue_profile_prefill(org.id)

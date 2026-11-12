@@ -44,6 +44,17 @@ def conn(engine: Engine) -> Iterator[Connection]:
     connection.close()
 
 
+@pytest.fixture(autouse=True)
+def credits_aplenty(request: pytest.FixtureRequest) -> None:
+    """Lot 4: the tests of the paid actions written before the credits do not count them; the
+    test modules that check the credits themselves declare ``REAL_CREDITS = True``."""
+    if getattr(request.module, "REAL_CREDITS", False):
+        return
+    if not {"conn", "db", "make_client"} & set(request.fixturenames):
+        return
+    request.getfixturevalue("conn").execute(text("UPDATE plans SET monthly_credits = 100000"))
+
+
 def _new_session(conn: Connection) -> Session:
     return Session(conn, join_transaction_mode="create_savepoint", expire_on_commit=False)
 

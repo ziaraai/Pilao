@@ -163,9 +163,9 @@ def get_pages(
 
 
 @router.post("/bids/{bid_id}/analysis", status_code=202)
-def run_analysis(bid_id: uuid.UUID, db: ScopedDb, queue: Queue) -> AnalysisOut:
-    """Re-run the AI analysis on the latest ready DCE version."""
-    return _analysis_out(db, analysis_svc.rerun(db, _bid(db, bid_id), queue))
+def run_analysis(bid_id: uuid.UUID, ctx: CurrentAuth, db: ScopedDb, queue: Queue) -> AnalysisOut:
+    """Re-run the AI analysis on the latest ready DCE version (paid in credits, lot 4)."""
+    return _analysis_out(db, analysis_svc.rerun(db, _bid(db, bid_id), queue, ctx.user.id))
 
 
 @router.get("/bids/{bid_id}/analysis")

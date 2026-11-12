@@ -32,6 +32,7 @@ from app.domain import go_no_go as gng
 from app.domain import vault as vault_rules
 from app.domain.trades import TRADES
 from app.schemas.dce_analysis import DceAnalysisData, Source
+from app.services import credits
 from app.services import vault as vault_svc
 from app.services.jobs import set_job_status
 from app.workers.queue import ANALYSIS_JOB_TIMEOUT_SECONDS, JobQueue
@@ -343,7 +344,20 @@ def _short(raw: dict[str, Any]) -> str:
 # ---------- orchestration -----------------------------------------------------------------
 
 
-def request_analysis(db: Session, version: DceVersion, queue: JobQueue) -> DceAnalysis:
+WAITING_CREDITS = "Analyse non lancée : crédits insuffisants."
+
+
+def request_analysis(
+    db: Session,
+    version: DceVersion,
+    queue: JobQueue,
+    *,
+    user_id: uuid.UUID | None,
+    automatic: bool,
+) -> DceAnalysis:
+    """Start the analysis of ``version`` and take its credits (lot 4). Without enough credits,
+    the analysis that starts by itself at the deposit waits (``waiting_credits``) and one asked
+    by the user is refused (402)."""
     analysis = DceAnalysis(
         id=uuid.uuid4(),
         bid_id=version.bid_id,
@@ -352,7 +366,25 @@ def request_analysis(db: Session, version: DceVersion, queue: JobQueue) -> DceAn
         org_id=version.org_id,
     )
     db.add(analysis)
-    db.add(Job(kind=JOB_KIND, ref_id=analysis.id, org_id=version.org_id, status="pending"))
+    job = Job(kind=JOB_KIND, ref_id=analysis.id, org_id=version.org_id, status="pending")
+    db.add(job)
+    db.flush()  # the charge comes after the work exists: a failure gives back this charge only
+    try:
+        credits.charge(
+            db,
+            db.get_one(Organization, version.org_id),
+            "dce_analysis",
+            user_id=user_id,
+            bid_id=version.bid_id,
+            ref_id=analysis.id,
+        )
+    except ApiError as exc:
+        if not automatic or exc.code != "credits_exhausted":
+            raise
+        db.delete(job)
+        analysis.status, analysis.error = "waiting_credits", WAITING_CREDITS
+        db.commit()
+        return analysis
     db.commit()
     try:
         queue.enqueue_analyze_dce(analysis.id)
@@ -367,7 +399,7 @@ def request_analysis(db: Session, version: DceVersion, queue: JobQueue) -> DceAn
     return analysis
 
 
-def rerun(db: Session, bid: Bid, queue: JobQueue) -> DceAnalysis:
+def rerun(db: Session, bid: Bid, queue: JobQueue, user_id: uuid.UUID) -> DceAnalysis:
     running = db.scalar(
         select(DceAnalysis.id).where(
             DceAnalysis.bid_id == bid.id,
@@ -387,7 +419,7 @@ def rerun(db: Session, bid: Bid, queue: JobQueue) -> DceAnalysis:
         raise ApiError(
             409, "no_dce", "Déposez d'abord un DCE (et attendez la fin de son traitement)."
         )
-    return request_analysis(db, version, queue)
+    return request_analysis(db, version, queue, user_id=user_id, automatic=False)
 
 
 def _company_summary(db: Session, org: Organization) -> str:

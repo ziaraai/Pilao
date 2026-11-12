@@ -36,6 +36,7 @@ from app.db.models import (
 from app.domain.memoir_checks import check_chapter, force_title
 from app.domain.trades import TRADES
 from app.schemas.drafting import ChapterOut, MatrixOut
+from app.services import credits
 from app.services.jobs import set_job_status
 from app.services.knowledge import search_chunks
 from app.services.memoir_editing import add_revision
@@ -183,6 +184,15 @@ def start_generation(db: Session, user: User, memoir: Memoir, queue: JobQueue) -
         s.status, s.error = "pending", None
         db.add(Job(kind=JOB_SECTION, ref_id=s.id, org_id=memoir.org_id, status="pending"))
     db.add(AuditLog(user_id=user.id, action="generate", entity="memoir", entity_id=memoir.id))
+    db.flush()
+    credits.charge(  # lot 4: refused (402) without enough credits, nothing is started
+        db,
+        db.get_one(Organization, memoir.org_id),
+        "memoir_generation",
+        user_id=user.id,
+        bid_id=memoir.bid_id,
+        ref_id=memoir.id,
+    )
     db.commit()
     _enqueue_sections(db, memoir, [s.id for s in sections], queue)
 
@@ -204,6 +214,8 @@ def regenerate_section(
     stale = section.updated_at < datetime.now(UTC) - SECTION_STALE_AFTER
     if section.status in ("pending", "generating") and not stale:
         raise ApiError(409, "section_busy", "Ce chapitre est en cours de rédaction.")
+    # lot 4: relaunching a chapter that failed (or that a dead worker left stuck) is free
+    free = section.status == "error" or section.status in ("pending", "generating")
     if add_refs:
         known = set(
             db.scalars(
@@ -230,6 +242,16 @@ def regenerate_section(
             meta={"instruction": section.instruction, "added_requirements": add_refs},
         )
     )
+    db.flush()
+    if not free:
+        credits.charge(
+            db,
+            db.get_one(Organization, memoir.org_id),
+            "chapter_regeneration",
+            user_id=user.id,
+            bid_id=memoir.bid_id,
+            ref_id=section.id,
+        )
     db.commit()
     _enqueue_sections(db, memoir, [section.id], queue)
 
@@ -319,7 +341,8 @@ def run_draft_section(
         result = llm.complete(
             db,
             org_id=org.id,
-            task="memoir_generation",
+            # a new version of a chapter has its own task: its real cost (lot 4)
+            task="memoir_regeneration" if instruction else "memoir_generation",
             bid_id=bid.id,
             prompt_version=prompt.version,
             messages=[{"role": "system", "content": system}, {"role": "user", "content": user}],
@@ -412,6 +435,12 @@ def _maybe_finish(db: Session, memoir_id: uuid.UUID, queue: JobQueue) -> None:
         db.commit()
         return
     memoir.status = "ready"
+    if all(s == "error" for s in statuses) and not db.scalar(
+        select(MemoirSection.id).where(
+            MemoirSection.memoir_id == memoir_id, MemoirSection.content_md.is_not(None)
+        )
+    ):  # lot 4: nothing was ever written, the drafting gives its credits back
+        credits.refund_latest(db, "memoir_generation", memoir_id, None, credits.DRAFTING_REFUND)
     start = all(s == "ready" for s in statuses)
     if start:
         memoir.conformity_status, memoir.conformity_error = "pending", None

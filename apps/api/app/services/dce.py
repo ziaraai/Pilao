@@ -308,7 +308,7 @@ def run_process_dce(
     if queue is not None:
         from app.services.dce_analysis import request_analysis  # avoid an import cycle
 
-        request_analysis(db, fresh, queue)
+        request_analysis(db, fresh, queue, user_id=fresh.uploaded_by, automatic=True)
 
 
 def _finish(

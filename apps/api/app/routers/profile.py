@@ -185,7 +185,7 @@ def read_documents(
     queue: Annotated[JobQueue, Depends(get_job_queue)],
 ) -> ReadJobOut:
     """US-1.6: read the knowledge base in the background to propose profile lines."""
-    job = prefill.request_read(db, ctx.org, queue)
+    job = prefill.request_read(db, ctx.org, queue, ctx.user.id)
     return prefill.job_out(job)
 
 

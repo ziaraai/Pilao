@@ -32,6 +32,7 @@ JOB_LABELS = {
 TASK_LABELS = {
     "dce_extraction": "Analyse du DCE",
     "memoir_generation": "Rédaction du mémoire",
+    "memoir_regeneration": "Régénération d'un chapitre",
     "tender_scoring": "Score des annonces",
     "profile_extraction": "Lecture des documents du profil",
     "compliance_reading": "Lecture des attestations",
