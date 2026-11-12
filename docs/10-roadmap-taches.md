@@ -88,7 +88,7 @@ Reste à faire :
   - [x] Lot 1 — compte super admin séparé (mot de passe + code TOTP, créé par `admin-access`) et supervision en lecture seule : vue d'ensemble, entreprises et fiche, coûts de l'IA, technique, avis
   - [x] Lot 2 — gestion des comptes : créer une entreprise, suspendre et réactiver, supprimer (tout de suite si jamais utilisée, sinon dans 30 jours), dépanner les utilisateurs, écran du journal ; « Mot de passe oublié ? » pour les clients (ADR-042)
   - [x] Lot 3 — socle des modules (ADR-041) : deux modules, « Veille des annonces » et « Réponse aux appels d'offres », activés par défaut ; carte « Modules » de la fiche, colonne de la liste, écran « Modules » ; menu, pages, tableau de bord, profil et travail de fond qui suivent les modules actifs ; rien n'est effacé (US-6.9, US-6.10)
-  - [ ] Lot 4 — formules et crédits : une formule = des modules + des crédits ; attribution à la main (dépend de P4-05), Stripe plus tard
+  - [x] Lot 4 — formules et crédits (ADR-043) : formules réglées dans l'admin (« Découverte » par défaut, « Pilote » pour les entreprises existantes), prix en crédits de 4 actions payantes avec leur coût réel, crédits du mois et supplémentaires, recharges à la main, remboursement automatique des échecs ; le client ne voit que des crédits (US-6.11 à US-6.14) ; Stripe plus tard
   - [ ] Lot 5 — réglages de la plateforme : modèle d'IA par tâche, clés API chiffrées en base, imports
 
 ## V2 (après validation)

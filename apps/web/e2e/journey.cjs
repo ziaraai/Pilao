@@ -265,6 +265,7 @@ let current; // the page, for a screenshot when a step fails
   await page.getByLabel("Intitulé").fill("Nettoyage mairie E2E");
   await page.getByRole("button", { name: "Créer", exact: true }).click();
   await page.waitForURL(/\/dossiers\/[0-9a-f-]+$/);
+  const bidUrl = page.url(); // lot 4: the paid relaunch of its analysis
   await page.setInputFiles("#dce-upload", `${S}/DCE_mairie.zip`);
   await page
     .getByRole("button", { name: "Déposer le DCE", exact: true })
@@ -927,7 +928,7 @@ let current; // the page, for a screenshot when a step fails
   // Suspended: the page already open is sent to sign-in, which says why.
   await admin.reload();
   await admin.getByRole("button", { name: "Suspendre" }).click();
-  await admin.getByLabel("Raison").fill("Essai du parcours");
+  await admin.getByLabel("Raison", { exact: true }).fill("Essai du parcours");
   await admin.getByRole("button", { name: "Suspendre l'accès" }).click();
   await admin.getByText("Essai du parcours").waitFor();
   await bossPage.goto(`${WEB}/dossiers`);
@@ -1099,6 +1100,77 @@ let current; // the page, for a screenshot when a step fails
   await admin.screenshot({ path: `${S}/admin-modules.png`, fullPage: true });
   step(
     "« Réponse » turned off: the menu entry leads to the card, then leaves the menu; turned on again; the catalogue read",
+  );
+  // 17. Lot 4: plans and credits. A small plan for the company of the journey: no credits
+  // left this month, the paid buttons are greyed out; Pilao adds credits, the analysis runs.
+  await admin.getByRole("link", { name: "Formules", exact: true }).click();
+  await admin.getByRole("heading", { name: "Formules" }).first().waitFor();
+  await admin.getByRole("button", { name: "Nouvelle formule" }).click();
+  const planName = `Parcours ${n}`;
+  await admin.getByLabel("Nom", { exact: true }).fill(planName);
+  await admin.getByLabel("Phrase vue par le client").fill("Formule d'essai.");
+  await admin.getByLabel("Crédits par mois").fill("3");
+  await admin.getByRole("button", { name: "Enregistrer" }).click();
+  await admin.getByRole("cell", { name: new RegExp(`^${planName}`) }).waitFor();
+  await admin.getByText("Prix des actions").waitFor();
+  await admin.screenshot({ path: `${S}/admin-formules.png`, fullPage: true });
+  await admin.getByRole("link", { name: "Entreprises", exact: true }).click();
+  await admin
+    .getByRole("link", { name: "Nettoyage E2E", exact: true })
+    .first()
+    .click();
+  await admin.getByRole("heading", { name: "Nettoyage E2E" }).waitFor();
+  const changePlan = async (name) => {
+    await admin.getByLabel("Changer de formule").selectOption({ label: name });
+    await admin.getByRole("button", { name: "Changer", exact: true }).click();
+    await admin
+      .getByRole("dialog")
+      .getByRole("button", { name: "Changer de formule" })
+      .click();
+    await admin.getByRole("dialog").waitFor({ state: "detached" });
+  };
+  await changePlan(planName);
+  await admin.getByText("Crédits du mois : 0 sur 3").waitFor(); // this month's use counts
+  await page.goto(bidUrl);
+  await page
+    .getByText("Vous n'avez plus de crédits", { exact: false })
+    .first()
+    .waitFor();
+  await page
+    .getByRole("button", { name: "Relancer l'analyse · 2 crédits" })
+    .first()
+    .waitFor();
+  if (
+    !(await page
+      .getByRole("button", { name: "Relancer l'analyse · 2 crédits" })
+      .first()
+      .isDisabled())
+  )
+    throw new Error("a paid button stays active without credits");
+  await page
+    .getByText("Il faut 2 crédits, il vous en reste 0.")
+    .first()
+    .waitFor();
+  await admin.getByLabel("Ajouter des crédits").fill("10");
+  await admin.getByLabel("Raison de l'ajout").fill("Parcours");
+  await admin.getByRole("button", { name: "Ajouter", exact: true }).click();
+  await admin.getByText("10 crédits ajoutés.").waitFor();
+  await page.reload();
+  await page
+    .getByRole("button", { name: "Relancer l'analyse · 2 crédits" })
+    .first()
+    .click();
+  await page.goto(`${WEB}/profil?onglet=formule`);
+  await page.getByText("8 crédits").first().waitFor();
+  await page.getByRole("cell", { name: "Analyse du DCE" }).first().waitFor();
+  await page
+    .getByRole("cell", { name: /Crédits ajoutés par Pilao/ })
+    .first()
+    .waitFor();
+  await page.screenshot({ path: `${S}/credits.png`, fullPage: true });
+  await changePlan("Pilote");
+  step(
+    "a small plan given to the company: buttons greyed out without credits, Pilao adds 10, the analysis is paid and in the history",
   );
   // the account closed from the server: the next screen asks to sign in again
   execFileSync(PY, ["-m", "app.cli", "admin-access", adminEmail, "--disable"], {

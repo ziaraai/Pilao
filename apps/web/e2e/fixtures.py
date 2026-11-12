@@ -32,4 +32,12 @@ ws.append(["Matériel", "Type de matériel", "Quantité"])
 ws.append(["Monobrosse Taski Ergodisc", "monobrosse", 2])
 ws.append(["Aspirateur Numatic", "aspirateur", 6])
 wb.save(f"{out}/materiel.xlsx")
+# Lot 4: in the local database of the journey, « Pilote » (100 credits a month) is the plan
+# of a new sign-up, so the steps written before the credits have what they use.
+import os
+if os.environ.get("DATABASE_URL"):
+    from sqlalchemy import create_engine, text
+    with create_engine(os.environ["DATABASE_URL"]).begin() as conn:
+        conn.execute(text("UPDATE plans SET is_default = false"))
+        conn.execute(text("UPDATE plans SET is_default = true WHERE name = 'Pilote'"))
 print("fixtures ok")

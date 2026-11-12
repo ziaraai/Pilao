@@ -431,3 +431,17 @@ Format : numéro, date, décision, raison, statut. Ajouter une entrée pour chaq
   - L'exploitant ne choisit jamais un mot de passe et ne se connecte jamais à la place d'un utilisateur : il envoie des liens (invitation, confirmation, nouveau mot de passe). « Mot de passe oublié ? » est ouvert à tous.
 - **Alternatives écartées** : des fonctions propres à l'administration (les règles divergeraient) ; « se connecter en tant que » (contraire à la promesse de ne jamais lire le contenu d'un client).
 - **Statut** : validé (lot 2 livré).
+
+## ADR-043 — Crédits par action, journal des crédits, jamais d'euros côté client
+- **Date** : 2026-11-12
+- **Contexte** : lot 4 du back-office (ADR-040). Une formule = des modules (ADR-041) + des crédits ; les prix ne sont pas décidés (Q3) et la plateforme aura d'autres modules (devis, CRM). Spécification : `docs/superpowers/specs/2026-11-12-administration-lot4-formules-credits-design.md`.
+- **Décision** :
+  - **Un prix en crédits par action** : chaque module déclare ses actions payantes (`PaidAction` dans `app/modules.py`) ; l'exploitant fixe leur prix dans l'admin et voit à côté leur coût réel moyen d'IA (journal `ai_calls`). Pas « 1 crédit = 1 dossier » (ne vaut pas pour d'autres modules), pas « 1 crédit = une somme d'IA » (illisible pour le client).
+  - **Crédits du mois + crédits supplémentaires** : l'allocation de la formule est renouvelée chaque mois civil (Paris), le reste est perdu ; les recharges et crédits offerts n'expirent pas et passent après.
+  - **Un journal** (`credit_entries`) ; le solde est calculé, rien n'est écrit le 1er du mois.
+  - **Prise au lancement**, verrou de la ligne de l'entreprise ; **remboursement automatique** quand le travail finit en erreur, une seule fois, au prix pris ; après la fin du mois, la part du mois revient en crédits supplémentaires.
+  - **Sans crédits, l'action est refusée** (402 `credits_exhausted`), tout le reste marche ; l'analyse automatique d'un DCE attend.
+  - **Jamais d'euros côté client** : solde, prix et historique en crédits ; les euros (ton prix, le coût réel) restent dans l'admin.
+  - La formule décide des modules ; les boutons du lot 3 restent pour les exceptions (« Hors formule »).
+- **Alternatives écartées** : un compteur stocké (se dérègle, pas d'historique) ; une tâche de renouvellement le 1er (peut rater) ; Stripe tout de suite (prix non décidés).
+- **Statut** : validé (lot 4 livré) ; le paiement en ligne viendra sur ce socle.

@@ -1,7 +1,7 @@
 # Administration de la plateforme, lot 4 : formules et crédits — conception
 
 - **Date** : 2026-11-12
-- **Statut** : à valider.
+- **Statut** : validé et livré.
 - **Stories** : US-6.11 (formules), US-6.12 (prix des actions), US-6.13 (formule et crédits d'une
   entreprise), US-6.14 (crédits côté client) ; ADR-043.
 - **S'appuie sur** : lot 3 (`2026-11-11-administration-lot3-modules-design.md`, ADR-041), lot 2

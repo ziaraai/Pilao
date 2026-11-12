@@ -16,6 +16,8 @@ organizations (
   suspended_at timestamptz null,               -- suspendue par l'administration (lot 2)
   suspension_reason text null,                 -- raison saisie par Pilao, jamais montrée au client
   modules text[] not null default '{veille,reponse}',  -- modules actifs (lot 3, ADR-041 ; clés de app/modules.py)
+  plan_id uuid not null -> plans,              -- sa formule (lot 4) ; à la création : la formule par défaut
+  welcome_credits_at timestamptz null,         -- crédits offerts déjà donnés (jamais deux fois)
   created_at, updated_at
 )
 
@@ -40,6 +42,18 @@ platform_admin_sessions ( id, admin_id -> platform_admins cascade, token_hash ch
 platform_audit_logs ( id, admin_id -> platform_admins set null, admin_email text, action text,
                       org_id uuid null,  -- sans clé étrangère : la ligne survit à l'entreprise
                       at timestamptz, ip inet, meta jsonb )                      -- 12 mois
+
+-- Formules et crédits (lot 4, ADR-043)
+plans ( id, name text (unique, sans la casse), description text, modules text[],
+        monthly_credits int, welcome_credits int, price_note text,   -- price_note : pour l'exploitant seul
+        is_default bool (une seule à vrai), archived_at timestamptz null, created_at, updated_at )
+credit_prices ( action text pk, credits int, updated_at )   -- sans ligne : le prix de départ du registre
+credit_entries ( id, org_id, at, kind text check in ('charge','refund','grant','welcome'), action text null,
+                 monthly int, extra int,       -- négatifs pour une prise : où elle a été prise
+                 month date null,              -- 1er jour du mois de Paris de la prise
+                 bid_id -> bids set null, user_id -> users set null, platform_admin_id -> platform_admins set null,
+                 reason text null, ref_id uuid null,             -- le travail payé (analyse, mémoire, chapitre…)
+                 refund_of uuid unique -> credit_entries )        -- un remboursement, une seule fois
 ```
 
 ## Profil

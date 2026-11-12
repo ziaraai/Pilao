@@ -46,4 +46,4 @@
 
 - Abonnement mensuel par entreprise, probablement en plusieurs formules (veille seule / veille + mémoire / illimité).
 - Essai gratuit possible.
-- Prix à valider avec les entreprises testeuses. **Ne pas coder de grille tarifaire avant décision.**
+- Prix à valider avec les entreprises testeuses. **Ne pas coder de grille tarifaire avant décision.** Depuis le lot 4 (ADR-043), les formules et le prix des actions en crédits se règlent dans l'administration : aucune grille n'est dans le code.

@@ -8,7 +8,7 @@ sources cliquables, plan du mémoire, rédaction, matrice de conformité et « c
 modification d'un chapitre et restauration d'une version, DC1 téléchargé, export du dossier complet
 (ZIP avec le PDF de LibreOffice) après avertissements, base documentaire, annonces chargées par
 `python -m app.cli load-tenders` puis filtrées, notées, écartée ou suivie, résultat du dossier,
-tableau de bord, puis l'administration de la plateforme (accès créé par `python -m app.cli admin-access`, activation avec un code TOTP calculé par le parcours, nouvelle connexion, les cinq écrans et la fiche de l'entreprise ; lot 2 : création d'une entreprise et arrivée de son responsable par le lien, suspension (la page ouverte renvoie à la connexion avec le message) et réactivation, « Mot de passe oublié ? » de bout en bout, ajout puis retrait d'un utilisateur avec un code de secours, journal, suppression immédiate d'une entreprise jamais utilisée ; lot 3 : « Réponse aux appels d'offres » désactivé pour l'entreprise du parcours — son entrée de menu mène à la carte « Ce module n'est pas activé », puis quitte le menu — réactivé, catalogue des modules ; refus d'une session d'entreprise), déconnexion. Le parcours lance la CLI : exécutez-le avec les variables ci-dessus. Le worker
+tableau de bord, puis l'administration de la plateforme (accès créé par `python -m app.cli admin-access`, activation avec un code TOTP calculé par le parcours, nouvelle connexion, les cinq écrans et la fiche de l'entreprise ; lot 2 : création d'une entreprise et arrivée de son responsable par le lien, suspension (la page ouverte renvoie à la connexion avec le message) et réactivation, « Mot de passe oublié ? » de bout en bout, ajout puis retrait d'un utilisateur avec un code de secours, journal, suppression immédiate d'une entreprise jamais utilisée ; lot 3 : « Réponse aux appels d'offres » désactivé pour l'entreprise du parcours — son entrée de menu mène à la carte « Ce module n'est pas activé », puis quitte le menu — réactivé, catalogue des modules ; lot 4 : une petite formule donnée à l'entreprise du parcours, boutons payants grisés sans crédits, recharge par Pilao, analyse payée et dans l'historique ; refus d'une session d'entreprise), déconnexion. Le parcours lance la CLI : exécutez-le avec les variables ci-dessus. Le worker
 a besoin de LibreOffice (`libreoffice-writer-nogui`) pour le PDF.
 
 ```bash
@@ -39,3 +39,6 @@ module « Réponse » est désactivé). Avant de relancer, videz les entreprises
 parcours précédents (`delete from organizations; delete from tenders where source_id like 'E2E-%';`
 sur la base locale) : sinon la file des notes ralentit le parcours, et l'annonce du parcours peut
 passer en deuxième page.
+`fixtures.py` fait de « Pilote » (100 crédits par mois) la formule par défaut de la base locale :
+l'entreprise inscrite par le parcours a de quoi payer ses actions. Videz aussi les formules
+d'essai des parcours précédents (`delete from plans where name like 'Parcours %';`).

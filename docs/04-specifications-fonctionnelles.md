@@ -175,7 +175,7 @@ L'utilisateur indique gagné / perdu, le montant proposé, le classement et les 
 
 ## Module 6 — Administration de la plateforme
 
-Le back-office de l'exploitant de Pilao, en cinq lots (ADR-040) : 1. accès et supervision en lecture seule (**fait**) ; 2. gestion des comptes (**fait**, ADR-042) ; 3. socle des modules (**fait**, ADR-041) ; 4. formules et crédits ; 5. réglages de la plateforme (modèles d'IA, clés API, imports). Conceptions : `docs/superpowers/specs/2026-11-10-administration-lot1-supervision-design.md`, `docs/superpowers/specs/2026-11-11-administration-lot2-comptes-design.md`, `docs/superpowers/specs/2026-11-11-administration-lot3-modules-design.md`.
+Le back-office de l'exploitant de Pilao, en cinq lots (ADR-040) : 1. accès et supervision en lecture seule (**fait**) ; 2. gestion des comptes (**fait**, ADR-042) ; 3. socle des modules (**fait**, ADR-041) ; 4. formules et crédits (**fait**, ADR-043) ; 5. réglages de la plateforme (modèles d'IA, clés API, imports). Conceptions : `docs/superpowers/specs/2026-11-10-administration-lot1-supervision-design.md`, `docs/superpowers/specs/2026-11-11-administration-lot2-comptes-design.md`, `docs/superpowers/specs/2026-11-11-administration-lot3-modules-design.md`, `docs/superpowers/specs/2026-11-12-administration-lot4-formules-credits-design.md`.
 
 **US-6.1 Accès du super admin**
 L'exploitant a un compte à lui, séparé de tout compte d'entreprise, sur `app.pilao.pro/admin`.
@@ -231,6 +231,26 @@ Pilao est fait de modules : « Veille des annonces » (menu Annonces) et « Rép
 
 **US-6.10 Le catalogue des modules**
 Écran « Modules » (`/admin/modules`, lecture seule) : chaque module, ce qu'il contient, ses entrées de menu et le nombre d'entreprises qui l'ont activé. Ajouter un module plus tard (CRM, stock) = son code et une entrée du registre (`app/modules.py`).
+
+**US-6.11 Les formules**
+Une formule donne des modules et des crédits. Écran « Formules » (`/admin/formules`).
+- CA1 Nom (unique), phrase vue par le client, modules, crédits par mois, crédits offerts (une seule fois, à la première attribution), prix pour l'exploitant (jamais montré au client).
+- CA2 Modifier les modules ou les crédits par mois d'une formule s'applique tout de suite à ses entreprises, après confirmation (« Ces changements s'appliquent aux N entreprises qui ont cette formule. ») ; seuls les modules changés sont ajoutés ou retirés chez elles (leurs exceptions restent).
+- CA3 Une seule formule par défaut, donnée aux nouvelles inscriptions ; une formule s'archive (plus proposée, ses entreprises la gardent), jamais supprimée ; la formule par défaut ne s'archive pas.
+- CA4 Au départ : « Découverte » (par défaut : les deux modules, 7 crédits offerts une fois) et « Pilote » (les deux modules, 100 crédits par mois, donnée aux entreprises existantes).
+
+**US-6.12 Le prix des actions**
+Chaque action payante a un prix en crédits, réglé dans l'admin (0 à 1000 ; 0 = gratuite). Au départ : analyse du DCE 2, rédaction du mémoire 5, régénérer un chapitre 1, pré-remplir le profil depuis ses documents 1. À côté, pour l'exploitant seul : le nombre d'utilisations et le coût réel moyen d'IA sur 30 jours, en euros. La veille, la lecture des attestations, l'indexation, le DC1/DC2 et les exports sont gratuits.
+
+**US-6.13 La formule et les crédits d'une entreprise**
+Sur sa fiche, carte « Formule et crédits » : la formule et « Changer de formule » (les modules deviennent ceux de la formule, l'allocation du mois aussi ; les crédits supplémentaires restent ; les crédits offerts ne sont jamais donnés deux fois), les crédits du mois et supplémentaires, « Ajouter des crédits » (nombre et raison, au journal), l'historique. La liste a les colonnes « Formule » et « Crédits » ; « À surveiller » signale les entreprises à 0 crédit ; la création d'une entreprise demande sa formule.
+
+**US-6.14 Les crédits côté client**
+- CA1 Le client ne voit jamais d'euros : un compteur « N crédits restants », un onglet Profil « Formule et crédits » (formule, crédits du mois renouvelés le 1er, crédits supplémentaires, prix, historique), le prix sur chaque bouton payant (« Lancer l'analyse · 2 crédits »).
+- CA2 Les crédits du mois sont pris d'abord, puis les supplémentaires (recharges, crédits offerts), qui n'expirent pas.
+- CA3 Sans assez de crédits, le bouton est grisé (« Il faut 5 crédits, il vous en reste 3. Contactez Pilao… ») et le serveur refuse (402 `credits_exhausted`) ; tout le reste marche. L'analyse automatique d'un DCE déposé sans crédits attend (« Analyse non lancée : crédits insuffisants. »).
+- CA4 Bandeau orange sous 20 % des crédits reçus, rouge à 0.
+- CA5 Une action qui échoue rend ses crédits (une fois, au prix pris) ; relancer un chapitre en erreur est gratuit ; un mémoire dont tous les chapitres échouent est remboursé.
 
 ---
 

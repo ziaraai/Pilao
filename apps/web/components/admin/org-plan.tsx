@@ -131,7 +131,7 @@ export function OrgPlan({
                       onChange={(e) => setAmount(e.target.value)}
                     />
                   </Field>
-                  <Field label="Raison" htmlFor={`reason-${orgId}`}>
+                  <Field label="Raison de l'ajout" htmlFor={`reason-${orgId}`}>
                     <Input
                       id={`reason-${orgId}`}
                       maxLength={200}
