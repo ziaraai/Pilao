@@ -13,6 +13,7 @@ from datetime import UTC, datetime, timedelta
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
+from app.core import runtime
 from app.core.config import get_settings
 from app.core.email import Email, Mailer
 from app.core.errors import ApiError
@@ -54,11 +55,12 @@ def submit(
     db.flush()
     db.add(AuditLog(user_id=user.id, action="feedback", entity="feedback", entity_id=item.id))
     db.commit()
-    if s.feedback_email:
+    team = str(runtime.effective("feedback_email") or "").strip()  # set here, else the server's
+    if team:
         try:
             mailer.send(
                 Email(
-                    to=s.feedback_email,
+                    to=team,
                     subject=f"[Pilao] {KINDS[item.kind]} — {org.name}",
                     body=(
                         f"{KINDS[item.kind]} de {user.full_name or user.email} ({user.email}), "

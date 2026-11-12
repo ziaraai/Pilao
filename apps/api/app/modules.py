@@ -9,7 +9,7 @@ module later (a CRM, stock) means writing its code and adding one entry to ``MOD
 from collections.abc import Iterable
 from dataclasses import dataclass
 
-from app.core.config import get_settings
+from app.core import runtime
 from app.core.errors import ApiError
 from app.db.models import Organization
 
@@ -97,7 +97,7 @@ def has_paid_actions(modules: Iterable[str] | None) -> bool:
 
 
 def module_disabled_error() -> ApiError:
-    support = get_settings().support_email.strip()
+    support = str(runtime.effective("support_email") or "").strip()
     contact = f"Contactez Pilao : {support}." if support else "Contactez Pilao."
     return ApiError(
         403,

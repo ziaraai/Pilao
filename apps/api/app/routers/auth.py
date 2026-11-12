@@ -3,6 +3,7 @@ from typing import Annotated
 from fastapi import APIRouter, Depends, Request, Response
 from sqlalchemy.orm import Session
 
+from app.core import runtime
 from app.core.config import get_settings
 from app.core.deps import CurrentAuth
 from app.core.email import Mailer, get_mailer
@@ -48,7 +49,7 @@ def _me_from(db: Session, user: User, org: Organization) -> MeOut:
         org=OrgOut(id=org.id, name=org.name, siret=org.siret),
         terms_current=user.terms_version == TERMS_VERSION,
         modules=active_modules(org),
-        support_email=(get_settings().support_email or "").strip() or None,
+        support_email=str(runtime.effective("support_email") or "").strip() or None,
         credits=_credits_of(db, org) if has_paid_actions(org.modules) else None,
     )
 

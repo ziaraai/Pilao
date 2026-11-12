@@ -19,10 +19,12 @@ from typing import Literal, Protocol, cast
 from sqlalchemy import select, text
 from sqlalchemy.orm import Session
 
+from app.core import runtime
 from app.core.config import get_settings
 from app.core.email import Mailer
 from app.db.models import CompanyProfile, Tender, TenderImport
 from app.domain.trades import TRADES
+from app.platform_settings import IMPORTS
 from app.schemas.tenders import TenderIn
 from app.services.tenders import ingest, match_tenders
 from app.workers.queue import JobQueue
@@ -228,19 +230,25 @@ def describe(r: ImportResult) -> str:
     return f"{r.source.upper()} {_summary(r)}."
 
 
-def readers() -> dict[str, Callable[[], Reader]]:
-    """The enabled sources, by name."""
+def _ted() -> Reader:
     from app.integrations.ted import TedReader
 
-    found: dict[str, Callable[[], Reader]] = {}
-    s = get_settings()
-    if s.ted_import_enabled:
-        found["ted"] = TedReader
-    if s.boamp_import_enabled:
-        from app.integrations.boamp import BoampReader
+    return TedReader()
 
-        found["boamp"] = BoampReader
-    return found
+
+def _boamp() -> Reader:
+    from app.integrations.boamp import BoampReader
+
+    return BoampReader()
+
+
+# Every source, by name (« Importer maintenant » runs one of them, lot 5)
+ALL_READERS: dict[str, Callable[[], Reader]] = {"ted": _ted, "boamp": _boamp}
+
+
+def readers() -> dict[str, Callable[[], Reader]]:
+    """The enabled sources, by name: switched on in the administration, else on the server."""
+    return {name: make for name, make in ALL_READERS.items() if runtime.effective(IMPORTS[name])}
 
 
 def run_all(db: Session, mailer: Mailer, queue: JobQueue) -> list[ImportResult]:

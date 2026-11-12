@@ -24,6 +24,7 @@ from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from app.ai.routing import provider_routing
+from app.core import runtime
 from app.core.config import get_settings
 from app.db.models import AiCall
 from app.platform_settings import TASK_MODELS  # task -> its server setting (re-exported)
@@ -69,10 +70,9 @@ class LlmResult[T: BaseModel]:
 
 
 def model_for(task: str) -> str:
-    attr = TASK_MODELS.get(task)
-    if attr is None:
+    if task not in TASK_MODELS:
         raise LlmError(f"unknown AI task: {task}")
-    model: str = getattr(get_settings(), attr)
+    model = runtime.model_for_task(task)  # the administration's model, else the server's
     if not model:
         raise LlmNotConfigured(f"Aucun modèle configuré pour la tâche « {task} ».")
     return model
@@ -90,7 +90,7 @@ def month_spend_eur(db: Session, org_id: uuid.UUID) -> float:
 
 def ensure_budget(db: Session, org_id: uuid.UUID) -> None:
     """Raise if the organization has used its monthly AI budget (all AI tasks included)."""
-    if month_spend_eur(db, org_id) >= get_settings().ai_monthly_budget_eur_per_org:
+    if month_spend_eur(db, org_id) >= float(runtime.effective("ai_monthly_budget_eur_per_org")):
         raise LlmBudgetExceeded("Budget IA mensuel de l'organisation atteint.")
 
 
@@ -116,6 +116,7 @@ def _call_provider(
 
     if max_tokens:  # the caller sizes the answer; recent models also reason before it
         max_tokens += get_settings().llm_reasoning_tokens
+    key = runtime.api_key()  # the administration's key, else the server's (lot 5)
     resp = litellm.completion(
         model=model,
         messages=messages,
@@ -124,6 +125,7 @@ def _call_provider(
         timeout=300 if max_tokens and max_tokens > 4000 else 90,
         num_retries=2,
         **({"max_tokens": max_tokens} if max_tokens else {}),
+        **({"api_key": key} if key else {}),
         **provider_routing(model),
     )
     content = resp.choices[0].message.content or ""

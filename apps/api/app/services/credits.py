@@ -13,7 +13,7 @@ from datetime import UTC, datetime
 from sqlalchemy import case, exists, func, select
 from sqlalchemy.orm import Session, aliased
 
-from app.core.config import get_settings
+from app.core import runtime
 from app.core.errors import ApiError
 from app.db.models import (
     Bid,
@@ -45,7 +45,7 @@ def _now() -> datetime:
 
 
 def contact_sentence() -> str:
-    support = get_settings().support_email.strip()
+    support = str(runtime.effective("support_email") or "").strip()
     return f"Contactez Pilao : {support}." if support else "Contactez Pilao."
 
 

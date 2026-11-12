@@ -6,9 +6,10 @@ import re
 import unicodedata
 from dataclasses import dataclass
 from functools import lru_cache
-from typing import Protocol
+from typing import Any, Protocol
 
 from app.ai.routing import provider_routing
+from app.core import runtime
 from app.core.config import get_settings
 
 
@@ -73,6 +74,8 @@ class LiteLLMEmbedder:
 
         vectors: list[list[float]] = []
         tokens, cost = 0, 0.0
+        key = runtime.api_key()  # the administration's key, else the server's (lot 5)
+        auth: dict[str, Any] = {"api_key": key} if key else {}  # none: LiteLLM reads the env
         for i in range(0, len(texts), self._batch):
             try:
                 resp = litellm.embedding(
@@ -80,6 +83,7 @@ class LiteLLMEmbedder:
                     input=texts[i : i + self._batch],
                     timeout=60,
                     num_retries=2,
+                    **auth,
                     **provider_routing(self._model),
                 )
             except Exception as exc:
