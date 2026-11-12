@@ -175,6 +175,9 @@ class InlineQueue:
     def enqueue_profile_prefill(self, org_id: uuid.UUID) -> None:
         pass  # the model comparison does not pre-fill profiles
 
+    def enqueue_import_source(self, source: str) -> None:
+        pass  # nor imports notices
+
     def drain(self) -> None:
         embedder = get_embedder()
         while self.jobs:

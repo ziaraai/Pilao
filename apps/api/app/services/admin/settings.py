@@ -2,11 +2,13 @@
 the notice imports and the general settings. Every change is journaled; the value in use is
 read through ``app.core.runtime``, invalidated after each write."""
 
+import logging
 import threading
 import time
 from datetime import UTC, datetime, timedelta
 from typing import Any
 
+from pydantic import EmailStr, TypeAdapter, ValidationError
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
@@ -16,6 +18,7 @@ from app.core import crypto, runtime
 from app.core.config import get_settings
 from app.core.errors import ApiError
 from app.db.models import AiCall, PlatformAdmin, PlatformSetting, TenderImport
+from app.domain.admin_watch import WatchItem
 from app.domain.ai_catalogue import NEEDS_IMAGES, eur_per_million, usable
 from app.platform_settings import BY_NAME, GENERAL, IMPORTS, MODEL_LABELS
 from app.schemas.admin import (
@@ -29,6 +32,10 @@ from app.schemas.admin import (
     SettingsOut,
 )
 from app.services.admin import audit
+from app.workers.queue import TENDER_JOB_TIMEOUT_SECONDS, JobQueue
+
+logger = logging.getLogger("pilao.admin.settings")
+_EMAIL: TypeAdapter[str] = TypeAdapter(EmailStr)
 
 CATALOGUE_TTL_SECONDS = 3600
 KEY = runtime.KEY
@@ -334,3 +341,131 @@ def reset_api_key(db: Session, admin: PlatformAdmin, ip: str | None) -> None:
     db.delete(row)
     audit.record(db, "api_key_reset", admin=admin, ip=ip, meta={})
     _done(db)
+
+
+# ---------- imports and general settings (task 5) ------------------------------------------
+
+
+def _source_or_404(source: str) -> str:
+    if source not in IMPORTS:
+        raise ApiError(404, "unknown_source", "Source inconnue.")
+    return IMPORTS[source]
+
+
+def _general_or_404(name: str) -> str:
+    if name not in GENERAL:
+        raise ApiError(404, "unknown_setting", "Réglage inconnu.")
+    return name
+
+
+def _import_out(db: Session, source: str) -> ImportSettingOut:
+    return next(i for i in imports_out(db) if i.source == source)
+
+
+def set_import(
+    db: Session, admin: PlatformAdmin, source: str, enabled: bool, ip: str | None
+) -> ImportSettingOut:
+    name = _source_or_404(source)
+    before = bool(runtime.effective(name))
+    _store(db, name, admin, value=enabled)
+    meta = {"setting": name, "label": BY_NAME[name].label, "from": before, "to": enabled}
+    audit.record(db, "setting_changed", admin=admin, ip=ip, meta=meta)
+    _done(db)
+    return _import_out(db, source)
+
+
+def reset_import(db: Session, admin: PlatformAdmin, source: str, ip: str | None) -> None:
+    reset(db, admin, _source_or_404(source), ip)
+
+
+def start_import(
+    db: Session, admin: PlatformAdmin, queue: JobQueue, source: str, ip: str | None
+) -> None:
+    """« Importer maintenant »: refused when the source is off, or when a pass of it started
+    less than ``2 × TENDER_JOB_TIMEOUT_SECONDS`` ago and still runs (an older one is dead)."""
+    name = _source_or_404(source)
+    if not runtime.effective(name):
+        raise ApiError(409, "import_off", f"Activez d'abord l'import {source.upper()}.")
+    alive = datetime.now(UTC) - timedelta(seconds=2 * TENDER_JOB_TIMEOUT_SECONDS)
+    running = db.scalar(
+        select(TenderImport.id).where(
+            TenderImport.source == source,
+            TenderImport.status == "running",
+            TenderImport.created_at > alive,
+        )
+    )
+    if running is not None:
+        raise ApiError(409, "import_running", "Un passage est déjà en cours.")
+    try:
+        queue.enqueue_import_source(source)
+    except Exception:
+        logger.exception("could not enqueue the %s import", source)
+        raise ApiError(503, "queue_unavailable", "File d'attente indisponible.") from None
+    audit.record(db, "import_started", admin=admin, ip=ip, meta={"source": source})
+    db.commit()
+
+
+def _general_value(name: str, value: Any) -> int | str:
+    d = BY_NAME[name]
+    if d.kind == "int":
+        low, high = d.minimum or 0, d.maximum or 0
+        if isinstance(value, bool) or not isinstance(value, int) or not low <= value <= high:
+            bounds = f"{low} à {high:,}".replace(",", " ")
+            raise ApiError(422, "invalid_value", f"Un nombre entier de {bounds}.")
+        return value
+    text = str(value if value is not None else "").strip()
+    if text:
+        try:
+            _EMAIL.validate_python(text)
+        except ValidationError:
+            raise ApiError(422, "invalid_value", "Adresse e-mail invalide.") from None
+    return text  # empty: « aucune »
+
+
+def set_general(
+    db: Session, admin: PlatformAdmin, name: str, value: Any, ip: str | None
+) -> GeneralSettingOut:
+    _general_or_404(name)
+    clean = _general_value(name, value)
+    before = runtime.effective(name)
+    _store(db, name, admin, value=clean)
+    meta = {"setting": name, "label": BY_NAME[name].label, "from": before, "to": clean}
+    audit.record(db, "setting_changed", admin=admin, ip=ip, meta=meta)
+    _done(db)
+    return general_out(name)
+
+
+def reset_general(db: Session, admin: PlatformAdmin, name: str, ip: str | None) -> None:
+    reset(db, admin, _general_or_404(name), ip)
+
+
+# ---------- « À surveiller » --------------------------------------------------------------
+
+
+def known_catalogue_ids(client: OpenRouter) -> set[str] | None:
+    """The catalogue's identifiers for the overview: cached, else read within 5 seconds;
+    ``None`` when OpenRouter does not answer (no line about the models then)."""
+    known = cached_catalogue()
+    if known is None:
+        try:
+            known = client.models(timeout=5)
+        except OpenRouterUnavailable:
+            return None
+        with _cache_lock:
+            global _cache
+            _cache = (time.monotonic(), known)
+    return {m.id for m in known}
+
+
+def watch_alerts(catalogue_ids: set[str] | None) -> list[WatchItem]:
+    alerts = []
+    if runtime.snapshot().key_unreadable:
+        title = "La clé OpenRouter enregistrée est illisible"
+        alerts.append(WatchItem("red", "settings", title, None, None, None))
+    if catalogue_ids is not None:
+        for task, label in MODEL_LABELS.items():
+            model = runtime.model_for_task(task)
+            if model and catalogue_id(model) not in catalogue_ids:
+                title = f"{label} : modèle retiré du catalogue OpenRouter"
+                alerts.append(WatchItem("amber", "settings", title, None, None, None))
+    return alerts

@@ -11,11 +11,16 @@ from app.schemas.admin import (
     ApiKeyIn,
     ApiKeyOut,
     CatalogueModelOut,
+    GeneralSettingOut,
+    GeneralValueIn,
+    ImportSettingOut,
+    ImportSwitchIn,
     ModelChoiceIn,
     ModelSettingOut,
     SettingsOut,
 )
 from app.services.admin import settings as svc
+from app.workers.queue import JobQueue, get_job_queue
 
 router = APIRouter(prefix="/admin/settings", tags=["admin"])
 Client = Annotated[OpenRouter, Depends(get_openrouter)]
@@ -54,4 +59,42 @@ def replace_key(
 @router.delete("/api-key", status_code=204)
 def reset_key(request: Request, ctx: CurrentAdmin, db: AdminDb) -> Response:
     svc.reset_api_key(db, ctx.admin, client_ip(request))
+    return Response(status_code=204)
+
+
+@router.put("/imports/{source}")
+def switch_import(
+    source: str, data: ImportSwitchIn, request: Request, ctx: CurrentAdmin, db: AdminDb
+) -> ImportSettingOut:
+    return svc.set_import(db, ctx.admin, source, data.enabled, client_ip(request))
+
+
+@router.delete("/imports/{source}", status_code=204)
+def reset_import(source: str, request: Request, ctx: CurrentAdmin, db: AdminDb) -> Response:
+    svc.reset_import(db, ctx.admin, source, client_ip(request))
+    return Response(status_code=204)
+
+
+@router.post("/imports/{source}/run", status_code=202)
+def import_now(
+    source: str,
+    request: Request,
+    ctx: CurrentAdmin,
+    db: AdminDb,
+    queue: Annotated[JobQueue, Depends(get_job_queue)],
+) -> Response:
+    svc.start_import(db, ctx.admin, queue, source, client_ip(request))
+    return Response(status_code=202)
+
+
+@router.put("/general/{name}")
+def change_general(
+    name: str, data: GeneralValueIn, request: Request, ctx: CurrentAdmin, db: AdminDb
+) -> GeneralSettingOut:
+    return svc.set_general(db, ctx.admin, name, data.value, client_ip(request))
+
+
+@router.delete("/general/{name}", status_code=204)
+def reset_general(name: str, request: Request, ctx: CurrentAdmin, db: AdminDb) -> Response:
+    svc.reset_general(db, ctx.admin, name, client_ip(request))
     return Response(status_code=204)

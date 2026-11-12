@@ -74,7 +74,7 @@ class CountersOut(BaseModel):
 
 class WatchItemOut(BaseModel):
     level: Literal["red", "amber"]
-    kind: Literal["import", "job", "ai", "inactive", "credits"]
+    kind: Literal["import", "job", "ai", "inactive", "credits", "settings"]
     title: str
     detail: str | None
     at: datetime | None
@@ -584,3 +584,11 @@ class ApiKeyIn(BaseModel):
         if not v:
             raise ValueError("Collez la clé OpenRouter.")
         return v
+
+
+class ImportSwitchIn(BaseModel):
+    enabled: bool
+
+
+class GeneralValueIn(BaseModel):
+    value: int | float | str | bool | None  # checked by kind in the service (422)

@@ -81,7 +81,7 @@ class OrgActivity:
 @dataclass(frozen=True)
 class WatchItem:
     level: Literal["red", "amber"]
-    kind: Literal["import", "job", "ai", "inactive", "credits"]
+    kind: Literal["import", "job", "ai", "inactive", "credits", "settings"]
     title: str
     detail: str | None
     at: datetime | None
@@ -155,10 +155,14 @@ def watch(
     ai_failures: int,
     orgs: list[OrgActivity],
     out_of_credits: list[tuple[uuid.UUID, str]] | None = None,
+    settings_alerts: list[WatchItem] | None = None,
 ) -> tuple[list[WatchItem], int]:
-    """The lines to show, and how many job issues were left out (beyond ten)."""
+    """The lines to show, and how many job issues were left out (beyond ten). Lot 5: the
+    red settings lines (an unreadable key) go with the reds, the orange ones come last."""
     job_items, more = _jobs(jobs)
+    alerts = settings_alerts or []
     reds = job_items + _imports(now, imports) + _ai(ai_calls, ai_failures)
+    reds += [a for a in alerts if a.level == "red"]
     reds.sort(key=lambda i: (i.at is None, -(i.at.timestamp() if i.at else 0)))
     out = out_of_credits or []
     empty = [  # lot 4: a good moment to offer a top-up or a bigger plan
@@ -169,4 +173,5 @@ def watch(
         n = len(out) - CREDIT_LINES
         others = "1 autre entreprise" if n == 1 else f"{n} autres entreprises"
         empty.append(WatchItem("amber", "credits", f"… et {others} sans crédits", None, None, None))
-    return reds + _inactive(now, orgs) + empty, more
+    ambers = [a for a in alerts if a.level == "amber"]
+    return reds + _inactive(now, orgs) + empty + ambers, more

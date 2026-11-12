@@ -74,10 +74,13 @@ class OpenRouter:
         self._base = base_url.rstrip("/")
         self._http = http or httpx.Client(timeout=timeout)
 
-    def _get(self, path: str, key: str | None = None) -> dict[str, Any]:
+    def _get(
+        self, path: str, key: str | None = None, timeout: float | None = None
+    ) -> dict[str, Any]:
         headers = {"Authorization": f"Bearer {key}"} if key else {}
+        extra: dict[str, Any] = {"timeout": timeout} if timeout else {}
         try:
-            resp = self._http.get(f"{self._base}{path}", headers=headers)
+            resp = self._http.get(f"{self._base}{path}", headers=headers, **extra)
         except httpx.HTTPError as exc:
             raise OpenRouterUnavailable(f"OpenRouter injoignable ({type(exc).__name__})") from None
         if resp.status_code in (401, 403):
@@ -92,8 +95,8 @@ class OpenRouter:
             raise OpenRouterUnavailable("réponse inattendue d'OpenRouter")
         return body
 
-    def models(self) -> list[CatalogueModel]:
-        items = self._get("/models").get("data") or []
+    def models(self, timeout: float | None = None) -> list[CatalogueModel]:
+        items = self._get("/models", timeout=timeout).get("data") or []
         found = (_model(item) for item in items if isinstance(item, dict))
         return [m for m in found if m is not None]
 

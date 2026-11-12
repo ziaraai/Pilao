@@ -212,6 +212,7 @@ class FakeQueue:
         self.pending_score: list[uuid.UUID] = []
         self.pending_org_exports: list[uuid.UUID] = []
         self.pending_prefill: list[uuid.UUID] = []
+        self.pending_imports: list[str] = []
         self.ocr = None  # set to an OCR engine to exercise scanned pages
         self.down = False
 
@@ -350,6 +351,11 @@ class FakeQueue:
             raise ConnectionError("redis down")
         self.pending_prefill.append(org_id)
 
+    def enqueue_import_source(self, source: str) -> None:
+        if self.down:
+            raise ConnectionError("redis down")
+        self.pending_imports.append(source)
+
     def drain_profile_prefill(self) -> None:
         from app.services.profile_prefill import run_profile_prefill
 
@@ -437,7 +443,7 @@ class FakeOpenRouter:
         if self.down:
             raise OpenRouterUnavailable("OpenRouter injoignable (test)")
 
-    def models(self) -> list[Any]:
+    def models(self, timeout: float | None = None) -> list[Any]:
         self._check()
         self.model_reads += 1
         return list(self.catalogue)

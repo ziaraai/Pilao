@@ -30,6 +30,7 @@ class JobQueue(Protocol):
     def enqueue_score_tenders(self, org_id: uuid.UUID) -> None: ...
     def enqueue_org_export(self, request_id: uuid.UUID) -> None: ...
     def enqueue_profile_prefill(self, org_id: uuid.UUID) -> None: ...
+    def enqueue_import_source(self, source: str) -> None: ...
 
 
 class RqJobQueue:
@@ -157,6 +158,16 @@ class RqJobQueue:
             result_ttl=3600,
             failure_ttl=7 * 24 * 3600,
             retry=Retry(max=1, interval=[120]),
+        )
+
+    def enqueue_import_source(self, source: str) -> None:
+        # « Importer maintenant » from the administration (lot 5): one source, now
+        self._q.enqueue(
+            "app.workers.jobs.import_source_job",
+            source,
+            job_timeout=TENDER_JOB_TIMEOUT_SECONDS,
+            result_ttl=3600,
+            failure_ttl=7 * 24 * 3600,
         )
 
 

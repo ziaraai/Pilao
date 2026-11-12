@@ -1,6 +1,7 @@
 """RQ entry points. Run a worker with:  ``uv run rq worker -u $REDIS_URL``."""
 
 import uuid
+from typing import cast
 
 from app.ai.embeddings import get_embedder
 from app.core.email import get_mailer
@@ -18,6 +19,7 @@ from app.services.memoir_drafting import run_conformity, run_draft_section
 from app.services.org_data import run_org_export
 from app.services.profile_prefill import run_profile_prefill
 from app.services.stale_works import sweep_stale_works
+from app.services.tender_import import ALL_READERS, Source, run_import
 from app.services.tender_import import run_all as import_tenders
 from app.services.tenders import match_tenders, rematch_org, score_org
 from app.services.vault import run_read_document
@@ -110,3 +112,9 @@ def sweep_stale_works_job() -> None:
     """Every 15 minutes (lot 4): the works left for dead give their credits back."""
     with get_sessionmaker()() as db:  # unscoped: every company
         sweep_stale_works(db, get_job_queue())
+
+
+def import_source_job(source: str) -> None:
+    """« Importer maintenant » (lot 5): one source, since its last pass."""
+    with get_sessionmaker()() as db:  # unscoped: notices are global
+        run_import(db, cast(Source, source), ALL_READERS[source](), get_mailer(), get_job_queue())

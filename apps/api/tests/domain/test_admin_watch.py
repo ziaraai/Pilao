@@ -8,6 +8,7 @@ from app.domain.admin_watch import (
     ImportState,
     JobIssue,
     OrgActivity,
+    WatchItem,
     job_label,
     watch,
 )
@@ -121,3 +122,26 @@ def test_credit_lines_are_capped() -> None:
     assert items[-1].org_id is None
     one_more, _ = watch(NOW, [], [], 0, 0, [], empty[:11])
     assert one_more[-1].title == "… et 1 autre entreprise sans crédits"
+
+
+def test_settings_lines_take_their_place() -> None:
+    red = WatchItem(
+        "red", "settings", "La clé OpenRouter enregistrée est illisible", None, None, None
+    )
+    amber = WatchItem("amber", "settings", "Note des annonces : modèle retiré", None, None, None)
+    items, _ = watch(
+        NOW,
+        [],
+        [job(1)],
+        0,
+        0,
+        [],
+        [(uuid.uuid4(), "Entreprise 01")],
+        settings_alerts=[amber, red],
+    )
+    assert [(i.level, i.kind) for i in items] == [
+        ("red", "job"),  # dated reds first, then the undated red line
+        ("red", "settings"),
+        ("amber", "credits"),
+        ("amber", "settings"),  # last
+    ]

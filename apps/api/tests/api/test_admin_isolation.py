@@ -131,7 +131,7 @@ def test_supervision_routes_cannot_write(
     signed_in_client(make_client, outbox)
     admin, _ = activated_admin(make_client, db)
 
-    def buggy(session: Session, now: datetime) -> OverviewOut:
+    def buggy(session: Session, now: datetime, settings_alerts: object = None) -> OverviewOut:
         session.execute(update(Organization).values(name="Piratée"))
         raise AssertionError("the write went through")
 

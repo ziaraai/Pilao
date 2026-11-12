@@ -8,8 +8,9 @@ import uuid
 from datetime import UTC, date, datetime
 from typing import Annotated
 
-from fastapi import APIRouter, Query, Request
+from fastapi import APIRouter, Depends, Query, Request
 
+from app.ai.openrouter import OpenRouter, get_openrouter
 from app.core.admin_deps import AdminDb, AdminReadDb, CurrentAdmin, read_only
 from app.core.errors import ApiError
 from app.core.net import client_ip
@@ -22,6 +23,7 @@ from app.schemas.admin import (
     SystemOut,
 )
 from app.services.admin import audit
+from app.services.admin import settings as settings_svc
 from app.services.admin import supervision as svc
 
 router = APIRouter(prefix="/admin", tags=["admin"])
@@ -33,8 +35,11 @@ def _now() -> datetime:
 
 
 @router.get("/overview")
-def overview(db: AdminReadDb) -> OverviewOut:
-    return svc.overview(db, _now())
+def overview(
+    db: AdminReadDb, client: Annotated[OpenRouter, Depends(get_openrouter)]
+) -> OverviewOut:
+    alerts = settings_svc.watch_alerts(settings_svc.known_catalogue_ids(client))  # lot 5
+    return svc.overview(db, _now(), settings_alerts=alerts)
 
 
 @router.get("/organizations")
