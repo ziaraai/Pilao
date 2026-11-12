@@ -81,6 +81,13 @@ Légende : **Vérifié** = confirmé sur la documentation officielle (novembre 2
 - **Assurances** : pas d'API ; dépôt du PDF.
 - Piste V2 : partenariat avec une plateforme de conformité fournisseurs (ex. Aprovall Portal, ex-e-attestations) — pas d'API publique documentée à ce jour.
 
+## 7. OpenRouter (hors LiteLLM) — vérifié le 2026-11-12
+
+Les appels d'IA passent par LiteLLM (`app/ai/llm.py`). L'administration (lot 5, ADR-044) lit en plus, par `app/ai/openrouter.py` (adresse `OPENROUTER_API_URL`, `https://openrouter.ai/api/v1`) :
+- `GET /models` (public) : `data[]` avec `id`, `name`, `pricing.prompt` et `pricing.completion` (dollars par jeton, en texte ; `"-1"` pour le routeur `openrouter/auto`), `context_length`, `supported_parameters` (`response_format` = réponse JSON), `architecture.input_modalities` (`image`). 432 modèles le 2026-11-12, dont 369 avec `response_format`.
+- `GET /key` avec `Authorization: Bearer <clé>` : 200 et `data.usage`, `data.limit`… ; 401 pour une clé refusée. Sert à vérifier une clé avant de l'enregistrer.
+- `GET /credits` avec la clé : `data.total_credits` et `data.total_usage`, en dollars (le crédit du compte).
+
 ## Règles techniques communes
 
 - Client HTTP unique (`httpx`) avec timeouts, 3 tentatives avec attente exponentielle, journalisation des erreurs.

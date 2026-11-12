@@ -20,7 +20,11 @@ export NO_PROXY=127.0.0.1,localhost ENVIRONMENT=local REDIS_URL=redis://127.0.0.
   LLM_MODEL_EXTRACTION=openai/fake-extraction LLM_MODEL_GENERATION=openai/fake-generation \
   LLM_MODEL_SCORING=openai/fake-scoring \
   OPENAI_API_BASE=http://127.0.0.1:5577/v1 OPENAI_API_KEY=fake \
-  RECHERCHE_ENTREPRISES_BASE_URL=http://127.0.0.1:9  # annuaire injoignable : saisie manuelle
+  RECHERCHE_ENTREPRISES_BASE_URL=http://127.0.0.1:9 \
+  OPENROUTER_API_URL=http://127.0.0.1:5577/api/v1 LLM_CATALOGUE_PREFIX=openai/ \
+  TED_API_URL=http://127.0.0.1:9 BOAMP_API_URL=http://127.0.0.1:9
+# annuaire et sources d'annonces injoignables (saisie manuelle, « Importer maintenant » échoue
+# sans rien importer) ; le faux serveur sert aussi le catalogue, la clé et le crédit d'OpenRouter
 redis-server --port 6390 --save "" --daemonize yes
 uv run moto_server -p 5555 &                       # puis créer le bucket « e2e »
 uv run python ../web/e2e/fake_openai.py 5577 &

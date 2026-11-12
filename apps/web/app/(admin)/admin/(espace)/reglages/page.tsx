@@ -357,6 +357,7 @@ function GeneralRow({
         />
         <Button
           className="px-2 py-1 text-xs"
+          aria-label={`Enregistrer « ${g.label} »`}
           disabled={!valid || typed === String(g.value ?? "")}
           onClick={() =>
             run(() =>

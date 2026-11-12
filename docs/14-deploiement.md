@@ -81,7 +81,7 @@ Les fichiers déposés sont stockés sur le disque du serveur, dans le volume `p
      ```
 4. **Secrets GitHub** (`github.com/ziaraai/Pilao` > Settings > Secrets and variables > Actions > New repository secret) :
    - `PILAO_SSH_KEY` : la clé privée entière ;
-   - `PILAO_OPENROUTER_API_KEY` : la clé OpenRouter (de préférence une nouvelle clé réservée au serveur) ;
+   - `PILAO_OPENROUTER_API_KEY` : la clé OpenRouter (de préférence une nouvelle clé réservée au serveur). Depuis le lot 5, elle se remplace aussi dans l'admin (« Réglages ») : la clé de l'admin passe avant, celle de GitHub reste la clé de secours. De même, les modèles d'IA, les imports, le budget d'IA et les adresses d'`app.env` sont les valeurs du serveur, que l'admin peut remplacer ;
    - `PILAO_SMTP_PASSWORD` : le mot de passe de la boîte de l'étape 5.
 5. **Boîte d'envoi** : Plesk > Mail > Create Email Address `noreply@pilao.pro`, avec un mot de passe fort. Les e-mails partent par le serveur de messagerie de Plesk (`app.env` : `SMTP_HOST=host.docker.internal`).
    - Si Plesk gère le DNS de `pilao.pro`, activer **DKIM** et vérifier **SPF** (Mail Settings), sinon les messages risquent de finir en indésirables.

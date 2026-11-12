@@ -77,11 +77,39 @@ def score(prompt):
             else "Prestation voisine de votre activité.", "relevant_lots": []}
 
 
+MODEL = {"pricing": {"prompt": "0.0000001", "completion": "0.0000005"}, "context_length": 128000,
+         "architecture": {"input_modalities": ["text"]}, "supported_parameters": ["response_format"]}
+CATALOGUE = [  # lot 5: OpenRouter's catalogue, as the administration reads it
+    {**MODEL, "id": "fake-extraction", "name": "Fake Extraction"},
+    {**MODEL, "id": "fake-generation", "name": "Fake Generation"},
+    {**MODEL, "id": "fake-scoring", "name": "Fake Scoring"},
+    {**MODEL, "id": "fake-scoring-2", "name": "Fake Scoring 2"},
+    {**MODEL, "id": "fake-free:free", "name": "Fake Free"},
+]
+
+
 class H(BaseHTTPRequestHandler):
+    def _json(self, status, payload):
+        data = json.dumps(payload).encode()
+        self.send_response(status); self.send_header("content-type", "application/json"); self.send_header("content-length", str(len(data))); self.end_headers()
+        self.wfile.write(data)
+
+    def do_GET(self):  # lot 5: OpenRouter's catalogue, key check and credit
+        good = self.headers.get("authorization", "").startswith("Bearer sk-or-v1-e2e")
+        if self.path.endswith("/models"):
+            return self._json(200, {"data": CATALOGUE})
+        if self.path.endswith("/key"):
+            return self._json(200 if good else 401, {"data": {"usage": 0.1}} if good else {"error": "no"})
+        if self.path.endswith("/credits"):
+            return self._json(200, {"data": {"total_credits": 5, "total_usage": 1.32}})
+        return self._json(404, {})
+
     def do_POST(self):
         request = json.loads(self.rfile.read(int(self.headers.get("content-length", 0))) or b"{}")
         prompt = request["messages"][1]["content"] if len(request.get("messages", [])) > 1 else ""
-        answer = (profile(prompt) if "<profile_document" in prompt
+        system = request["messages"][0]["content"] if request.get("messages") else ""
+        answer = ({"ok": True} if '{"ok": true}' in system  # lot 5: a model's trial
+                  else profile(prompt) if "<profile_document" in prompt
                   else chapter(prompt) if "Chapitre à rédiger" in prompt
                   else matrix(prompt) if "<memoir>" in prompt
                   else score(prompt) if "<tender>" in prompt else ANSWER)

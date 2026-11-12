@@ -89,7 +89,7 @@ Reste à faire :
   - [x] Lot 2 — gestion des comptes : créer une entreprise, suspendre et réactiver, supprimer (tout de suite si jamais utilisée, sinon dans 30 jours), dépanner les utilisateurs, écran du journal ; « Mot de passe oublié ? » pour les clients (ADR-042)
   - [x] Lot 3 — socle des modules (ADR-041) : deux modules, « Veille des annonces » et « Réponse aux appels d'offres », activés par défaut ; carte « Modules » de la fiche, colonne de la liste, écran « Modules » ; menu, pages, tableau de bord, profil et travail de fond qui suivent les modules actifs ; rien n'est effacé (US-6.9, US-6.10)
   - [x] Lot 4 — formules et crédits (ADR-043) : formules réglées dans l'admin (« Découverte » par défaut, « Pilote » pour les entreprises existantes), prix en crédits de 4 actions payantes avec leur coût réel, crédits du mois et supplémentaires, recharges à la main, remboursement automatique des échecs ; le client ne voit que des crédits (US-6.11 à US-6.14) ; Stripe plus tard
-  - [ ] Lot 5 — réglages de la plateforme : modèle d'IA par tâche, clés API chiffrées en base, imports
+  - [x] Lot 5 — réglages de la plateforme : modèle d'IA par tâche (catalogue OpenRouter, essai), clé OpenRouter chiffrée en base, imports TED/BOAMP (actif, « Importer maintenant »), budget d'IA et adresses (ADR-044)
 
 ## V2 (après validation)
 

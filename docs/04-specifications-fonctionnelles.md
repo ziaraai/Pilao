@@ -175,7 +175,7 @@ L'utilisateur indique gagné / perdu, le montant proposé, le classement et les 
 
 ## Module 6 — Administration de la plateforme
 
-Le back-office de l'exploitant de Pilao, en cinq lots (ADR-040) : 1. accès et supervision en lecture seule (**fait**) ; 2. gestion des comptes (**fait**, ADR-042) ; 3. socle des modules (**fait**, ADR-041) ; 4. formules et crédits (**fait**, ADR-043) ; 5. réglages de la plateforme (modèles d'IA, clés API, imports). Conceptions : `docs/superpowers/specs/2026-11-10-administration-lot1-supervision-design.md`, `docs/superpowers/specs/2026-11-11-administration-lot2-comptes-design.md`, `docs/superpowers/specs/2026-11-11-administration-lot3-modules-design.md`, `docs/superpowers/specs/2026-11-12-administration-lot4-formules-credits-design.md`.
+Le back-office de l'exploitant de Pilao, en cinq lots (ADR-040) : 1. accès et supervision en lecture seule (**fait**) ; 2. gestion des comptes (**fait**, ADR-042) ; 3. socle des modules (**fait**, ADR-041) ; 4. formules et crédits (**fait**, ADR-043) ; 5. réglages de la plateforme (**fait**, ADR-044). Conceptions : `docs/superpowers/specs/2026-11-10-administration-lot1-supervision-design.md`, `docs/superpowers/specs/2026-11-11-administration-lot2-comptes-design.md`, `docs/superpowers/specs/2026-11-11-administration-lot3-modules-design.md`, `docs/superpowers/specs/2026-11-12-administration-lot4-formules-credits-design.md`, `docs/superpowers/specs/2026-11-12-administration-lot5-reglages-design.md`.
 
 **US-6.1 Accès du super admin**
 L'exploitant a un compte à lui, séparé de tout compte d'entreprise, sur `app.pilao.pro/admin`.
@@ -251,7 +251,23 @@ Sur sa fiche, carte « Formule et crédits » : la formule et « Changer de form
 - CA3 Sans assez de crédits, le bouton est grisé (« Il faut 5 crédits, il vous en reste 3. Contactez Pilao… ») et le serveur refuse (402 `credits_exhausted`) ; tout le reste marche. L'analyse automatique d'un DCE déposé sans crédits attend (« Analyse non lancée : crédits insuffisants. »).
 - CA4 Bandeau orange sous 20 % des crédits reçus, rouge à 0. Une entreprise dont aucun module n'a d'action payante (la veille seule) ne voit ni solde ni bandeau.
 - CA5 Un échec rend ses crédits : relancer un chapitre en échec est gratuit tant que l'échec ne les a pas rendus, payant sinon (le bouton l'indique). Un travail bloqué (analyse, chapitre, lecture) est fermé en erreur et remboursé au plus tard une heure après son dernier signe de vie.
-- CA5 Une action qui échoue rend ses crédits (une fois, au prix pris) ; relancer un chapitre en erreur est gratuit ; un mémoire dont tous les chapitres échouent est remboursé.
+
+**US-6.15 Les modèles d'IA par tâche**
+Écran « Réglages » (`/admin/reglages`), carte « Modèles d'IA » : une ligne par tâche (lecture du DCE, rédaction du mémoire, régénération d'un chapitre, pré-remplissage du profil, note des annonces, lecture des attestations) avec le modèle, son prix en euros par million de jetons, son origine (« réglé ici » ou « valeur du serveur ») et le coût réel sur 30 jours.
+- CA1 « Changer » ouvre le catalogue d'OpenRouter (recherche) ; seuls les modèles qui répondent en JSON, à prix connu, ni « :free » (ils gardent les textes) ni alias « ~ », et pour la lecture des attestations qui lisent les images.
+- CA2 Un essai réel précède l'enregistrement (« Essai d'un modèle » dans les coûts de l'IA, ligne « Plateforme ») ; raté → « Le modèle n'a pas répondu correctement : … », rien de changé.
+- CA3 « Revenir à la valeur du serveur » (refusé si le serveur n'a pas de modèle) ; un modèle retiré du catalogue est signalé en orange et dans « À surveiller ». Le modèle d'indexation reste réglé sur le serveur.
+
+**US-6.16 La clé OpenRouter**
+- CA1 La clé collée est vérifiée auprès d'OpenRouter, enregistrée chiffrée, jamais réaffichée (seuls ses 4 derniers caractères) ; le crédit du compte OpenRouter est affiché en dollars.
+- CA2 Clé refusée → « Clé refusée par OpenRouter. » ; OpenRouter injoignable → « OpenRouter ne répond pas : la clé n'est pas vérifiée, rien n'est changé. »
+- CA3 « Revenir à la clé du serveur » (refusé sans clé du serveur) ; une clé devenue illisible (clé secrète du serveur changée) laisse la clé du serveur prendre le relais, bandeau rouge et ligne rouge dans « À surveiller ».
+
+**US-6.17 Les imports d'annonces**
+Pour TED et BOAMP : « Actif » (le planificateur n'importe que les sources actives), le dernier passage, « Importer maintenant » (refusé si la source est coupée ou si un passage de moins d'une heure tourne encore).
+
+**US-6.18 Les réglages généraux**
+Budget d'IA maximum par entreprise et par mois (1 à 10 000 €), adresse de support (« Contactez Pilao : … »), adresse des avis des testeurs ; chacun avec sa valeur du serveur et « Revenir à la valeur du serveur ». Un réglage compte partout en moins d'une minute et va au journal (avant → après).
 
 ---
 

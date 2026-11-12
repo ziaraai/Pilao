@@ -1172,6 +1172,63 @@ let current; // the page, for a screenshot when a step fails
   step(
     "a small plan given to the company: buttons greyed out without credits, Pilao adds 10, the analysis is paid and in the history",
   );
+  // 18. Lot 5: the platform settings. The fake server plays OpenRouter too (catalogue, key,
+  // credit); a model is tried before it is saved, the key is never shown again.
+  await admin.getByRole("link", { name: "Réglages", exact: true }).click();
+  await admin.getByRole("heading", { name: "Réglages" }).first().waitFor();
+  await admin
+    .getByRole("button", { name: "Changer le modèle de « Note des annonces »" })
+    .click();
+  await admin.getByLabel("Chercher un modèle").fill("scoring 2");
+  await admin.getByRole("option", { name: /Fake Scoring 2/ }).click();
+  await admin.getByRole("button", { name: "Essayer et enregistrer" }).click();
+  await admin.getByText("openai/fake-scoring-2", { exact: true }).waitFor();
+  await admin.getByLabel("Remplacer la clé").fill("sk-or-v1-e2e-test-0000abcd");
+  await admin.getByRole("button", { name: "Vérifier et enregistrer" }).click();
+  await admin.getByText("•••• abcd — réglée ici", { exact: false }).waitFor();
+  await admin.getByText("3,68 $ restants sur 5,00 $").waitFor();
+  if ((await admin.content()).includes("sk-or-v1-e2e-test"))
+    throw new Error("the key is shown again");
+  await admin.getByLabel("Import TED actif").click(); // flips once the server has saved it
+  await admin
+    .getByRole("button", { name: "Importer maintenant" })
+    .waitFor({ state: "detached" }); // a source switched off cannot be imported now
+  await admin.getByLabel("Import TED actif").click();
+  await admin
+    .getByRole("button", { name: "Importer maintenant" })
+    .first()
+    .click();
+  await admin
+    .getByText("Passage lancé : il apparaîtra dans Technique.")
+    .waitFor();
+  await admin
+    .getByRole("textbox", { name: "Adresse de support" })
+    .fill("support-e2e@example.fr");
+  await admin
+    .getByRole("button", { name: "Enregistrer « Adresse de support »" })
+    .click();
+  await admin
+    .getByRole("button", {
+      name: "Enregistrer « Adresse de support »",
+      disabled: true,
+    })
+    .waitFor(); // saved: the value shown is the one typed
+  await admin.screenshot({ path: `${S}/admin-reglages.png`, fullPage: true });
+  await page.goto(`${WEB}/profil?onglet=formule`);
+  await page
+    .getByText("contactez Pilao : support-e2e@example.fr", { exact: false })
+    .first()
+    .waitFor();
+  await admin.getByRole("link", { name: "Journal", exact: true }).click();
+  for (const label of [
+    "Réglage changé",
+    "Clé OpenRouter remplacée",
+    "Import lancé à la main",
+  ])
+    await admin.getByRole("cell", { name: label }).first().waitFor();
+  step(
+    "settings: a model tried then saved, the key replaced (never shown again), TED off and on, imported now, the support address seen by the client, all in the journal",
+  );
   // the account closed from the server: the next screen asks to sign in again
   execFileSync(PY, ["-m", "app.cli", "admin-access", adminEmail, "--disable"], {
     cwd: `${__dirname}/../../api`,

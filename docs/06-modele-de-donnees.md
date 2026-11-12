@@ -44,6 +44,11 @@ platform_audit_logs ( id, admin_id -> platform_admins set null, admin_email text
                       at timestamptz, ip inet, meta jsonb )                      -- 12 mois
 
 -- Formules et crédits (lot 4, ADR-043)
+platform_settings ( key text pk, value jsonb null, secret text null, secret_last4 text null,
+                    updated_at, updated_by -> platform_admins set null )
+  -- lot 5 (ADR-044) : une ligne par réglage changé dans l'admin ; pas de ligne = valeur du
+  -- serveur. La clé OpenRouter : `secret` chiffré (Fernet, clé dérivée d'APP_SECRET_KEY).
+
 plans ( id, name text (unique, sans la casse), description text, modules text[],
         monthly_credits int, welcome_credits int, price_note text,   -- price_note : pour l'exploitant seul
         is_default bool (une seule à vrai), archived_at timestamptz null, created_at, updated_at )

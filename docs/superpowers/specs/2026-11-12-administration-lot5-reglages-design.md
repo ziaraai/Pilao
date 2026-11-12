@@ -1,7 +1,7 @@
 # Administration de la plateforme, lot 5 : réglages — conception
 
 - **Date** : 2026-11-12
-- **Statut** : à valider.
+- **Statut** : validé et livré.
 - **Stories** : US-6.15 (modèles d'IA par tâche), US-6.16 (clé OpenRouter), US-6.17 (imports
   d'annonces), US-6.18 (réglages généraux) ; ADR-044.
 - **S'appuie sur** : ADR-040 (back-office, journal), lot 1 (`app/core/crypto.py`, chiffrement

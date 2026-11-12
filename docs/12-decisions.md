@@ -447,3 +447,17 @@ Format : numéro, date, décision, raison, statut. Ajouter une entrée pour chaq
   - La formule décide des modules ; les boutons du lot 3 restent pour les exceptions (« Hors formule »).
 - **Alternatives écartées** : un compteur stocké (se dérègle, pas d'historique) ; une tâche de renouvellement le 1er (peut rater) ; Stripe tout de suite (prix non décidés).
 - **Statut** : validé (lot 4 livré) ; le paiement en ligne viendra sur ce socle.
+
+## ADR-044 — Réglages de la plateforme dans l'administration, la valeur de l'admin d'abord
+
+- **Date** : 2026-11-12
+- **Contexte** : lot 5 du back-office (ADR-040). Changer un modèle d'IA, la clé OpenRouter, un import ou une adresse demandait de modifier `infra/server/app.env` ou un secret GitHub, puis une remise en ligne. Spécification : `docs/superpowers/specs/2026-11-12-administration-lot5-reglages-design.md`.
+- **Décision** :
+  - Une table de la plateforme `platform_settings` (une ligne par réglage changé dans l'admin) ; **la valeur de l'admin passe avant celle du serveur**, sans ligne c'est celle du serveur ; « Revenir à la valeur du serveur » supprime la ligne.
+  - Douze réglages déclarés dans `app/platform_settings.py` : le modèle de chacune des 6 tâches d'IA, la clé OpenRouter, les imports TED et BOAMP, le budget d'IA par entreprise et par mois, l'adresse de support, celle des avis.
+  - Lecture par `app/core/runtime.py` : un instantané par processus relu au plus toutes les 30 s (le processus qui écrit le relit aussitôt) ; un changement compte partout en moins d'une minute.
+  - **Les modèles se choisissent dans le catalogue d'OpenRouter** (JSON, prix connu, ni « :free » ni alias « ~ », images pour la lecture des attestations) et sont **essayés** avant d'être enregistrés.
+  - **La clé** est vérifiée auprès d'OpenRouter, chiffrée (Fernet, `APP_SECRET_KEY`), jamais renvoyée ; illisible → la clé du serveur prend le relais et « À surveiller » le dit.
+  - Restent sur le serveur : base, stockage, antivirus, e-mails, modèle d'indexation (en changer oblige à tout réindexer), taux dollar → euro.
+- **Alternatives écartées** : l'admin réécrit `app.env` et redémarre les conteneurs (il faudrait piloter Docker ; une erreur arrête le site) ; les réglages dans Redis (ni durable, ni sauvegardé) ; taper le nom du modèle (une faute ne se voit qu'à l'usage).
+- **Statut** : validé (lot 5 livré).

@@ -40,4 +40,6 @@ if os.environ.get("DATABASE_URL"):
     with create_engine(os.environ["DATABASE_URL"]).begin() as conn:
         conn.execute(text("UPDATE plans SET is_default = false"))
         conn.execute(text("UPDATE plans SET is_default = true WHERE name = 'Pilote'"))
+        # lot 5: every run starts from the server's settings (a previous run changed some)
+        conn.execute(text("DELETE FROM platform_settings"))
 print("fixtures ok")
