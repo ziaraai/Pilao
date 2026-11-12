@@ -82,7 +82,8 @@ export function PlanCredits() {
         </ul>
         <p className="px-5 pb-3 text-xs text-slate-500">
           Une action qui échoue rend ses crédits. Relancer un chapitre en erreur
-          est gratuit.
+          est gratuit quand son échec ne vous les a pas déjà rendus : le bouton
+          l&apos;indique.
         </p>
       </Card>
       <Card title="Historique" color="slate" flush>

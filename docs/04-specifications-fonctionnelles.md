@@ -243,13 +243,14 @@ Une formule donne des modules et des crédits. Écran « Formules » (`/admin/fo
 Chaque action payante a un prix en crédits, réglé dans l'admin (0 à 1000 ; 0 = gratuite). Au départ : analyse du DCE 2, rédaction du mémoire 5, régénérer un chapitre 1, pré-remplir le profil depuis ses documents 1. À côté, pour l'exploitant seul : le nombre d'utilisations et le coût réel moyen d'IA sur 30 jours, en euros. La veille, la lecture des attestations, l'indexation, le DC1/DC2 et les exports sont gratuits.
 
 **US-6.13 La formule et les crédits d'une entreprise**
-Sur sa fiche, carte « Formule et crédits » : la formule et « Changer de formule » (les modules deviennent ceux de la formule, l'allocation du mois aussi ; les crédits supplémentaires restent ; les crédits offerts ne sont jamais donnés deux fois), les crédits du mois et supplémentaires, « Ajouter des crédits » (nombre et raison, au journal), l'historique. La liste a les colonnes « Formule » et « Crédits » ; « À surveiller » signale les entreprises à 0 crédit ; la création d'une entreprise demande sa formule.
+Sur sa fiche, carte « Formule et crédits » : la formule et « Changer de formule » (les modules deviennent ceux de la formule, l'allocation du mois aussi ; les crédits supplémentaires restent ; les crédits offerts ne sont jamais donnés deux fois), les crédits du mois et supplémentaires, « Ajouter des crédits » (nombre et raison, au journal), l'historique. La liste a les colonnes « Formule » et « Crédits » ; « À surveiller » signale les entreprises à 0 crédit qui ont un module payant (dix par leur nom, puis « … et N autres entreprises sans crédits ») ; la création d'une entreprise demande sa formule. La raison d'un ajout reste dans l'admin : le client voit « Crédits ajoutés par Pilao ». Un champ de prix ou de crédits vidé ne s'enregistre pas (jamais lu comme 0).
 
 **US-6.14 Les crédits côté client**
 - CA1 Le client ne voit jamais d'euros : un compteur « N crédits restants », un onglet Profil « Formule et crédits » (formule, crédits du mois renouvelés le 1er, crédits supplémentaires, prix, historique), le prix sur chaque bouton payant (« Lancer l'analyse · 2 crédits »).
 - CA2 Les crédits du mois sont pris d'abord, puis les supplémentaires (recharges, crédits offerts), qui n'expirent pas.
 - CA3 Sans assez de crédits, le bouton est grisé (« Il faut 5 crédits, il vous en reste 3. Contactez Pilao… ») et le serveur refuse (402 `credits_exhausted`) ; tout le reste marche. L'analyse automatique d'un DCE déposé sans crédits attend (« Analyse non lancée : crédits insuffisants. »).
-- CA4 Bandeau orange sous 20 % des crédits reçus, rouge à 0.
+- CA4 Bandeau orange sous 20 % des crédits reçus, rouge à 0. Une entreprise dont aucun module n'a d'action payante (la veille seule) ne voit ni solde ni bandeau.
+- CA5 Un échec rend ses crédits : relancer un chapitre en échec est gratuit tant que l'échec ne les a pas rendus, payant sinon (le bouton l'indique). Un travail bloqué (analyse, chapitre, lecture) est fermé en erreur et remboursé au plus tard une heure après son dernier signe de vie.
 - CA5 Une action qui échoue rend ses crédits (une fois, au prix pris) ; relancer un chapitre en erreur est gratuit ; un mémoire dont tous les chapitres échouent est remboursé.
 
 ---
