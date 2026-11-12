@@ -43,6 +43,7 @@ ADMIN_GETS = [
     "/admin/modules",
     "/admin/plans",
     "/admin/credit-prices",
+    "/admin/settings",
 ]
 
 

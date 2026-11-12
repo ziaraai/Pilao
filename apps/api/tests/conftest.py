@@ -1,6 +1,7 @@
 import os
 import uuid
 from collections.abc import Callable, Iterator
+from typing import Any
 
 os.environ.setdefault("ENVIRONMENT", "test")
 os.environ.setdefault("DATABASE_URL", "postgresql+psycopg://pilao:pilao@localhost:5432/pilao_test")
@@ -410,6 +411,57 @@ def outbox() -> Outbox:
     return Outbox()
 
 
+class FakeOpenRouter:
+    """OpenRouter for the tests (lot 5): a small catalogue; keys starting with
+    ``sk-or-v1-good`` are accepted; ``down`` makes every call fail."""
+
+    def __init__(self) -> None:
+        from app.ai.openrouter import CatalogueModel, Credit
+
+        def model(model_id: str, name: str, images: bool = False) -> CatalogueModel:
+            return CatalogueModel(model_id, name, 0.0000001, 0.0000005, 128000, True, images)
+
+        self.catalogue = [
+            model("acme/small", "Acme Small"),
+            model("acme/vision", "Acme Vision", images=True),
+            model("acme/small:free", "Acme Small (free)"),
+            model("~acme/latest", "Acme Latest"),
+        ]
+        self.credit_value = Credit(5.0, 1.32)
+        self.down = False
+        self.model_reads = 0
+
+    def _check(self) -> None:
+        from app.ai.openrouter import OpenRouterUnavailable
+
+        if self.down:
+            raise OpenRouterUnavailable("OpenRouter injoignable (test)")
+
+    def models(self) -> list[Any]:
+        self._check()
+        self.model_reads += 1
+        return list(self.catalogue)
+
+    def check_key(self, key: str) -> None:
+        from app.ai.openrouter import KeyRefused
+
+        self._check()
+        if not key.startswith("sk-or-v1-good"):
+            raise KeyRefused("Clé refusée par OpenRouter.")
+
+    def credit(self, key: str) -> Any:
+        self._check()
+        return self.credit_value
+
+
+@pytest.fixture
+def openrouter() -> FakeOpenRouter:
+    from app.services.admin import settings as settings_svc
+
+    settings_svc.clear_catalogue_cache()
+    return FakeOpenRouter()
+
+
 @pytest.fixture
 def make_client(
     conn: Connection,
@@ -418,9 +470,11 @@ def make_client(
     scanner: FakeScanner,
     queue: FakeQueue,
     embedder: CountingEmbedder,
+    openrouter: FakeOpenRouter,
 ) -> Iterator[Callable[[], TestClient]]:
     """Factory of independent HTTP clients (own cookie jar), one DB session per request."""
     from app.ai.embeddings import get_embedder
+    from app.ai.openrouter import get_openrouter
     from app.core.email import get_mailer
     from app.db.session import get_db
     from app.integrations.recherche_entreprises import get_company_directory
@@ -440,5 +494,6 @@ def make_client(
     app.dependency_overrides[_scanner] = lambda: scanner
     app.dependency_overrides[get_job_queue] = lambda: queue
     app.dependency_overrides[get_embedder] = lambda: embedder
+    app.dependency_overrides[get_openrouter] = lambda: openrouter  # never hit the network
     yield lambda: TestClient(app, headers={"Origin": "http://localhost:3000"})
     app.dependency_overrides.clear()

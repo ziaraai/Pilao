@@ -493,3 +493,94 @@ class OrgCreditsOut(BaseModel):
     total: int
     renews_on: date
     history: list[HistoryOut]
+
+
+# ---------- lot 5: platform settings ----------------------------------------------------------
+
+Origin = Literal["admin", "server"]
+
+
+class ModelSettingOut(BaseModel):
+    task: str
+    label: str
+    model: str  # the LiteLLM name in use ("" = none)
+    model_name: str | None  # its catalogue name, when the catalogue is known
+    source: Origin
+    server_model: str
+    price_in_eur: float | None  # per million tokens, None when the catalogue is not known
+    price_out_eur: float | None
+    in_catalogue: bool | None
+    cost_30d_eur: float
+    calls_30d: int
+    updated_at: datetime | None
+
+
+class CreditOut(BaseModel):
+    total_usd: float
+    used_usd: float
+
+
+class ApiKeyOut(BaseModel):
+    source: Literal["admin", "server", "none"]
+    last4: str | None  # never the key itself
+    updated_at: datetime | None
+    unreadable: bool
+    server_key: bool
+    credit: CreditOut | None
+
+
+class LastPassOut(BaseModel):
+    started_at: datetime
+    status: str
+    created: int
+    updated: int
+    error: str | None
+
+
+class ImportSettingOut(BaseModel):
+    source: str
+    label: str
+    enabled: bool
+    origin: Origin
+    last: LastPassOut | None
+
+
+class GeneralSettingOut(BaseModel):
+    name: str
+    label: str
+    kind: Literal["int", "email"]
+    value: int | float | str | None
+    server_value: int | float | str | None
+    source: Origin
+
+
+class SettingsOut(BaseModel):
+    models: list[ModelSettingOut]
+    embedding_model: str
+    api_key: ApiKeyOut
+    imports: list[ImportSettingOut]
+    general: list[GeneralSettingOut]
+
+
+class CatalogueModelOut(BaseModel):
+    id: str
+    name: str
+    price_in_eur: float
+    price_out_eur: float
+    context_length: int
+
+
+class ModelChoiceIn(BaseModel):
+    model_id: str = Field(min_length=1, max_length=200)
+
+
+class ApiKeyIn(BaseModel):
+    key: str = Field(max_length=200)
+
+    @field_validator("key")
+    @classmethod
+    def _strip(cls, v: str) -> str:
+        v = v.strip()
+        if not v:
+            raise ValueError("Collez la clé OpenRouter.")
+        return v
