@@ -16,6 +16,7 @@ import { api } from "@/lib/api";
 import { useMe } from "@/lib/auth";
 import { formatCents, formatDateTimeShort, formatDuration } from "@/lib/format";
 import { useAction, useApi } from "@/lib/hooks";
+import { type CreditLevel, creditLevel } from "@/lib/credits";
 import { hasModule } from "@/lib/modules";
 import type {
   BidProgress,
@@ -62,7 +63,13 @@ const TILE_COLUMNS = [
   "lg:grid-cols-2",
   "lg:grid-cols-3",
   "lg:grid-cols-4",
+  "lg:grid-cols-5",
 ];
+const CREDIT_TILE: Record<CreditLevel, Color> = {
+  ok: "violet",
+  low: "amber",
+  empty: "red",
+};
 
 const today = new Intl.DateTimeFormat("fr-FR", {
   weekday: "long",
@@ -103,7 +110,7 @@ export default function DashboardPage() {
       </div>
 
       <div
-        className={`grid grid-cols-2 gap-3 lg:gap-4 ${TILE_COLUMNS[1 + (veille ? 1 : 0) + (reponse ? 2 : 0)]}`}
+        className={`grid grid-cols-2 gap-3 lg:gap-4 ${TILE_COLUMNS[1 + (veille ? 1 : 0) + (reponse ? 2 : 0) + (me.credits ? 1 : 0)]}`}
       >
         <Tile
           href="#a-faire"
@@ -119,6 +126,16 @@ export default function DashboardPage() {
             label={
               d.new_tenders > 1 ? "nouvelles annonces" : "nouvelle annonce"
             }
+          />
+        )}
+        {me.credits && (
+          <Tile
+            href="/profil?onglet=formule"
+            color={
+              CREDIT_TILE[creditLevel(me.credits.total, me.credits.reference)]
+            }
+            count={me.credits.total}
+            label={me.credits.total > 1 ? "crédits restants" : "crédit restant"}
           />
         )}
         {reponse && (

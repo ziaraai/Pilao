@@ -11,6 +11,7 @@ import { api } from "@/lib/api";
 import { AuthContext } from "@/lib/auth";
 import { useAction, useApi } from "@/lib/hooks";
 import { formatDate } from "@/lib/format";
+import { bannerText, creditLevel } from "@/lib/credits";
 import { DEFAULT_MODULES, hasModule } from "@/lib/modules";
 import type { Deletion, Me, VaultSummary } from "@/lib/types";
 
@@ -46,6 +47,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
     ...me.data,
     modules: me.data.modules ?? DEFAULT_MODULES,
     support_email: me.data.support_email ?? null,
+    credits: me.data.credits ?? null,
   };
 
   async function logout() {
@@ -66,6 +68,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
         />
         <div className="flex min-w-0 flex-1 flex-col">
           <DeletionBanner />
+          <CreditsBanner me={current} />
           {hasModule(current.modules, "reponse") && <VaultBanner />}
           <main className="mx-auto w-full max-w-6xl flex-1 px-4 py-8 lg:px-8">
             {current.terms_current !== false ? ( // an older API omits it: never block
@@ -80,6 +83,29 @@ export function AppShell({ children }: { children: React.ReactNode }) {
         </div>
       </div>
     </AuthContext.Provider>
+  );
+}
+
+/** Lot 4: few credits left (orange) or none (red), on every page. */
+function CreditsBanner({ me }: { me: Me }) {
+  if (!me.credits) return null;
+  const level = creditLevel(me.credits.total, me.credits.reference);
+  const text = bannerText(level, me.credits.total, me.support_email);
+  if (!text) return null;
+  const tone =
+    level === "empty"
+      ? "border-red-300 bg-red-50 text-red-900"
+      : "border-amber-200 bg-amber-50 text-amber-900";
+  return (
+    <div
+      role={level === "empty" ? "alert" : "status"}
+      className={`border-b px-4 py-2 text-center text-sm ${tone}`}
+    >
+      {text}{" "}
+      <Link href="/profil?onglet=formule" className="font-semibold underline">
+        Voir mes crédits
+      </Link>
+    </div>
   );
 }
 

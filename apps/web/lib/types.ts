@@ -9,6 +9,35 @@ export type Me = {
   terms_current: boolean;
   modules: string[]; // the active modules (lot 3)
   support_email: string | null;
+  credits: MeCredits | null; // lot 4: never a euro
+};
+
+export type MeCredits = {
+  total: number;
+  reference: number; // the plan's monthly credits, or its welcome credits
+  prices: Record<string, number>;
+};
+
+/** GET /credits (lot 4). */
+export type Credits = {
+  plan: { name: string; description: string; modules: string[] };
+  monthly_allowance: number;
+  monthly_left: number;
+  extra: number;
+  total: number;
+  renews_on: string;
+  prices: { action: string; name: string; credits: number }[];
+  history: CreditLine[];
+};
+
+export type CreditLine = {
+  at: string;
+  kind: "charge" | "refund" | "grant" | "welcome";
+  action_name: string | null;
+  bid_title: string | null;
+  user_name: string | null;
+  credits: number;
+  reason: string | null;
 };
 
 export type CompanyLookup = {

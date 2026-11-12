@@ -3,10 +3,10 @@
 import { useRef } from "react";
 
 import { SourceLink, SourceViewer } from "@/components/dossier/source";
+import { PaidButton } from "@/components/paid-button";
 import {
   Alert,
   Badge,
-  Button,
   Card,
   type Color,
   Empty,
@@ -98,9 +98,12 @@ export function AnalysisSection({
       </Card>
     );
 
+  const waiting = a.status === "waiting_credits"; // lot 4: deposited without credits
   const actions = (
-    <Button
-      variant="secondary"
+    <PaidButton
+      action="dce_analysis"
+      label={waiting ? "Lancer l'analyse" : "Relancer l'analyse"}
+      variant={waiting ? "primary" : "secondary"}
       busy={rerun.busy}
       disabled={working(a)}
       onClick={async () => {
@@ -111,9 +114,7 @@ export function AnalysisSection({
         )
           analysis.reload();
       }}
-    >
-      Relancer l&apos;analyse
-    </Button>
+    />
   );
   if (a.status !== "ready" || !a.data) {
     return (
@@ -124,7 +125,7 @@ export function AnalysisSection({
               "Analyse en cours : elle prend quelques minutes pour un gros DCE."}
           </Alert>
         ) : (
-          <Alert tone="danger">{a.error}</Alert>
+          <Alert tone={waiting ? "warning" : "danger"}>{a.error}</Alert>
         )}
         {rerun.error && (
           <div className="mt-3">

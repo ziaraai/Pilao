@@ -41,6 +41,15 @@ export const NAV: NavItem[] = [
 /** What a company has when nothing says otherwise (the API's default, too). */
 export const DEFAULT_MODULES: string[] = ["veille", "reponse"];
 
+const MODULE_NAMES: Record<string, string> = {
+  veille: "Veille des annonces",
+  reponse: "Réponse aux appels d'offres",
+};
+
+export function moduleName(key: string): string {
+  return MODULE_NAMES[key] ?? key;
+}
+
 export function hasModule(modules: string[], key: ModuleKey): boolean {
   return modules.includes(key);
 }

@@ -5,6 +5,7 @@ import { Suspense, useRef, useState } from "react";
 
 import { CompanyIdentity } from "@/components/profile/company-identity";
 import { DataRights } from "@/components/profile/data-rights";
+import { PlanCredits } from "@/components/profile/plan-credits";
 import { ProfilePrefill } from "@/components/profile/prefill";
 import { Members } from "@/components/profile/members";
 import { References } from "@/components/profile/references";
@@ -30,6 +31,7 @@ const TABS = [
   { id: "certifications", label: "Certifications", keys: ["certifications"] },
   { id: "references", label: "Références", keys: ["references"] },
   { id: "utilisateurs", label: "Utilisateurs", keys: [] },
+  { id: "formule", label: "Formule et crédits", keys: [] },
   { id: "donnees", label: "Vos données", keys: [] },
 ] as const;
 type TabId = (typeof TABS)[number]["id"];
@@ -275,6 +277,7 @@ function ProfileTabs() {
           <References onChange={completeness.reload} />
         )}
         {current === "utilisateurs" && <Members />}
+        {current === "formule" && <PlanCredits />}
         {current === "donnees" && <DataRights />}
       </div>
     </div>

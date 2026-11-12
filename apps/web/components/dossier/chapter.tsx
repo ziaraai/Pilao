@@ -2,6 +2,7 @@
 
 import { useRef, useState } from "react";
 
+import { PaidButton } from "@/components/paid-button";
 import { Markdown } from "@/components/markdown";
 import { Alert, Badge, Button, Field, Textarea } from "@/components/ui";
 import { api } from "@/lib/api";
@@ -332,7 +333,10 @@ function Regenerate({
             onChange={(e) => setInstruction(e.target.value)}
           />
         </Field>
-        <Button
+        <PaidButton
+          action="chapter_regeneration"
+          label="Régénérer"
+          free={section.status === "error"}
           variant="secondary"
           busy={regenerate.busy}
           onClick={async () => {
@@ -347,9 +351,7 @@ function Regenerate({
               onChange(m);
             }
           }}
-        >
-          Régénérer
-        </Button>
+        />
         <p className="text-xs text-slate-500">
           La version actuelle reste dans l&apos;historique.
         </p>

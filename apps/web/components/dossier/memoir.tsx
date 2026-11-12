@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 
+import { PaidButton } from "@/components/paid-button";
 import { ChapterView } from "@/components/dossier/chapter";
 import { ExportCard } from "@/components/dossier/export";
 import { SourceLink, SourceViewer } from "@/components/dossier/source";
@@ -489,7 +490,9 @@ function OutlineEditor({
               cochées et de votre base documentaire. Rien n&apos;est inventé :
               ce qui manque est signalé « [À COMPLÉTER : …] ».
             </p>
-            <Button
+            <PaidButton
+              action="memoir_generation"
+              label="Rédiger le mémoire"
               busy={generate.busy}
               disabled={dirty}
               onClick={async () => {
@@ -500,9 +503,7 @@ function OutlineEditor({
                 );
                 if (m) onChange(m);
               }}
-            >
-              Rédiger le mémoire
-            </Button>
+            />
             {dirty && (
               <p className="text-xs text-amber-800">
                 Enregistrez d&apos;abord le plan.
@@ -755,7 +756,12 @@ function ConformityRow({
               </Select>
             </>
           )}
-          <Button
+          <PaidButton
+            action="chapter_regeneration"
+            label={`Compléter ce point${item.target_section_id && chapter ? ` (${chapter.title})` : ""}`}
+            free={
+              memoir.sections.find((s) => s.id === target)?.status === "error"
+            }
             variant="secondary"
             busy={complete.busy}
             disabled={!target || chapterBusy}
@@ -775,10 +781,7 @@ function ConformityRow({
               );
               if (m) onChange(m);
             }}
-          >
-            Compléter ce point
-            {item.target_section_id && chapter ? ` (${chapter.title})` : ""}
-          </Button>
+          />
           {complete.error && <Alert tone="danger">{complete.error}</Alert>}
         </div>
       )}

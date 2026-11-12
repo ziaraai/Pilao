@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useState } from "react";
 
+import { PaidButton } from "@/components/paid-button";
 import {
   Alert,
   Button,
@@ -123,7 +124,9 @@ export function ProfilePrefill({ onAdded }: { onAdded: () => void }) {
       title="Pré-remplir depuis vos documents"
       actions={
         s.documents_ready > 0 && (
-          <Button
+          <PaidButton
+            action="profile_prefill"
+            label={s.job ? "Relire mes documents" : "Lire mes documents"}
             busy={read.busy || reading}
             onClick={async () => {
               await read.run(() =>
@@ -131,9 +134,7 @@ export function ProfilePrefill({ onAdded }: { onAdded: () => void }) {
               );
               state.reload();
             }}
-          >
-            {s.job ? "Relire mes documents" : "Lire mes documents"}
-          </Button>
+          />
         )
       }
     >
