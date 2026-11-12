@@ -279,13 +279,15 @@ def _apply_correction(db: Session, target: Tender, item: TenderIn, mailer: Maile
             TenderMatch.tender_id == target.id, TenderMatch.status == "tracked"
         )
     ).all()
-    watching = set(  # the « Avis rectificatif » e-mail belongs to the watch (lot 3)
-        db.scalars(
-            select(Organization.id).where(
-                Organization.id.in_({m.org_id for m in tracked}),
-                Organization.modules.contains(["veille"]),
+    # The « Avis rectificatif » e-mail goes to the watch (lot 3), and to a company answering
+    # the notice in a dossier even without the watch: a new deadline or new documents change
+    # its answer (« Réponse »).
+    modules = dict(
+        db.execute(
+            select(Organization.id, Organization.modules).where(
+                Organization.id.in_({m.org_id for m in tracked})
             )
-        )
+        ).all()
     )
     for match in tracked:
         if "deadline_at" in changes and match.bid_id is not None:
@@ -293,7 +295,9 @@ def _apply_correction(db: Session, target: Tender, item: TenderIn, mailer: Maile
             old = changes["deadline_at"][0]
             if bid is not None and bid.deadline_at in (None, old):
                 bid.deadline_at = target.deadline_at  # the user's own date is kept
-        if match.org_id not in watching:
+        active = modules.get(match.org_id) or []
+        answering = match.bid_id is not None and "reponse" in active
+        if "veille" not in active and not answering:
             continue
         notify(
             db,

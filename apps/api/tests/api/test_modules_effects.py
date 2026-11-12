@@ -136,7 +136,11 @@ def test_background_skips_without_veille(
     run_daily(db, outbox, paris(TODAY, 8))
     assert db.scalar(select(TenderMatch).where(TenderMatch.tender_id == tender_id(db, "B"))) is None
     assert scorer.prompts == []
-    assert outbox.sent[sent:] == []  # no digest, no « Avis rectificatif »
+    # no digest; the « Avis rectificatif » still comes: it changes a dossier being answered
+    # (deadline, documents), which belongs to « Réponse », not to the watch
+    [mail] = outbox.sent[sent:]
+    assert mail.subject.startswith("Avis rectificatif")
+    assert "Vérifiez votre dossier dans Pilao." in mail.body
     assert not any(s.startswith("Pilao —") for s, _ in mails_to(outbox, "user1@example.fr"))
 
 
