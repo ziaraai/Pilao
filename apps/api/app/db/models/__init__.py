@@ -3,6 +3,7 @@ from app.db.models.analysis import DceAnalysis, Requirement
 from app.db.models.audit_log import AuditLog
 from app.db.models.auth import AuthToken, LoginAttempt, UserSession
 from app.db.models.bid import Bid, DceFile, DcePage, DceVersion
+from app.db.models.billing import CREDIT_KINDS, CreditEntry, CreditPrice, Plan
 from app.db.models.data_request import DataRequest, PurgeLog
 from app.db.models.document import DOCUMENT_KINDS, GeneratedDocument
 from app.db.models.feedback import Feedback
@@ -31,6 +32,7 @@ from app.db.models.user import User
 from app.db.models.vault import ComplianceDocument
 
 __all__ = [
+    "CREDIT_KINDS",
     "DOCUMENT_KINDS",
     "NOTICE_TYPES",
     "AiCall",
@@ -42,6 +44,8 @@ __all__ = [
     "CompanyReference",
     "ComplianceDocument",
     "ConformityItem",
+    "CreditEntry",
+    "CreditPrice",
     "DataRequest",
     "DceAnalysis",
     "DceFile",
@@ -61,6 +65,7 @@ __all__ = [
     "MemoirSectionRevision",
     "Notification",
     "Organization",
+    "Plan",
     "PlatformAdmin",
     "PlatformAdminSession",
     "PlatformAuditLog",

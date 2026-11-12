@@ -14,12 +14,24 @@ from app.db.models import Organization
 
 
 @dataclass(frozen=True)
+class PaidAction:
+    """An action that costs credits (lot 4). Its price is set in the administration; this is
+    the starting one. ``ai_task``: the ``ai_calls.task`` of its AI calls (its real cost)."""
+
+    key: str
+    name: str
+    default_credits: int
+    ai_task: str
+
+
+@dataclass(frozen=True)
 class Module:
     key: str
     name: str
     description: str
     contents: tuple[str, ...]  # what it brings, shown in the administration
     nav: tuple[str, ...]  # its entries in the company's menu
+    actions: tuple[PaidAction, ...] = ()  # what it charges credits for (lot 4)
 
 
 MODULES: tuple[Module, ...] = (
@@ -46,10 +58,24 @@ MODULES: tuple[Module, ...] = (
             "la base documentaire",
         ),
         nav=("Dossiers", "Coffre-fort", "Base documentaire"),
+        actions=(
+            PaidAction("dce_analysis", "Analyse du DCE", 2, "dce_extraction"),
+            PaidAction("memoir_generation", "Rédaction du mémoire", 5, "memoir_generation"),
+            PaidAction("chapter_regeneration", "Régénérer un chapitre", 1, "memoir_regeneration"),
+            PaidAction(
+                "profile_prefill",
+                "Pré-remplir le profil depuis vos documents",
+                1,
+                "profile_extraction",
+            ),
+        ),
     ),
 )
 DEFAULT_MODULES: tuple[str, ...] = tuple(m.key for m in MODULES)
 BY_KEY: dict[str, Module] = {m.key: m for m in MODULES}
+PAID_ACTIONS: tuple[PaidAction, ...] = tuple(a for m in MODULES for a in m.actions)
+ACTION_BY_KEY: dict[str, PaidAction] = {a.key: a for a in PAID_ACTIONS}
+MODULE_OF_ACTION: dict[str, str] = {a.key: m.key for m in MODULES for a in m.actions}
 
 
 def active_modules(org: Organization) -> list[str]:
