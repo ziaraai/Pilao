@@ -238,3 +238,31 @@ def test_followed_without_bid_can_be_dismissed(
     assert res.json()["status"] == "dismissed"
     refused = c.post(f"/tenders/{with_bid}/dismiss", json={"reason": "x"})
     assert refused.json()["error"]["code"] == "tender_tracked"  # its bid is kept, untouched
+
+
+def test_correction_without_a_dossier_points_to_the_notice(
+    make_client: Factory,
+    outbox: Outbox,
+    queue: FakeQueue,
+    scorer: ScoreModel,  # noqa: F811
+    db: Session,
+) -> None:
+    """A company following a notice without « Réponse » has no dossier: the « Avis
+    rectificatif » e-mail sends it to the notice, not to a dossier that does not exist."""
+    c = company(make_client, outbox, queue)
+    set_modules(db, "user1@example.fr", ["veille"])
+    load(db, queue, outbox, notice("A"))
+    assert c.post(f"/tenders/{tender_id(db, 'A')}/track").json() == {"bid": None}
+    sent = len(outbox.sent)
+
+    later = datetime.now(paris(TODAY, 8).tzinfo) + timedelta(days=40)
+    load(
+        db,
+        queue,
+        outbox,
+        notice("A-RECT", notice_type="correction", corrects="A", deadline_at=later),
+    )
+    [mail] = outbox.sent[sent:]
+    assert mail.subject.startswith("Avis rectificatif")
+    assert "Consultez l'annonce dans Pilao." in mail.body
+    assert "dossier" not in mail.body

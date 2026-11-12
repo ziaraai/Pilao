@@ -23,6 +23,7 @@ export function OrgModules({
   const act = useAdminAction();
   const [done, setDone] = useState<string | null>(null);
   const [disabling, setDisabling] = useState<AdminModule | null>(null);
+  const [enabling, setEnabling] = useState<string | null>(null); // only its button spins
 
   async function toggle(m: AdminModule, enabled: boolean) {
     setDone(null);
@@ -80,9 +81,14 @@ export function OrgModules({
                       </Button>
                     ) : (
                       <Button
-                        busy={act.busy}
+                        busy={enabling === m.key}
+                        disabled={enabling !== null}
                         aria-label={`Activer ${m.name}`}
-                        onClick={() => act.run(() => toggle(m, true))}
+                        onClick={async () => {
+                          setEnabling(m.key);
+                          await act.run(() => toggle(m, true));
+                          setEnabling(null);
+                        }}
                       >
                         Activer
                       </Button>

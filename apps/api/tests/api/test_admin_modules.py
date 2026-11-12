@@ -1,10 +1,12 @@
 """Administration, lot 3: turn a company's modules on or off, the catalogue (spec §3.1, §5.4)."""
 
+import uuid
 from collections.abc import Callable
 
 from fastapi.testclient import TestClient
 from sqlalchemy.orm import Session
 
+from app.db.models import Organization
 from tests.api.helpers import signed_in_client
 from tests.api.test_admin_accounts import admin, journal, org_id_of
 from tests.api.test_modules import set_modules
@@ -129,3 +131,43 @@ def test_company_session_refused(make_client: Factory, outbox: Outbox, db: Sessi
     assert company.get("/admin/modules").status_code == 401
     assert toggle(company, org_id, "veille", False).status_code == 401
     assert company.get("/auth/me").json()["modules"] == ["veille", "reponse"]
+
+
+def test_toggle_keeps_keys_it_does_not_know(
+    make_client: Factory, outbox: Outbox, db: Session
+) -> None:
+    """A key outside the registry (a newer release, a module taken out of the code for a
+    while) is ignored, never erased by a toggle."""
+    signed_in_client(make_client, outbox)
+    set_modules(db, "user1@example.fr", ["veille", "reponse", "crm"])
+    org_id = org_id_of(db, "user1@example.fr")
+    client, _, _ = admin(make_client, db)
+
+    assert toggle(client, org_id, "reponse", False).json() == {"modules": ["veille"]}
+    db.expire_all()
+    assert db.get_one(Organization, uuid.UUID(org_id)).modules == ["veille", "crm"]
+    assert toggle(client, org_id, "reponse", True).json() == {"modules": ["veille", "reponse"]}
+    db.expire_all()
+    assert db.get_one(Organization, uuid.UUID(org_id)).modules == ["veille", "reponse", "crm"]
+
+
+def test_list_percentage_follows_the_watch(
+    make_client: Factory, outbox: Outbox, db: Session
+) -> None:
+    """Without « Veille » the profile no longer asks for the watch settings: the companies
+    list shows the new percentage at once, not at the next profile save."""
+    company = signed_in_client(make_client, outbox)
+    assert company.put("/profile", json={"trades": ["vitrerie"]}).status_code == 200
+    org_id = org_id_of(db, "user1@example.fr")
+    client, _, _ = admin(make_client, db)
+
+    def shown() -> int:
+        [row] = client.get("/admin/organizations").json()
+        return int(row["completeness_pct"])
+
+    before = shown()
+    toggle(client, org_id, "veille", False)
+    assert shown() == before + 15 + 10  # CPV/keywords and departments no longer asked
+    assert shown() == company.get("/profile/completeness").json()["pct"]
+    toggle(client, org_id, "veille", True)
+    assert shown() == before

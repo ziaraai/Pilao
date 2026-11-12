@@ -9,6 +9,7 @@ from app.core.errors import ApiError
 from app.db.models import Organization
 from app.modules import BY_KEY, MODULES, active_modules
 from app.schemas.admin import ModuleOut
+from app.services import profile as profile_svc
 from app.services.admin import audit
 from app.services.admin.context import AdminOrgContext
 from app.workers.queue import JobQueue
@@ -31,7 +32,10 @@ def set_module(
     if (key in current) == enabled:
         return current
     wanted = {*current, key} if enabled else set(current) - {key}
-    ctx.org.modules = [m.key for m in MODULES if m.key in wanted]
+    unknown = [k for k in ctx.org.modules if k not in BY_KEY]  # ignored, never erased
+    ctx.org.modules = [m.key for m in MODULES if m.key in wanted] + unknown
+    if key == "veille":  # the profile asks for the watch settings only with « Veille »
+        profile_svc.refresh_completeness(ctx.db, ctx.org)
     action = "module_enabled" if enabled else "module_disabled"
     meta = {"module": module.key, "name": module.name}
     audit.record(ctx.db, action, admin=ctx.admin, org_id=ctx.org.id, ip=ip, meta=meta)

@@ -306,7 +306,11 @@ def _apply_correction(db: Session, target: Tender, item: TenderIn, mailer: Maile
             + "\n".join(
                 f"- {LABELS[k]} : {_fmt(k, a)} → {_fmt(k, b)}" for k, (a, b) in changes.items()
             )
-            + "\n\nVérifiez votre dossier dans Pilao.",
+            + (
+                "\n\nVérifiez votre dossier dans Pilao."
+                if match.bid_id is not None
+                else "\n\nConsultez l'annonce dans Pilao."  # followed without a dossier
+            ),
         )
     db.flush()
     return True

@@ -222,6 +222,7 @@ def test_a_correction_updates_the_notice_and_warns_who_follows_it(
     mails = outbox.sent[sent:]
     assert len(mails) == 1 and mails[0].subject == "Avis rectificatif : Nettoyage A"
     assert "date limite" in mails[0].body
+    assert "Vérifiez votre dossier dans Pilao." in mails[0].body  # followed with a dossier
     assert load(db, queue, outbox, correction).unchanged == 1 and len(outbox.sent) == sent + 1
 
     load(

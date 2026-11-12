@@ -56,6 +56,10 @@ def test_me_gives_the_support_address(
     assert c.get("/auth/me").json()["support_email"] is None
     monkeypatch.setattr(get_settings(), "support_email", "aide@pilao.test")
     assert c.get("/auth/me").json()["support_email"] == "aide@pilao.test"
+    monkeypatch.setattr(get_settings(), "support_email", " aide@pilao.test \n")
+    assert c.get("/auth/me").json()["support_email"] == "aide@pilao.test"  # a clean mailto
+    monkeypatch.setattr(get_settings(), "support_email", "   ")
+    assert c.get("/auth/me").json()["support_email"] is None
 
 
 @pytest.mark.parametrize(("module", "method", "path"), ROUTES)

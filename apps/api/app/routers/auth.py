@@ -47,7 +47,7 @@ def _me_from(user: User, org: Organization) -> MeOut:
         org=OrgOut(id=org.id, name=org.name, siret=org.siret),
         terms_current=user.terms_version == TERMS_VERSION,
         modules=active_modules(org),
-        support_email=get_settings().support_email or None,
+        support_email=(get_settings().support_email or "").strip() or None,
     )
 
 
