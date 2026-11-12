@@ -72,6 +72,8 @@ export default function AdminOrganizationsPage() {
                       <th className={NUM}>Profil</th>
                       <th className={NUM}>IA ce mois</th>
                       <th className={HEAD}>Modules</th>
+                      <th className={HEAD}>Formule</th>
+                      <th className={NUM}>Crédits</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -134,6 +136,14 @@ export default function AdminOrganizationsPage() {
                               ))
                             )}
                           </span>
+                        </td>
+                        <td className={`${CELL} whitespace-nowrap`}>
+                          {o.plan.name}
+                        </td>
+                        <td
+                          className={`${NUM} ${o.credits_total === 0 ? "font-semibold text-red-700" : ""}`}
+                        >
+                          {o.credits_total}
                         </td>
                       </tr>
                     ))}

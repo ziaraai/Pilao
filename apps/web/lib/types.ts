@@ -583,7 +583,7 @@ export type AdminSetupDone = { recovery_codes: string[]; me: AdminMe };
 
 export type AdminWatchItem = {
   level: "red" | "amber";
-  kind: "import" | "job" | "ai" | "inactive";
+  kind: "import" | "job" | "ai" | "inactive" | "credits";
   title: string;
   detail: string | null;
   at: string | null;
@@ -647,6 +647,8 @@ export type AdminOrganizationRow = {
   deletion_due_at: string | null;
   invitation_pending: boolean;
   modules: string[]; // its active modules (lot 3)
+  plan: { id: string; name: string }; // lot 4
+  credits_total: number;
 };
 
 /** A module of the registry, in the administration's catalogue (lot 3). */
@@ -755,6 +757,9 @@ export type AdminOrganizationDetail = {
   job_errors: AdminJobIssue[];
   feedback: AdminFeedbackItem[];
   modules: string[];
+  plan: { id: string; name: string };
+  credits_total: number;
+  modules_off_plan: { added: string[]; removed: string[] };
 };
 
 export type AdminAiCosts = {
@@ -805,3 +810,42 @@ export type AdminFeedback = {
 
 /** « Suivre » a notice: its bid, or none for a company without « Réponse » (lot 3). */
 export type TrackOut = { bid: Bid | null };
+
+/** Lot 4: a plan, in the administration. */
+export type AdminPlan = {
+  id: string;
+  name: string;
+  description: string;
+  modules: string[];
+  monthly_credits: number;
+  welcome_credits: number;
+  price_note: string;
+  is_default: boolean;
+  archived: boolean;
+  organizations: number;
+};
+
+export type AdminPlanIn = Omit<
+  AdminPlan,
+  "id" | "is_default" | "archived" | "organizations"
+>;
+
+export type AdminCreditPrice = {
+  action: string;
+  name: string;
+  module: string;
+  credits: number;
+  default_credits: number;
+  uses_30d: number;
+  avg_cost_30d: string | null; // euros: the administration only
+};
+
+export type AdminOrgCredits = {
+  plan: { id: string; name: string };
+  monthly_allowance: number;
+  monthly_left: number;
+  extra: number;
+  total: number;
+  renews_on: string;
+  history: CreditLine[];
+};

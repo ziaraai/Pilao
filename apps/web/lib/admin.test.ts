@@ -48,7 +48,7 @@ describe("administration", () => {
     ).toBe("/admin/technique");
   });
 
-  it("has seven screens, the overview first, the modules last", () => {
+  it("has eight screens, the overview first, the plans last", () => {
     expect(ADMIN_NAV.map((n) => n.href)).toEqual([
       "/admin",
       "/admin/entreprises",
@@ -57,8 +57,10 @@ describe("administration", () => {
       "/admin/avis",
       "/admin/journal",
       "/admin/modules",
+      "/admin/formules",
     ]);
     expect(ADMIN_NAV[6].label).toBe("Modules");
+    expect(ADMIN_NAV[7].label).toBe("Formules");
   });
 
   it("names the journal's actions in French", () => {
@@ -68,6 +70,14 @@ describe("administration", () => {
     expect(auditLabel("something_new")).toBe("something_new");
     expect(auditLabel("module_enabled")).toBe("Module activé");
     expect(auditLabel("module_disabled")).toBe("Module désactivé");
+    expect(auditLabel("plan_created")).toBe("Formule créée");
+    expect(auditLabel("plan_updated")).toBe("Formule modifiée");
+    expect(auditLabel("plan_archived")).toBe("Formule archivée");
+    expect(auditLabel("plan_unarchived")).toBe("Formule désarchivée");
+    expect(auditLabel("plan_default_set")).toBe("Formule par défaut changée");
+    expect(auditLabel("plan_changed")).toBe("Formule de l'entreprise changée");
+    expect(auditLabel("credits_added")).toBe("Crédits ajoutés");
+    expect(auditLabel("credit_price_changed")).toBe("Prix d'une action changé");
   });
 
   it("names the modules shortly in the companies list", () => {
@@ -88,6 +98,20 @@ describe("administration", () => {
       "Propreté · effacement dans 30 jours",
     );
     expect(auditDetail({ left: 3 })).toBe("3 codes de secours restants");
+    expect(auditDetail({ amount: 20, reason: "Geste" })).toBe(
+      "20 crédits · Raison : Geste",
+    );
+    expect(auditDetail({ from: "Découverte", to: "Pilote" })).toBe(
+      "Découverte → Pilote",
+    );
+    expect(
+      auditDetail({
+        action: "dce_analysis",
+        name: "Analyse du DCE",
+        from: 2,
+        to: 3,
+      }),
+    ).toBe("Analyse du DCE · 2 → 3 crédits");
     expect(
       auditDetail({ module: "reponse", name: "Réponse aux appels d'offres" }),
     ).toBe("Réponse aux appels d'offres");

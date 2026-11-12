@@ -17,7 +17,7 @@ const today = new Intl.DateTimeFormat("fr-FR", {
 
 /** Where a line of « À surveiller » leads. */
 function watchLink(item: AdminWatchItem): { href: string; label: string } {
-  if (item.kind === "inactive" && item.org_id)
+  if ((item.kind === "inactive" || item.kind === "credits") && item.org_id)
     return {
       href: `/admin/entreprises/${item.org_id}`,
       label: "Voir la fiche",

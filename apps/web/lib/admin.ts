@@ -12,6 +12,7 @@ export const ADMIN_NAV: { href: string; label: string; icon: IconName }[] = [
   { href: "/admin/avis", label: "Avis des testeurs", icon: "documents" },
   { href: "/admin/journal", label: "Journal", icon: "vault" },
   { href: "/admin/modules", label: "Modules", icon: "start" },
+  { href: "/admin/formules", label: "Formules", icon: "bids" },
 ];
 
 const ACCESS_PAGES = ["/admin/connexion", "/admin/activation"];
@@ -64,6 +65,14 @@ export const AUDIT_LABELS: Record<string, string> = {
   step_up_failed: "Code refusé",
   module_enabled: "Module activé",
   module_disabled: "Module désactivé",
+  plan_created: "Formule créée",
+  plan_updated: "Formule modifiée",
+  plan_archived: "Formule archivée",
+  plan_unarchived: "Formule désarchivée",
+  plan_default_set: "Formule par défaut changée",
+  plan_changed: "Formule de l'entreprise changée",
+  credits_added: "Crédits ajoutés",
+  credit_price_changed: "Prix d'une action changé",
 };
 
 export function auditLabel(action: string): string {
@@ -114,6 +123,16 @@ export function auditDetail(meta: Record<string, unknown>): string {
   if (who) parts.push(who);
   if (text("role"))
     parts.push(`rôle : ${label(ROLES, text("role") as string)}`);
+  if (typeof meta.from === "number" && typeof meta.to === "number")
+    parts.push(`${meta.from} → ${meta.to} crédits`); // an action's price
+  else if (text("from") && text("to"))
+    parts.push(`${text("from")} → ${text("to")}`); // a company's plan
+  if (typeof meta.amount === "number")
+    parts.push(`${meta.amount} crédit${meta.amount > 1 ? "s" : ""}`);
+  if (typeof meta.organizations === "number")
+    parts.push(
+      `${meta.organizations} entreprise${meta.organizations > 1 ? "s" : ""}`,
+    );
   if (text("reason")) parts.push(`Raison : ${text("reason")}`);
   if (meta.mode === "immediate") parts.push("effacée tout de suite");
   if (meta.mode === "scheduled") parts.push("effacement dans 30 jours");

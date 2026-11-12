@@ -5,10 +5,14 @@ import { useRouter } from "next/navigation";
 import { useState } from "react";
 
 import { AdminTitle } from "@/components/admin/ui";
-import { Alert, Button, Card, Field, Input } from "@/components/ui";
-import { useAdminAction } from "@/lib/admin-auth";
+import { Alert, Button, Card, Field, Input, Select } from "@/components/ui";
+import { useAdminAction, useAdminApi } from "@/lib/admin-auth";
 import { api, ApiError } from "@/lib/api";
-import type { AdminCreated, AdminOrganizationRow } from "@/lib/types";
+import type {
+  AdminCreated,
+  AdminOrganizationRow,
+  AdminPlan,
+} from "@/lib/types";
 
 type Lookup = {
   available: boolean;
@@ -27,6 +31,10 @@ export default function NewOrganizationPage() {
   const [name, setName] = useState("");
   const [contactName, setContactName] = useState("");
   const [contactEmail, setContactEmail] = useState("");
+  const plans = useAdminApi<AdminPlan[]>("/admin/plans");
+  const [planId, setPlanId] = useState("");
+  const offered = (plans.data ?? []).filter((p) => !p.archived);
+  const chosenPlan = planId || (offered.find((p) => p.is_default)?.id ?? "");
   const [found, setFound] = useState<string | null>(null);
   const [existing, setExisting] = useState<AdminOrganizationRow | null>(null);
   const search = useAdminAction();
@@ -65,6 +73,7 @@ export default function NewOrganizationPage() {
             name,
             contact_name: contactName,
             contact_email: contactEmail,
+            ...(chosenPlan ? { plan_id: chosenPlan } : {}),
           },
         });
       } catch (err) {
@@ -154,6 +163,26 @@ export default function NewOrganizationPage() {
               required
             />
           </Field>
+          {offered.length > 0 && (
+            <Field
+              label="Formule"
+              htmlFor="plan"
+              hint="Ses modules et ses crédits. Changeable ensuite sur sa fiche."
+            >
+              <Select
+                id="plan"
+                value={chosenPlan}
+                onChange={(e) => setPlanId(e.target.value)}
+              >
+                {offered.map((p) => (
+                  <option key={p.id} value={p.id}>
+                    {p.name}
+                    {p.is_default ? " (par défaut)" : ""}
+                  </option>
+                ))}
+              </Select>
+            </Field>
+          )}
           {create.error && (
             <Alert tone="danger">
               {create.error}

@@ -6,6 +6,7 @@ import { useState } from "react";
 
 import { ConfirmDialog } from "@/components/admin/dialogs";
 import { OrgModules } from "@/components/admin/org-modules";
+import { OrgPlan } from "@/components/admin/org-plan";
 import { OrgUsers } from "@/components/admin/org-users";
 import {
   AdminTitle,
@@ -404,9 +405,12 @@ export default function AdminOrganizationPage() {
                 onChanged={detail.reload}
               />
 
+              <OrgPlan orgId={id} orgName={i.name} onChanged={detail.reload} />
+
               <OrgModules
                 orgId={id}
                 modules={d.modules}
+                offPlan={d.modules_off_plan}
                 onChanged={detail.reload}
               />
 

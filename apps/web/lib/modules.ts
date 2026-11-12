@@ -41,6 +41,9 @@ export const NAV: NavItem[] = [
 /** What a company has when nothing says otherwise (the API's default, too). */
 export const DEFAULT_MODULES: string[] = ["veille", "reponse"];
 
+/** The modules of the registry, in its order (lot 4: plan form). */
+export const MODULE_KEYS: string[] = ["veille", "reponse"];
+
 const MODULE_NAMES: Record<string, string> = {
   veille: "Veille des annonces",
   reponse: "Réponse aux appels d'offres",

@@ -13,10 +13,13 @@ import type { AdminModule } from "@/lib/types";
 export function OrgModules({
   orgId,
   modules,
+  offPlan,
   onChanged,
 }: {
   orgId: string;
   modules: string[];
+  /** Lot 4: what differs from the company's plan. */
+  offPlan?: { added: string[]; removed: string[] };
   onChanged: () => void;
 }) {
   const catalog = useAdminApi<AdminModule[]>("/admin/modules");
@@ -64,6 +67,12 @@ export function OrgModules({
                           <Pill tone="ok">Activé</Pill>
                         ) : (
                           <Pill tone="neutral">Désactivé</Pill>
+                        )}
+                        {offPlan?.added.includes(m.key) && (
+                          <Pill tone="warning">Hors formule (offert)</Pill>
+                        )}
+                        {offPlan?.removed.includes(m.key) && (
+                          <Pill tone="warning">Hors formule (retiré)</Pill>
                         )}
                       </p>
                       <p className="text-sm text-slate-600">{m.description}</p>
