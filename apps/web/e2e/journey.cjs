@@ -1184,6 +1184,9 @@ let current; // the page, for a screenshot when a step fails
   await admin.getByRole("button", { name: "Essayer et enregistrer" }).click();
   await admin.getByText("openai/fake-scoring-2", { exact: true }).waitFor();
   await admin.getByLabel("Remplacer la clé").fill("sk-or-v1-e2e-test-0000abcd");
+  await admin
+    .getByLabel("Code de l'application d'authentification")
+    .fill(recovery[2]); // asked again: the key sees every prompt
   await admin.getByRole("button", { name: "Vérifier et enregistrer" }).click();
   await admin.getByText("•••• abcd — réglée ici", { exact: false }).waitFor();
   await admin.getByText("3,68 $ restants sur 5,00 $").waitFor();

@@ -576,6 +576,7 @@ class ModelChoiceIn(BaseModel):
 
 class ApiKeyIn(BaseModel):
     key: str = Field(max_length=200)
+    code: str = Field(min_length=1, max_length=40)  # asked again: the key sees every prompt
 
     @field_validator("key")
     @classmethod

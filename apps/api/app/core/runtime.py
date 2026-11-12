@@ -10,7 +10,8 @@ import logging
 import threading
 import time
 import uuid
-from collections.abc import Callable
+from collections.abc import Callable, Iterator
+from contextlib import contextmanager
 from dataclasses import dataclass, field
 from datetime import datetime
 from typing import Any, Literal
@@ -43,6 +44,7 @@ _lock = threading.Lock()
 _snapshot: Snapshot | None = None
 _taken_at = 0.0
 _loader: Loader | None = None
+_overrides: dict[str, Any] = {}  # this process only: the phase 0 evaluation (eval-models)
 
 
 def _read_rows() -> list[PlatformSetting]:
@@ -104,6 +106,8 @@ def source(name: str) -> Literal["admin", "server"]:
 def effective(name: str) -> Any:
     """The administration's value when there is one (an empty address included: « aucune »),
     else the server's."""
+    if name in _overrides:
+        return _overrides[name]
     if name == KEY:
         return api_key()
     current = snapshot().values
@@ -120,3 +124,16 @@ def api_key() -> str | None:
 
 def model_for_task(task: str) -> str:
     return str(effective(f"model.{task}") or "")
+
+
+@contextmanager
+def overridden(values: dict[str, Any]) -> Iterator[None]:
+    """Values forced in this process, over the administration's and the server's: the phase 0
+    evaluation tries its own model whatever is set in the administration."""
+    saved = dict(_overrides)
+    _overrides.update(values)
+    try:
+        yield
+    finally:
+        _overrides.clear()
+        _overrides.update(saved)

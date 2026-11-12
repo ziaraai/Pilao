@@ -42,6 +42,7 @@ from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from app.ai.embeddings import get_embedder
+from app.core import runtime
 from app.core.config import get_settings
 from app.core.tenancy import scope_session
 from app.db.models import (
@@ -62,6 +63,7 @@ from app.db.models import (
 from app.documents.ocr import OcrEngine
 from app.domain.markdown import TODO
 from app.exports.memoir_docx import build_memoir
+from app.platform_settings import TASK_MODELS
 from app.schemas.profile import (
     CertificationIn,
     EquipmentIn,
@@ -303,8 +305,11 @@ def models(model: str) -> Iterator[None]:
     s = get_settings()
     saved = (s.llm_model_extraction, s.llm_model_generation, s.llm_model_scoring)
     s.llm_model_extraction = s.llm_model_generation = s.llm_model_scoring = model
+    # lot 5: a model set in the administration would otherwise win over the one under test
+    tasks = {f"model.{task}": model for task in TASK_MODELS if task != "compliance_reading"}
     try:
-        yield
+        with runtime.overridden(tasks):
+            yield
     finally:
         s.llm_model_extraction, s.llm_model_generation, s.llm_model_scoring = saved
 

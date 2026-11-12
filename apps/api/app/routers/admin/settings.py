@@ -53,7 +53,7 @@ def reset_model(task: str, request: Request, ctx: CurrentAdmin, db: AdminDb) -> 
 def replace_key(
     data: ApiKeyIn, request: Request, ctx: CurrentAdmin, db: AdminDb, client: Client
 ) -> ApiKeyOut:
-    return svc.set_api_key(db, ctx.admin, client, data.key, client_ip(request))
+    return svc.set_api_key(db, ctx, client, data.key, data.code, client_ip(request))
 
 
 @router.delete("/api-key", status_code=204)

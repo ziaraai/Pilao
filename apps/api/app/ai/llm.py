@@ -110,7 +110,12 @@ def parse_json_object(text: str) -> dict[str, Any]:
 
 
 def _call_provider(
-    model: str, messages: list[dict[str, Any]], max_tokens: int | None = None
+    model: str,
+    messages: list[dict[str, Any]],
+    max_tokens: int | None = None,
+    *,
+    timeout: float | None = None,
+    retries: int = 2,
 ) -> tuple[str, int, int, float]:
     import litellm  # imported lazily: heavy, and unnecessary when no model is configured
 
@@ -122,8 +127,8 @@ def _call_provider(
         messages=messages,
         response_format={"type": "json_object"},
         temperature=0,
-        timeout=300 if max_tokens and max_tokens > 4000 else 90,
-        num_retries=2,
+        timeout=timeout or (300 if max_tokens and max_tokens > 4000 else 90),
+        num_retries=retries,
         **({"max_tokens": max_tokens} if max_tokens else {}),
         **({"api_key": key} if key else {}),
         **provider_routing(model),
@@ -259,6 +264,7 @@ def _journal(
 
 # Lot 5: the trial of a model before the administration saves it (spec §3.3)
 PROBE_TASK = "settings_check"
+PROBE_TIMEOUT_SECONDS = 60  # a provider that hangs must not keep the operator waiting
 PROBE_MESSAGES = [
     {"role": "system", "content": 'Réponds uniquement par l\'objet JSON {"ok": true}.'},
     {"role": "user", "content": "Essai"},
@@ -274,7 +280,9 @@ def probe(db: Session, model: str) -> None:
     cost = 0.0
     reason: str | None = None
     try:
-        content, t_in, t_out, cost = _call_provider(model, PROBE_MESSAGES, 50)
+        content, t_in, t_out, cost = _call_provider(
+            model, PROBE_MESSAGES, 50, timeout=PROBE_TIMEOUT_SECONDS, retries=0
+        )
         try:
             data = parse_json_object(content)
         except (ValueError, TypeError):

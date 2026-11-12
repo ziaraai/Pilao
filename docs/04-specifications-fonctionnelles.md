@@ -250,7 +250,7 @@ Sur sa fiche, carte « Formule et crédits » : la formule et « Changer de form
 - CA2 Les crédits du mois sont pris d'abord, puis les supplémentaires (recharges, crédits offerts), qui n'expirent pas.
 - CA3 Sans assez de crédits, le bouton est grisé (« Il faut 5 crédits, il vous en reste 3. Contactez Pilao… ») et le serveur refuse (402 `credits_exhausted`) ; tout le reste marche. L'analyse automatique d'un DCE déposé sans crédits attend (« Analyse non lancée : crédits insuffisants. »).
 - CA4 Bandeau orange sous 20 % des crédits reçus, rouge à 0. Une entreprise dont aucun module n'a d'action payante (la veille seule) ne voit ni solde ni bandeau.
-- CA5 Un échec rend ses crédits : relancer un chapitre en échec est gratuit tant que l'échec ne les a pas rendus, payant sinon (le bouton l'indique). Un travail bloqué (analyse, chapitre, lecture) est fermé en erreur et remboursé au plus tard une heure après son dernier signe de vie.
+- CA5 Un échec rend ses crédits : relancer un chapitre en échec est gratuit tant que l'échec ne les a pas rendus, payant sinon (le bouton l'indique). Un mémoire dont tous les chapitres échouent est remboursé. Un travail bloqué (analyse, chapitre, lecture) est fermé en erreur et remboursé au plus tard une heure après son dernier signe de vie.
 
 **US-6.15 Les modèles d'IA par tâche**
 Écran « Réglages » (`/admin/reglages`), carte « Modèles d'IA » : une ligne par tâche (lecture du DCE, rédaction du mémoire, régénération d'un chapitre, pré-remplissage du profil, note des annonces, lecture des attestations) avec le modèle, son prix en euros par million de jetons, son origine (« réglé ici » ou « valeur du serveur ») et le coût réel sur 30 jours.
@@ -259,7 +259,7 @@ Sur sa fiche, carte « Formule et crédits » : la formule et « Changer de form
 - CA3 « Revenir à la valeur du serveur » (refusé si le serveur n'a pas de modèle) ; un modèle retiré du catalogue est signalé en orange et dans « À surveiller ». Le modèle d'indexation reste réglé sur le serveur.
 
 **US-6.16 La clé OpenRouter**
-- CA1 La clé collée est vérifiée auprès d'OpenRouter, enregistrée chiffrée, jamais réaffichée (seuls ses 4 derniers caractères) ; le crédit du compte OpenRouter est affiché en dollars.
+- CA1 La clé collée est vérifiée auprès d'OpenRouter, puis le code de l'application d'authentification est redemandé (la clé voit tous les textes envoyés à l'IA), puis elle est enregistrée chiffrée, jamais réaffichée (seuls ses 4 derniers caractères) ; le crédit du compte OpenRouter est affiché en dollars.
 - CA2 Clé refusée → « Clé refusée par OpenRouter. » ; OpenRouter injoignable → « OpenRouter ne répond pas : la clé n'est pas vérifiée, rien n'est changé. »
 - CA3 « Revenir à la clé du serveur » (refusé sans clé du serveur) ; une clé devenue illisible (clé secrète du serveur changée) laisse la clé du serveur prendre le relais, bandeau rouge et ligne rouge dans « À surveiller ».
 

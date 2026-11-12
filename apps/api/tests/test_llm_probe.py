@@ -11,7 +11,9 @@ from app.db.models import AiCall
 
 
 def answering(content: str) -> Any:
-    def call(model: str, messages: list[dict[str, Any]], max_tokens: int | None = None) -> Any:
+    def call(
+        model: str, messages: list[dict[str, Any]], max_tokens: int | None = None, **_: Any
+    ) -> Any:
         assert '{"ok": true}' in messages[0]["content"]
         return content, 12, 3, 0.0001
 
@@ -48,3 +50,28 @@ def test_a_provider_error(db: Session, monkeypatch: pytest.MonkeyPatch) -> None:
         llm.probe(db, "openrouter/acme/small")
     assert "data policy" in str(exc.value)
     assert db.scalars(select(AiCall)).one().success is False
+
+
+def test_the_trial_is_short(db: Session, monkeypatch: pytest.MonkeyPatch) -> None:
+    """A provider that hangs must not keep the operator waiting for minutes (final review)."""
+    import litellm
+
+    seen: dict[str, Any] = {}
+
+    def completion(**kw: Any) -> Any:
+        from types import SimpleNamespace
+
+        seen.update(kw)
+        return SimpleNamespace(
+            choices=[
+                SimpleNamespace(
+                    message=SimpleNamespace(content='{"ok": true}'), finish_reason="stop"
+                )
+            ],
+            usage=SimpleNamespace(prompt_tokens=3, completion_tokens=2),
+            _hidden_params={"response_cost": 0.0001},
+        )
+
+    monkeypatch.setattr(litellm, "completion", completion)
+    llm.probe(db, "openrouter/acme/small")
+    assert (seen["timeout"], seen["num_retries"]) == (60, 0)

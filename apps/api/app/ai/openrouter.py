@@ -52,6 +52,8 @@ def _model(item: dict[str, Any]) -> CatalogueModel | None:
     pricing = item.get("pricing") or {}
     arch = item.get("architecture") or {}
     params = item.get("supported_parameters") or []
+    if not isinstance(params, list):
+        raise TypeError("supported_parameters")
     try:
         context = int(item.get("context_length") or 0)
     except (TypeError, ValueError):
@@ -83,7 +85,7 @@ class OpenRouter:
             resp = self._http.get(f"{self._base}{path}", headers=headers, **extra)
         except httpx.HTTPError as exc:
             raise OpenRouterUnavailable(f"OpenRouter injoignable ({type(exc).__name__})") from None
-        if resp.status_code in (401, 403):
+        if key and resp.status_code in (401, 403):  # without a key (the catalogue): unavailable
             raise KeyRefused("Clé refusée par OpenRouter.")
         if resp.status_code != 200:
             raise OpenRouterUnavailable(f"OpenRouter a répondu {resp.status_code}")
@@ -97,8 +99,17 @@ class OpenRouter:
 
     def models(self, timeout: float | None = None) -> list[CatalogueModel]:
         items = self._get("/models", timeout=timeout).get("data") or []
-        found = (_model(item) for item in items if isinstance(item, dict))
-        return [m for m in found if m is not None]
+        if not isinstance(items, list):
+            raise OpenRouterUnavailable("catalogue illisible")
+        found = []
+        for item in items:
+            try:
+                model = _model(item) if isinstance(item, dict) else None
+            except (AttributeError, TypeError, ValueError):
+                model = None  # an unreadable entry is skipped, never an error
+            if model is not None:
+                found.append(model)
+        return found
 
     def check_key(self, key: str) -> None:
         self._get("/key", key)

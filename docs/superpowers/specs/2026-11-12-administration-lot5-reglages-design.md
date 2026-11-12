@@ -81,8 +81,10 @@ d'appels sur 30 jours (journal `ai_calls`).
 **Clé OpenRouter** — « •••• 9f2c — réglée ici le 12/11/2026 » ou « •••• cc3a — clé du serveur »
 (ou « Aucune clé ») ; le crédit du compte OpenRouter : « 3,68 $ restants sur 5,00 $ » (en dollars,
 la monnaie du compte ; « Crédit indisponible » si OpenRouter ne répond pas).
-- « Remplacer la clé » : un champ mot de passe, « Vérifier et enregistrer » → la clé est vérifiée
-  auprès d'OpenRouter (§3.3) → enregistrée chiffrée ; refusée → rien de changé.
+- « Remplacer la clé » : un champ mot de passe et le code de l'application d'authentification
+  (demandé à nouveau, comme pour supprimer une entreprise : la clé voit tous les textes envoyés à
+  l'IA), « Vérifier et enregistrer » → la clé est vérifiée auprès d'OpenRouter (§3.3) → le code
+  est vérifié → enregistrée chiffrée ; refusée ou code faux → rien de changé.
 - « Revenir à la clé du serveur » (grisé quand il n'y a pas de clé réglée ici, ou pas de clé sur le
   serveur).
 - Une clé réglée ici devenue illisible (la clé secrète du serveur a changé) : bandeau rouge « La
@@ -219,6 +221,7 @@ valeurs du serveur : elles restent dans `Settings`.
 | Modèle absent du catalogue ou inutilisable pour la tâche | 422 « Ce modèle ne convient pas à cette tâche. » |
 | Essai du modèle raté | 422 « Le modèle n'a pas répondu correctement : {raison}. » |
 | Catalogue injoignable | 503 « Catalogue OpenRouter indisponible, réessayez dans un moment. » |
+| Code de l'application faux (clé) | 400 « Code incorrect. » ; 5 codes faux en 15 minutes ferment la session (lot 2) |
 | Clé refusée / OpenRouter injoignable / clé vide | 422 « Clé refusée par OpenRouter. » / 503 « OpenRouter ne répond pas : la clé n'est pas vérifiée, rien n'est changé. » / 422 |
 | Retour à la valeur du serveur sans valeur sur le serveur | 409 « Le serveur n'a pas de valeur pour ce réglage. » (clé : « Le serveur n'a pas de clé : remplacez la clé plutôt que de la retirer. ») |
 | Budget hors de 1 à 10 000, adresse mal formée | 422 |

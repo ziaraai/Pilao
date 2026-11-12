@@ -92,3 +92,22 @@ def test_openrouter_unreachable() -> None:
         assert "sk-or-v1-secret" not in str(exc.value)
         with pytest.raises(OpenRouterUnavailable):
             or_.credit("sk-or-v1-secret")
+
+
+def test_a_refused_public_catalogue_is_unavailable() -> None:
+    """``/models`` takes no key: a 401/403 there (a CDN challenge, a wrong address) is an
+    unavailable catalogue, never a refused key (final review)."""
+    for status in (401, 403):
+        with pytest.raises(OpenRouterUnavailable):
+            client(lambda request, s=status: httpx.Response(s)).models()
+
+
+def test_malformed_entries_are_skipped() -> None:
+    weird = [
+        {"id": "a/pricing-text", "name": "A", "pricing": "free"},
+        {"id": "b/arch-text", "architecture": "text", "supported_parameters": "response_format"},
+        {"id": "c/params-number", "pricing": HAIKU["pricing"], "supported_parameters": 3},
+        HAIKU,
+    ]
+    models = client(lambda request: httpx.Response(200, json={"data": weird})).models()
+    assert [m.id for m in models] == [HAIKU["id"]]

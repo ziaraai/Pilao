@@ -18,6 +18,7 @@ export function ApiKeyCard({
   onSaved: () => void;
 }) {
   const [typed, setTyped] = useState("");
+  const [code, setCode] = useState("");
   const save = useAdminAction();
   const k = apiKey;
   const setHere = k.source === "admin" || k.unreadable;
@@ -54,11 +55,12 @@ export function ApiKeyCard({
             const done = await save.run(() =>
               api("/admin/settings/api-key", {
                 method: "PUT",
-                json: { key: typed },
+                json: { key: typed, code },
               }),
             );
             if (done) {
               setTyped("");
+              setCode("");
               onSaved();
             }
           }}
@@ -75,7 +77,27 @@ export function ApiKeyCard({
               />
             </Field>
           </div>
-          <Button type="submit" busy={save.busy} disabled={!typed.trim()}>
+          <div className="w-full sm:w-56">
+            <Field
+              label="Code de l'application d'authentification"
+              htmlFor="openrouter-key-code"
+              hint="Demandé à nouveau : la clé voit tous les textes envoyés à l'IA."
+            >
+              <Input
+                id="openrouter-key-code"
+                autoComplete="one-time-code"
+                autoCapitalize="none"
+                spellCheck={false}
+                value={code}
+                onChange={(e) => setCode(e.target.value)}
+              />
+            </Field>
+          </div>
+          <Button
+            type="submit"
+            busy={save.busy}
+            disabled={!typed.trim() || !code.trim()}
+          >
             Vérifier et enregistrer
           </Button>
         </form>

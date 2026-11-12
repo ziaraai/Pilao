@@ -102,8 +102,9 @@ export function ModelPicker({
         </Button>
       </div>
       <p className="text-xs text-slate-500">
-        Un petit essai réel est fait d&apos;abord (moins d&apos;un centime) : si
-        le modèle ne répond pas correctement, rien n&apos;est changé.
+        Un petit essai réel est fait d&apos;abord (quelques centimes au plus,
+        une minute au plus) : si le modèle ne répond pas correctement, rien
+        n&apos;est changé.
       </p>
     </div>
   );

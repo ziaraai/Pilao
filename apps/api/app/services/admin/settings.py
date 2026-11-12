@@ -15,6 +15,7 @@ from sqlalchemy.orm import Session
 from app.ai import llm
 from app.ai.openrouter import CatalogueModel, KeyRefused, OpenRouter, OpenRouterUnavailable
 from app.core import crypto, runtime
+from app.core.admin_deps import AdminContext
 from app.core.config import get_settings
 from app.core.errors import ApiError
 from app.db.models import AiCall, PlatformAdmin, PlatformSetting, TenderImport
@@ -32,6 +33,7 @@ from app.schemas.admin import (
     SettingsOut,
 )
 from app.services.admin import audit
+from app.services.admin import auth as admin_auth
 from app.workers.queue import TENDER_JOB_TIMEOUT_SECONDS, JobQueue
 
 logger = logging.getLogger("pilao.admin.settings")
@@ -309,8 +311,16 @@ def reset_model(db: Session, admin: PlatformAdmin, task: str, ip: str | None) ->
 
 
 def set_api_key(
-    db: Session, admin: PlatformAdmin, client: OpenRouter, key: str, ip: str | None
+    db: Session,
+    ctx: AdminContext,
+    client: OpenRouter,
+    key: str,
+    code: str,
+    ip: str | None,
 ) -> ApiKeyOut:
+    """Checked with OpenRouter, then the authenticator code asked again (whoever sets the key
+    receives every prompt of every company), then stored encrypted."""
+    admin = ctx.admin
     try:
         client.check_key(key)
     except KeyRefused:
@@ -321,6 +331,7 @@ def set_api_key(
             "openrouter_unavailable",
             "OpenRouter ne répond pas : la clé n'est pas vérifiée, rien n'est changé.",
         ) from None
+    admin_auth.confirm_code(db, admin, ctx.session, code, ip)  # 400 « Code incorrect. »
     last4 = key[-4:]
     _store(db, KEY, admin, secret=crypto.encrypt(key, KEY), last4=last4)
     audit.record(db, "api_key_replaced", admin=admin, ip=ip, meta={"last4": last4})

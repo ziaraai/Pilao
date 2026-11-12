@@ -26,7 +26,7 @@ GOOD_KEY = "sk-or-v1-good-0001abcd"
 
 
 def answers(content: str) -> Callable[..., Any]:
-    return lambda model, messages, max_tokens=None: (content, 12, 3, 0.0001)
+    return lambda model, messages, max_tokens=None, **_: (content, 12, 3, 0.0001)
 
 
 @pytest.fixture
@@ -174,8 +174,8 @@ def test_back_to_the_server_value(
 def test_the_key_is_checked_stored_encrypted_never_returned(
     make_client: Factory, db: Session, server: None, openrouter: FakeOpenRouter
 ) -> None:
-    client, _, _ = admin(make_client, db)
-    res = client.put("/admin/settings/api-key", json={"key": f"  {GOOD_KEY} "})
+    client, _, codes = admin(make_client, db)
+    res = client.put("/admin/settings/api-key", json={"key": f"  {GOOD_KEY} ", "code": codes[0]})
     assert res.status_code == 200, res.text
     body = res.json()
     assert (body["source"], body["last4"], body["unreadable"]) == ("admin", "abcd", False)
@@ -188,12 +188,17 @@ def test_the_key_is_checked_stored_encrypted_never_returned(
     assert line.meta == {"last4": "abcd"}
     assert runtime.api_key() == GOOD_KEY
 
-    refused = client.put("/admin/settings/api-key", json={"key": "sk-or-v1-bad-9999"})
+    refused = client.put(
+        "/admin/settings/api-key", json={"key": "sk-or-v1-bad-9999", "code": codes[1]}
+    )
     assert refused.status_code == 422
     assert refused.json()["error"]["message"] == "Clé refusée par OpenRouter."
-    assert client.put("/admin/settings/api-key", json={"key": "   "}).status_code == 422
+    blank = client.put("/admin/settings/api-key", json={"key": "   ", "code": codes[2]})
+    assert blank.status_code == 422
     openrouter.down = True
-    down = client.put("/admin/settings/api-key", json={"key": "sk-or-v1-good-other"})
+    down = client.put(
+        "/admin/settings/api-key", json={"key": "sk-or-v1-good-other", "code": codes[3]}
+    )
     assert down.status_code == 503
     assert down.json()["error"]["message"] == (
         "OpenRouter ne répond pas : la clé n'est pas vérifiée, rien n'est changé."
@@ -204,8 +209,8 @@ def test_the_key_is_checked_stored_encrypted_never_returned(
 def test_back_to_the_server_key(
     make_client: Factory, db: Session, server: None, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    client, _, _ = admin(make_client, db)
-    client.put("/admin/settings/api-key", json={"key": GOOD_KEY})
+    client, _, codes = admin(make_client, db)
+    client.put("/admin/settings/api-key", json={"key": GOOD_KEY, "code": codes[0]})
     res = client.delete("/admin/settings/api-key")
     assert res.status_code == 409
     assert res.json()["error"]["message"] == (
@@ -377,3 +382,40 @@ def test_company_session_refused_on_imports_and_general(
         ("delete", "/admin/settings/general/support_email"),
     ]:
         assert company.request(method, path, json={}).status_code == 401, path
+
+
+def test_a_refused_catalogue_never_breaks_the_screens(
+    make_client: Factory, db: Session, server: None
+) -> None:
+    """A 403 from OpenRouter's catalogue (final review): the overview and « Réglages » stay up,
+    the catalogue answers 503."""
+    import httpx
+
+    from app.ai.openrouter import OpenRouter, get_openrouter
+    from app.main import app
+
+    client, _, _ = admin(make_client, db)
+    refused = httpx.Client(transport=httpx.MockTransport(lambda request: httpx.Response(403)))
+    app.dependency_overrides[get_openrouter] = lambda: OpenRouter("https://or.test/v1", refused)
+    assert client.get("/admin/overview").status_code == 200
+    state = client.get("/admin/settings")
+    assert state.status_code == 200
+    assert all(m["in_catalogue"] is None for m in state.json()["models"])
+    res = client.get("/admin/settings/catalogue", params={"task": "tender_scoring"})
+    assert res.status_code == 503
+
+
+def test_replacing_the_key_asks_for_the_code(
+    make_client: Factory, db: Session, server: None
+) -> None:
+    """Whoever sets the key receives every prompt: the authenticator code is asked again, as
+    for deleting a company (final review)."""
+    client, _, codes = admin(make_client, db)
+    url = "/admin/settings/api-key"
+    assert client.put(url, json={"key": GOOD_KEY}).status_code == 422
+    wrong = client.put(url, json={"key": GOOD_KEY, "code": "000000"})
+    assert wrong.status_code == 400 and wrong.json()["error"]["message"] == "Code incorrect."
+    assert db.get(PlatformSetting, "openrouter_api_key") is None
+    assert len(journal(db, "step_up_failed")) == 1
+    assert client.put(url, json={"key": GOOD_KEY, "code": codes[0]}).status_code == 200
+    assert runtime.api_key() == GOOD_KEY
