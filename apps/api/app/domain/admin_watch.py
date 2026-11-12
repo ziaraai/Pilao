@@ -34,6 +34,7 @@ TASK_LABELS = {
     "dce_extraction": "Analyse du DCE",
     "memoir_generation": "Rédaction du mémoire",
     "memoir_regeneration": "Régénération d'un chapitre",
+    "settings_check": "Essai d'un modèle",  # lot 5: a model tried from the administration
     "tender_scoring": "Score des annonces",
     "profile_extraction": "Lecture des documents du profil",
     "compliance_reading": "Lecture des attestations",

@@ -101,11 +101,13 @@ def test_labels() -> None:
         "dce_extraction",
         "memoir_generation",
         "memoir_regeneration",
+        "settings_check",
         "tender_scoring",
         "profile_extraction",
         "compliance_reading",
         "embedding",
     }
+    assert TASK_LABELS["settings_check"] == "Essai d'un modèle"  # lot 5
 
 
 def test_credit_lines_are_capped() -> None:

@@ -228,7 +228,7 @@ def complete[T: BaseModel](
 
 def _journal(
     db: Session,
-    org_id: uuid.UUID,
+    org_id: uuid.UUID | None,
     bid_id: uuid.UUID | None,
     task: str,
     model: str,
@@ -255,3 +255,41 @@ def _journal(
         )
     )
     db.commit()
+
+
+# Lot 5: the trial of a model before the administration saves it (spec §3.3)
+PROBE_TASK = "settings_check"
+PROBE_MESSAGES = [
+    {"role": "system", "content": 'Réponds uniquement par l\'objet JSON {"ok": true}.'},
+    {"role": "user", "content": "Essai"},
+]
+
+
+def probe(db: Session, model: str) -> None:
+    """One tiny call through the same route as the real ones (key, providers that keep no
+    data), journaled for the platform (no company, no budget). Raises ``LlmError`` with the
+    reason when the model does not answer ``{"ok": true}``."""
+    began = time.monotonic()
+    t_in = t_out = 0
+    cost = 0.0
+    reason: str | None = None
+    try:
+        content, t_in, t_out, cost = _call_provider(model, PROBE_MESSAGES, 50)
+        try:
+            data = parse_json_object(content)
+        except (ValueError, TypeError):
+            reason = "réponse illisible"
+        else:
+            if data.get("ok") is not True:
+                reason = "réponse inattendue"
+    except LlmTruncated as cut:
+        t_in, t_out, cost = cut.t_in, cut.t_out, cut.c
+        reason = "réponse tronquée"
+    except Exception as exc:  # noqa: BLE001 - the provider's reason is shown to the operator
+        reason = (str(exc) or type(exc).__name__)[:200]
+        key = runtime.api_key()
+        if key:
+            reason = reason.replace(key, "•••")  # never a key on the screen or in the journal
+    _journal(db, None, None, PROBE_TASK, model, None, t_in, t_out, cost, began, reason)
+    if reason is not None:
+        raise LlmError(reason)
