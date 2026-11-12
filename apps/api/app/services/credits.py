@@ -1,0 +1,251 @@
+"""A company's credits (lot 4, ADR-043): the only place that writes ``credit_entries``.
+
+The balance is computed from the ledger and the company's plan (``app.domain.credits``). A paid
+action takes its credits when it starts (``charge``), in the transaction that creates its work;
+a work that fails gives them back (``refund``).
+"""
+
+import uuid
+from dataclasses import dataclass
+from datetime import UTC, datetime
+
+from sqlalchemy import case, func, select
+from sqlalchemy.orm import Session
+
+from app.core.config import get_settings
+from app.core.errors import ApiError
+from app.db.models import Bid, CreditEntry, CreditPrice, Organization, Plan, PlatformAdmin, User
+from app.domain.credits import (
+    Balance,
+    InsufficientCredits,
+    Ledger,
+    compute_balance,
+    paris_month,
+    refund_parts,
+    split_charge,
+)
+from app.modules import ACTION_BY_KEY, BY_KEY, MODULES, PAID_ACTIONS
+
+WELCOME_REASON = "Crédits offerts"
+
+
+def _now() -> datetime:
+    return datetime.now(UTC)
+
+
+def contact_sentence() -> str:
+    support = get_settings().support_email.strip()
+    return f"Contactez Pilao : {support}." if support else "Contactez Pilao."
+
+
+def credits_exhausted_error(needed: int, left: int) -> ApiError:
+    unit = "crédit" if needed == 1 else "crédits"
+    return ApiError(
+        402,
+        "credits_exhausted",
+        f"Il faut {needed} {unit}, il vous en reste {left}. {contact_sentence()}",
+    )
+
+
+# ---------- plans ----------------------------------------------------------------------------
+
+
+def default_plan(db: Session) -> Plan:
+    plan = db.scalar(select(Plan).where(Plan.is_default))
+    if plan is None:  # the migration creates one and the administration always keeps one
+        raise RuntimeError("no default plan")
+    return plan
+
+
+def assignable_plan(db: Session, plan_id: uuid.UUID) -> Plan:
+    """A plan that may be given to a company: it exists and is not archived."""
+    plan = db.get(Plan, plan_id)
+    if plan is None:
+        raise ApiError(404, "unknown_plan", "Formule inconnue.")
+    if plan.archived_at is not None:
+        raise ApiError(409, "plan_archived", "Cette formule est archivée.")
+    return plan
+
+
+def plan_of(db: Session, org: Organization) -> Plan:
+    return db.get_one(Plan, org.plan_id)
+
+
+def plan_modules(plan: Plan, current: list[str]) -> list[str]:
+    """The modules of ``plan`` in the registry's order, plus the keys this code does not know
+    (ignored, never erased: lot 3)."""
+    wanted = set(plan.modules)
+    unknown = [k for k in current if k not in BY_KEY]
+    return [m.key for m in MODULES if m.key in wanted] + unknown
+
+
+def assign_plan(db: Session, org: Organization, plan: Plan) -> None:
+    """Give ``plan`` to the company: its modules (exceptions dropped) and, the first time ever,
+    its welcome credits. Its monthly allowance applies at once (the balance is computed)."""
+    org.plan_id = plan.id
+    org.modules = plan_modules(plan, list(org.modules or ()))
+    db.flush()
+    give_welcome(db, org, plan)
+
+
+def give_welcome(db: Session, org: Organization, plan: Plan | None = None) -> CreditEntry | None:
+    plan = plan or plan_of(db, org)
+    if org.welcome_credits_at is not None or plan.welcome_credits <= 0:
+        return None
+    now = _now()
+    entry = CreditEntry(
+        org_id=org.id, kind="welcome", extra=plan.welcome_credits, reason=WELCOME_REASON, at=now
+    )
+    org.welcome_credits_at = now
+    db.add(entry)
+    db.flush()
+    return entry
+
+
+# ---------- balance and prices ---------------------------------------------------------------
+
+
+def org_balance(db: Session, org: Organization, now: datetime | None = None) -> Balance:
+    now = now or _now()
+    plan = plan_of(db, org)
+    month = paris_month(now)
+    used, extra = db.execute(
+        select(
+            func.coalesce(
+                func.sum(case((CreditEntry.month == month, CreditEntry.monthly), else_=0)), 0
+            ),
+            func.coalesce(func.sum(CreditEntry.extra), 0),
+        ).where(CreditEntry.org_id == org.id)
+    ).one()
+    return compute_balance(
+        plan.monthly_credits, plan.welcome_credits, [Ledger(int(used), int(extra), month)], now
+    )
+
+
+def price(db: Session, action: str) -> int:
+    row = db.get(CreditPrice, action)
+    return row.credits if row is not None else ACTION_BY_KEY[action].default_credits
+
+
+def prices(db: Session) -> dict[str, int]:
+    set_ = {p.action: p.credits for p in db.scalars(select(CreditPrice))}
+    return {a.key: set_.get(a.key, a.default_credits) for a in PAID_ACTIONS}
+
+
+# ---------- movements ------------------------------------------------------------------------
+
+
+def charge(
+    db: Session,
+    org: Organization,
+    action: str,
+    *,
+    user_id: uuid.UUID | None,
+    bid_id: uuid.UUID | None = None,
+    ref_id: uuid.UUID | None = None,
+) -> CreditEntry | None:
+    """Take the price of ``action``; nothing when it is free. The caller commits with the work
+    it creates. Raises 402 ``credits_exhausted`` when the balance is too low."""
+    cost = price(db, action)
+    if cost <= 0:
+        return None
+    # one charge at a time per company: two clicks cannot both spend the same credits
+    db.execute(select(Organization.id).where(Organization.id == org.id).with_for_update())
+    now = _now()
+    try:
+        monthly, extra = split_charge(org_balance(db, org, now), cost)
+    except InsufficientCredits as exc:
+        raise credits_exhausted_error(exc.needed, exc.left) from None
+    entry = CreditEntry(
+        org_id=org.id,
+        kind="charge",
+        action=action,
+        monthly=-monthly,
+        extra=-extra,
+        month=paris_month(now),
+        bid_id=bid_id,
+        user_id=user_id,
+        ref_id=ref_id,
+        at=now,
+    )
+    db.add(entry)
+    db.flush()
+    return entry
+
+
+def refund(db: Session, entry: CreditEntry, reason: str) -> CreditEntry | None:
+    """Give back what ``entry`` took, where it took it; once only."""
+    if entry.kind != "charge" or entry.month is None:
+        return None
+    if db.scalar(select(CreditEntry.id).where(CreditEntry.refund_of == entry.id)):
+        return None
+    monthly, extra, month = refund_parts(entry.monthly, entry.extra, entry.month, _now())
+    back = CreditEntry(
+        org_id=entry.org_id,
+        kind="refund",
+        action=entry.action,
+        monthly=monthly,
+        extra=extra,
+        month=month,
+        bid_id=entry.bid_id,
+        user_id=entry.user_id,
+        ref_id=entry.ref_id,
+        refund_of=entry.id,
+        reason=reason,
+    )
+    db.add(back)
+    db.flush()
+    return back
+
+
+def grant(
+    db: Session, org: Organization, amount: int, reason: str, admin: PlatformAdmin
+) -> CreditEntry:
+    """Extra credits added by Pilao: they never expire."""
+    entry = CreditEntry(
+        org_id=org.id, kind="grant", extra=amount, reason=reason, platform_admin_id=admin.id
+    )
+    db.add(entry)
+    db.flush()
+    return entry
+
+
+# ---------- history --------------------------------------------------------------------------
+
+
+@dataclass(frozen=True)
+class HistoryRow:
+    at: datetime
+    kind: str
+    action_name: str | None
+    bid_title: str | None
+    user_name: str | None
+    credits: int
+    reason: str | None
+
+
+def history(db: Session, org: Organization, limit: int) -> list[HistoryRow]:
+    rows = db.execute(
+        select(CreditEntry, Bid.title, User.full_name, User.email)
+        .outerjoin(Bid, Bid.id == CreditEntry.bid_id)
+        .outerjoin(User, User.id == CreditEntry.user_id)
+        .where(CreditEntry.org_id == org.id)
+        .order_by(CreditEntry.at.desc(), CreditEntry.id.desc())
+        .limit(limit)
+    ).all()
+    out = []
+    for entry, title, full_name, email in rows:
+        action = ACTION_BY_KEY.get(entry.action or "")
+        who = full_name or email or ("Pilao" if entry.platform_admin_id else None)
+        out.append(
+            HistoryRow(
+                at=entry.at,
+                kind=entry.kind,
+                action_name=action.name if action else None,
+                bid_title=title,
+                user_name=who,
+                credits=entry.monthly + entry.extra,
+                reason=entry.reason,
+            )
+        )
+    return out

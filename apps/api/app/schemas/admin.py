@@ -292,6 +292,7 @@ class AdminCreateOrgIn(BaseModel):
     name: str = Field(min_length=1, max_length=300)
     contact_name: str = Field(min_length=1, max_length=200)
     contact_email: EmailStr
+    plan_id: uuid.UUID | None = None  # lot 4: the default plan when none is chosen
 
     @field_validator("siret")
     @classmethod

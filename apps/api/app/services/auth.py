@@ -14,6 +14,7 @@ from app.core.security import hash_password, hash_token, needs_rehash, new_token
 from app.db.models import AuditLog, AuthToken, LoginAttempt, Organization, User, UserSession
 from app.integrations.recherche_entreprises import CompanyDirectory, CompanyLookupUnavailable
 from app.schemas.auth import RegisterIn
+from app.services import credits
 from app.services.suspension import is_suspended, suspended_error
 
 VERIFY_KIND = "email_verify"
@@ -111,6 +112,7 @@ def register(
     try:
         db.add(org)
         db.flush()
+        credits.assign_plan(db, org, credits.default_plan(db))  # its modules, welcome credits
         user = User(
             org_id=org.id,
             email=data.email,

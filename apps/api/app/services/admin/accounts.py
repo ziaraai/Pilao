@@ -22,7 +22,7 @@ from app.integrations.recherche_entreprises import CompanyDirectory
 from app.schemas.admin import AdminCreateOrgIn, DeletionPreviewOut, OrgDeletionOut
 from app.schemas.members import InviteIn
 from app.services import auth as company_auth
-from app.services import members, org_data, password_reset
+from app.services import credits, members, org_data, password_reset
 from app.services.actors import PlatformActor
 from app.services.admin import audit
 from app.services.admin import auth as admin_auth
@@ -57,12 +57,14 @@ def create_organization(
     taken = db.scalar(select(Organization.name).where(Organization.siret == data.siret))
     if taken is not None:
         raise ApiError(409, "siret_taken", f"Ce SIRET a déjà un compte : {taken}.")
+    plan = credits.assignable_plan(db, data.plan_id) if data.plan_id else credits.default_plan(db)
     org = Organization(siren=data.siret[:9], siret=data.siret, name=data.name.strip())
     if directory is not None:
         db.rollback()  # no transaction held open during the registry's HTTP call
         company_auth.prefill_from_registry(org, directory)
     db.add(org)
     db.flush()
+    credits.assign_plan(db, org, plan)
     audit.record(
         db,
         "organization_created",

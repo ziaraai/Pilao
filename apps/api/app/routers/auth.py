@@ -27,9 +27,10 @@ from app.schemas.auth import (
     ResetPasswordIn,
     VerifyEmailIn,
 )
+from app.schemas.credits import MeCreditsOut
 from app.schemas.members import AcceptInvitationIn, InvitationLookupIn, InvitationOut
 from app.services import auth as svc
-from app.services import members, password_reset
+from app.services import credits, members, password_reset
 
 router = APIRouter(prefix="/auth", tags=["auth"])
 Db = Annotated[Session, Depends(get_db)]
@@ -38,7 +39,7 @@ MailerDep = Annotated[Mailer, Depends(get_mailer)]
 _password_limiter = SlidingWindowLimiter(max_calls=10, window_seconds=60)
 
 
-def _me_from(user: User, org: Organization) -> MeOut:
+def _me_from(db: Session, user: User, org: Organization) -> MeOut:
     return MeOut(
         id=user.id,
         email=user.email,
@@ -48,7 +49,13 @@ def _me_from(user: User, org: Organization) -> MeOut:
         terms_current=user.terms_version == TERMS_VERSION,
         modules=active_modules(org),
         support_email=(get_settings().support_email or "").strip() or None,
+        credits=_credits_of(db, org),
     )
+
+
+def _credits_of(db: Session, org: Organization) -> MeCreditsOut:
+    balance = credits.org_balance(db, org)
+    return MeCreditsOut(total=balance.total, reference=balance.reference, prices=credits.prices(db))
 
 
 @router.post("/register", status_code=201)
@@ -88,7 +95,7 @@ def login(data: LoginIn, request: Request, response: Response, db: Db) -> MeOut:
     ip = client_ip(request)
     token, user = svc.login(db, data.email, data.password, ip, request.headers.get("user-agent"))
     _set_session_cookie(response, token)
-    return _me_from(user, db.get_one(Organization, user.org_id))
+    return _me_from(db, user, db.get_one(Organization, user.org_id))
 
 
 def _set_session_cookie(response: Response, token: str) -> None:
@@ -116,7 +123,7 @@ def accept_invitation(
 ) -> MeOut:
     token, user = members.accept(db, data, client_ip(request), request.headers.get("user-agent"))
     _set_session_cookie(response, token)
-    return _me_from(user, db.get_one(Organization, user.org_id))
+    return _me_from(db, user, db.get_one(Organization, user.org_id))
 
 
 @router.post("/password/forgot", status_code=202)
@@ -147,7 +154,7 @@ def reset_password(data: ResetPasswordIn, request: Request, response: Response, 
         db, data.token, data.password, client_ip(request), request.headers.get("user-agent")
     )
     _set_session_cookie(response, token)
-    return _me_from(user, db.get_one(Organization, user.org_id))
+    return _me_from(db, user, db.get_one(Organization, user.org_id))
 
 
 @router.post("/logout")
@@ -158,12 +165,12 @@ def logout(response: Response, db: Db, ctx: CurrentAuth) -> MessageOut:
 
 
 @router.get("/me")
-def me(ctx: CurrentAuth) -> MeOut:
-    return _me_from(ctx.user, ctx.org)
+def me(ctx: CurrentAuth, db: Db) -> MeOut:
+    return _me_from(db, ctx.user, ctx.org)
 
 
 @router.post("/accept-terms")
 def accept_terms(db: Db, ctx: CurrentAuth) -> MeOut:
     """The current version of the terms, accepted again after a change (CGU art. 12)."""
     svc.accept_terms(db, ctx.user)
-    return _me_from(ctx.user, ctx.org)
+    return _me_from(db, ctx.user, ctx.org)

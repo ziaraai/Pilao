@@ -19,6 +19,7 @@ from app.routers import (
     auth,
     bids,
     companies,
+    credits,
     dashboard,
     documents,
     feedback,
@@ -66,6 +67,7 @@ app.include_router(memoir.router)
 app.include_router(documents.router)
 app.include_router(tenders.router)
 app.include_router(dashboard.router)
+app.include_router(credits.router)
 app.include_router(organization.router)
 app.include_router(members.router)
 app.include_router(feedback.router)
