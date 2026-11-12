@@ -79,7 +79,7 @@ class OrgActivity:
 @dataclass(frozen=True)
 class WatchItem:
     level: Literal["red", "amber"]
-    kind: Literal["import", "job", "ai", "inactive"]
+    kind: Literal["import", "job", "ai", "inactive", "credits"]
     title: str
     detail: str | None
     at: datetime | None
@@ -152,9 +152,14 @@ def watch(
     ai_calls: int,
     ai_failures: int,
     orgs: list[OrgActivity],
+    out_of_credits: list[tuple[uuid.UUID, str]] | None = None,
 ) -> tuple[list[WatchItem], int]:
     """The lines to show, and how many job issues were left out (beyond ten)."""
     job_items, more = _jobs(jobs)
     reds = job_items + _imports(now, imports) + _ai(ai_calls, ai_failures)
     reds.sort(key=lambda i: (i.at is None, -(i.at.timestamp() if i.at else 0)))
-    return reds + _inactive(now, orgs), more
+    empty = [  # lot 4: a good moment to offer a top-up or a bigger plan
+        WatchItem("amber", "credits", f"{name} n'a plus de crédits", None, None, org_id)
+        for org_id, name in out_of_credits or []
+    ]
+    return reds + _inactive(now, orgs) + empty, more

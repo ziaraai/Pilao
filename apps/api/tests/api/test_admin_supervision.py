@@ -218,6 +218,8 @@ def test_list_columns_and_deletion_badge(make_client: Factory, outbox: Outbox, d
         "deletion_due_at",
         "invitation_pending",
         "modules",
+        "plan",
+        "credits_total",
     }
 
 

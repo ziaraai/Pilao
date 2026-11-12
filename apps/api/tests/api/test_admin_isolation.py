@@ -41,6 +41,8 @@ ADMIN_GETS = [
     "/admin/feedback",
     "/admin/audit",
     "/admin/modules",
+    "/admin/plans",
+    "/admin/credit-prices",
 ]
 
 
@@ -76,6 +78,9 @@ def test_company_session_cannot_act_on_accounts(
         ("post", f"/admin/organizations/{org}/users/{user}/logout"),
         ("post", f"/admin/organizations/{org}/users/{user}/remove"),
         ("put", f"/admin/organizations/{org}/modules/reponse"),
+        ("put", f"/admin/organizations/{org}/plan"),
+        ("post", f"/admin/organizations/{org}/credits"),
+        ("get", f"/admin/organizations/{org}/credits"),
         ("get", "/admin/companies/lookup?siret=12345678901234"),
     ]:
         assert company.request(method, path, json={}).status_code == 401, path

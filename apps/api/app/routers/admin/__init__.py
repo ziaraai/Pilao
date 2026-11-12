@@ -2,9 +2,10 @@
 
 from fastapi import APIRouter
 
-from app.routers.admin import accounts, auth, supervision
+from app.routers.admin import accounts, auth, plans, supervision
 
 router = APIRouter()
 router.include_router(auth.router)
 router.include_router(supervision.router)
 router.include_router(accounts.router)
+router.include_router(plans.router)

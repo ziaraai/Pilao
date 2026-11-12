@@ -33,6 +33,7 @@ from app.db.models import (
     KnowledgeDocument,
     Memoir,
     Organization,
+    Plan,
     TenderImport,
     User,
     UserSession,
@@ -40,7 +41,7 @@ from app.db.models import (
 from app.db.models.platform import PlatformAuditLog
 from app.domain import admin_watch
 from app.domain.admin_watch import ImportState, JobIssue, OrgActivity
-from app.modules import active_modules
+from app.modules import MODULES, active_modules, has_module
 from app.schemas.admin import (
     AccountStateOut,
     ActivityRowOut,
@@ -58,16 +59,19 @@ from app.schemas.admin import (
     ImportPassOut,
     ImportRowOut,
     JobIssueOut,
+    ModulesOffPlanOut,
     OrganizationDetailOut,
     OrganizationRowOut,
     OrgCountersOut,
     OrgIdentityOut,
     OrgUserOut,
     OverviewOut,
+    PlanRefOut,
     SystemOut,
     TimeSavedRowOut,
     WatchItemOut,
 )
+from app.services import credits
 from app.services.feedback import recent_feedback, time_saved_by_org
 
 PARIS = ZoneInfo("Europe/Paris")
@@ -267,6 +271,10 @@ def overview(db: Session, now: datetime) -> OverviewOut:
         )
     ).one()
     imports = _imports(db)
+    totals = credits.totals(db, now)
+    suspended = set(
+        db.scalars(select(Organization.id).where(Organization.suspended_at.is_not(None)))
+    )
     watch, more = admin_watch.watch(
         now,
         [state for state, _ in imports],
@@ -274,6 +282,7 @@ def overview(db: Session, now: datetime) -> OverviewOut:
         int(calls),
         int(failures),
         [OrgActivity(o.id, o.name, o.created_at, active.get(o.id)) for o in orgs],
+        [(o.id, o.name) for o in orgs if totals.get(o.id) == 0 and o.id not in suspended],
     )
     month_cost = sum(_ai_cost_per_org(db, current_month(now)).values(), Decimal(0))
 
@@ -344,6 +353,8 @@ def organizations(db: Session, now: datetime) -> list[OrganizationRowOut]:
     costs = _ai_cost_per_org(db, current_month(now))
     deletions = _deletions_requested(db)
     with_access = _with_access(db)
+    plans = {p.id: p for p in db.scalars(select(Plan))}
+    totals = credits.totals(db, now)
     rows = [
         OrganizationRowOut(
             id=o.id,
@@ -364,6 +375,8 @@ def organizations(db: Session, now: datetime) -> list[OrganizationRowOut]:
             deletion_due_at=deletions[o.id].due_at if o.id in deletions else None,
             invitation_pending=o.id not in with_access,
             modules=active_modules(o),
+            plan=PlanRefOut(id=o.plan_id, name=plans[o.plan_id].name),
+            credits_total=totals.get(o.id, 0),
         )
         for o in orgs
     ]
@@ -401,6 +414,7 @@ def _ai_months(db: Session, org_id: uuid.UUID, months: Sequence[date]) -> list[A
 
 def organization_detail(db: Session, org_id: uuid.UUID, now: datetime) -> OrganizationDetailOut:
     org = db.get_one(Organization, org_id)
+    plan = db.get_one(Plan, org.plan_id)
     profile = db.scalar(select(CompanyProfile).where(CompanyProfile.org_id == org_id))
     month = current_month(now)
     start, end = paris_month_bounds(month)
@@ -509,6 +523,14 @@ def organization_detail(db: Session, org_id: uuid.UUID, now: datetime) -> Organi
         ],
         feedback=[FeedbackItemOut(**vars(row)) for row in recent_feedback(db, org_id=org_id)],
         modules=active_modules(org),
+        plan=PlanRefOut(id=plan.id, name=plan.name),
+        credits_total=credits.org_balance(db, org, now).total,
+        modules_off_plan=ModulesOffPlanOut(
+            added=[k for k in active_modules(org) if k not in plan.modules],
+            removed=[
+                m.key for m in MODULES if m.key in plan.modules and not has_module(org, m.key)
+            ],
+        ),
     )
 
 

@@ -5,13 +5,14 @@ text of a memoir, a DCE or a document, the title of a bid or a line of a company
 """
 
 import uuid
-from datetime import datetime
+from datetime import date, datetime
 from decimal import Decimal
 from typing import Literal
 
 from pydantic import BaseModel, EmailStr, Field, field_validator
 
 from app.schemas.auth import siret_ok
+from app.schemas.credits import HistoryOut
 
 
 class SetupLookupIn(BaseModel):
@@ -73,7 +74,7 @@ class CountersOut(BaseModel):
 
 class WatchItemOut(BaseModel):
     level: Literal["red", "amber"]
-    kind: Literal["import", "job", "ai", "inactive"]
+    kind: Literal["import", "job", "ai", "inactive", "credits"]
     title: str
     detail: str | None
     at: datetime | None
@@ -136,6 +137,8 @@ class OrganizationRowOut(BaseModel):
     deletion_due_at: datetime | None
     invitation_pending: bool  # nobody of the company has created their access yet
     modules: list[str]  # its active modules, in the registry's order (lot 3)
+    plan: "PlanRefOut"  # lot 4
+    credits_total: int
 
 
 class OrgIdentityOut(BaseModel):
@@ -224,6 +227,9 @@ class OrganizationDetailOut(BaseModel):
     job_errors: list[JobIssueOut]  # 30 days
     feedback: list[FeedbackItemOut]
     modules: list[str]
+    plan: "PlanRefOut"  # lot 4
+    credits_total: int
+    modules_off_plan: "ModulesOffPlanOut"
 
 
 class AiCostOrgOut(BaseModel):
@@ -375,3 +381,115 @@ class ModuleToggleIn(BaseModel):
 
 class ModulesOut(BaseModel):
     modules: list[str]
+
+
+# ---------- lot 4: plans and credits --------------------------------------------------------
+
+
+class PlanRefOut(BaseModel):
+    id: uuid.UUID
+    name: str
+
+
+class ModulesOffPlanOut(BaseModel):
+    added: list[str]  # active although the plan does not give them
+    removed: list[str]  # given by the plan but turned off
+
+
+def _clean(value: str, *, required: bool, limit: int, what: str) -> str:
+    value = " ".join(value.split())
+    if required and not value:
+        raise ValueError(f"{what} : champ obligatoire.")
+    if len(value) > limit:
+        raise ValueError(f"{what} : {limit} caractères maximum.")
+    return value
+
+
+class PlanIn(BaseModel):
+    name: str
+    description: str = ""
+    modules: list[str] = Field(default_factory=list)
+    monthly_credits: int = Field(default=0, ge=0, le=100_000)
+    welcome_credits: int = Field(default=0, ge=0, le=100_000)
+    price_note: str = ""
+
+    @field_validator("name")
+    @classmethod
+    def _name(cls, v: str) -> str:
+        return _clean(v, required=True, limit=80, what="Nom")
+
+    @field_validator("description")
+    @classmethod
+    def _description(cls, v: str) -> str:
+        return _clean(v, required=False, limit=200, what="Phrase")
+
+    @field_validator("price_note")
+    @classmethod
+    def _price(cls, v: str) -> str:
+        return _clean(v, required=False, limit=120, what="Prix")
+
+    @field_validator("modules")
+    @classmethod
+    def _modules(cls, v: list[str]) -> list[str]:
+        from app.modules import BY_KEY, MODULES
+
+        unknown = [k for k in v if k not in BY_KEY]
+        if unknown:
+            raise ValueError(f"Module inconnu : {', '.join(unknown)}.")
+        return [m.key for m in MODULES if m.key in v]
+
+
+class PlanOut(BaseModel):
+    id: uuid.UUID
+    name: str
+    description: str
+    modules: list[str]
+    monthly_credits: int
+    welcome_credits: int
+    price_note: str
+    is_default: bool
+    archived: bool
+    organizations: int
+
+
+class PlanUpdateOut(BaseModel):
+    plan: PlanOut
+    organizations_affected: int
+
+
+class CreditPriceIn(BaseModel):
+    credits: int = Field(ge=0, le=1000)
+
+
+class CreditPriceOut(BaseModel):
+    action: str
+    name: str
+    module: str
+    credits: int
+    default_credits: int
+    uses_30d: int  # paid and not given back, the last 30 days
+    avg_cost_30d: Decimal | None  # real AI cost per use, in euros: the administration only
+
+
+class OrgPlanIn(BaseModel):
+    plan_id: uuid.UUID
+
+
+class CreditsGrantIn(BaseModel):
+    amount: int = Field(ge=1, le=100_000)
+    reason: str
+
+    @field_validator("reason")
+    @classmethod
+    def _reason(cls, v: str) -> str:
+        return _clean(v, required=True, limit=200, what="Raison")
+
+
+class OrgCreditsOut(BaseModel):
+    plan: PlanRefOut
+    monthly_allowance: int
+    monthly_left: int
+    extra: int
+    total: int
+    renews_on: date
+    history: list[HistoryOut]

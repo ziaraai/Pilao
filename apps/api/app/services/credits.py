@@ -131,6 +131,30 @@ def org_balance(db: Session, org: Organization, now: datetime | None = None) -> 
     )
 
 
+def totals(db: Session, now: datetime | None = None) -> dict[uuid.UUID, int]:
+    """Every company's balance, in two queries (the administration's list)."""
+    month = paris_month(now or _now())
+    sums = {
+        org_id: (int(used), int(extra))
+        for org_id, used, extra in db.execute(
+            select(
+                CreditEntry.org_id,
+                func.coalesce(
+                    func.sum(case((CreditEntry.month == month, CreditEntry.monthly), else_=0)), 0
+                ),
+                func.coalesce(func.sum(CreditEntry.extra), 0),
+            ).group_by(CreditEntry.org_id)
+        )
+    }
+    out = {}
+    for org_id, allowance in db.execute(
+        select(Organization.id, Plan.monthly_credits).join(Plan, Plan.id == Organization.plan_id)
+    ):
+        used, extra = sums.get(org_id, (0, 0))
+        out[org_id] = max(0, allowance + used) + max(0, extra)
+    return out
+
+
 def price(db: Session, action: str) -> int:
     row = db.get(CreditPrice, action)
     return row.credits if row is not None else ACTION_BY_KEY[action].default_credits
