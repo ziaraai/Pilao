@@ -232,11 +232,16 @@ def refund(db: Session, entry: CreditEntry, reason: str) -> CreditEntry | None:
 
 
 def grant(
-    db: Session, org: Organization, amount: int, reason: str, admin: PlatformAdmin
+    db: Session, org: Organization, amount: int, reason: str, admin: PlatformAdmin | None
 ) -> CreditEntry:
-    """Extra credits added by Pilao: they never expire."""
+    """Extra credits added by Pilao: they never expire. ``admin`` is None for a grant made by
+    the platform itself (the phase 0 evaluation)."""
     entry = CreditEntry(
-        org_id=org.id, kind="grant", extra=amount, reason=reason, platform_admin_id=admin.id
+        org_id=org.id,
+        kind="grant",
+        extra=amount,
+        reason=reason,
+        platform_admin_id=admin.id if admin else None,
     )
     db.add(entry)
     db.flush()

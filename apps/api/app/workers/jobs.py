@@ -17,6 +17,7 @@ from app.services.knowledge import run_index_document
 from app.services.memoir_drafting import run_conformity, run_draft_section
 from app.services.org_data import run_org_export
 from app.services.profile_prefill import run_profile_prefill
+from app.services.stale_works import sweep_stale_works
 from app.services.tender_import import run_all as import_tenders
 from app.services.tenders import match_tenders, rematch_org, score_org
 from app.services.vault import run_read_document
@@ -103,3 +104,9 @@ def org_export_job(request_id: str) -> None:
 def profile_prefill_job(org_id: str) -> None:
     with get_sessionmaker()() as db:
         run_profile_prefill(db, uuid.UUID(org_id), get_storage())
+
+
+def sweep_stale_works_job() -> None:
+    """Every 15 minutes (lot 4): the works left for dead give their credits back."""
+    with get_sessionmaker()() as db:  # unscoped: every company
+        sweep_stale_works(db, get_job_queue())

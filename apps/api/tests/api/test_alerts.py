@@ -119,7 +119,8 @@ def test_the_alerts_and_the_notice_import_are_scheduled() -> None:
     cron._job_data_registry.clear()
     importlib.reload(module)  # what `rq cron app/workers/cron.py` loads
     jobs = {job["func"].__name__: job for job in cron._job_data_registry}
-    assert set(jobs) == {"daily_alerts_job", "import_tenders_job"}
+    assert set(jobs) == {"daily_alerts_job", "import_tenders_job", "sweep_stale_works_job"}
+    assert jobs["sweep_stale_works_job"]["cron"] == "*/15 * * * *"  # lot 4: dead works refunded
     assert {job["queue_name"] for job in jobs.values()} == {"default"}
     start = datetime(2026, 11, 5, 7, 0)
     alerts = croniter(jobs["daily_alerts_job"]["cron"], start)

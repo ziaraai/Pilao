@@ -165,6 +165,19 @@ def latest_job(db: Session, org_id: uuid.UUID) -> Job | None:
     ).first()
 
 
+def is_stale(job: Job, now: datetime | None = None) -> bool:
+    """A reading with no start for longer than ``STALE`` (the worker died: out of memory, a
+    redeploy). Each attempt, the retry included, restarts the clock."""
+    now = now or datetime.now(UTC)
+    return job.status in ("pending", "running") and (job.started_at or job.created_at) < now - STALE
+
+
+def close_stale(db: Session, org_id: uuid.UUID) -> None:
+    """The latest reading, left for dead: failed, its credits given back (lot 4). Caller
+    commits."""
+    set_job_status(db, JOB_KIND, org_id, "error", INTERRUPTED)
+
+
 def _ready_documents(db: Session) -> list[KnowledgeDocument]:
     return list(
         db.scalars(
@@ -184,11 +197,9 @@ def request_read(
             409, "no_documents", "Déposez d'abord un document dans la base documentaire."
         )
     last = latest_job(db, org.id)
-    if (
-        last is not None
-        and last.status in ("pending", "running")
-        and last.created_at > datetime.now(UTC) - STALE
-    ):
+    if last is not None and is_stale(last):
+        close_stale(db, org.id)  # its credits come back before the new reading is paid
+    elif last is not None and last.status in ("pending", "running"):
         raise ApiError(409, "already_running", "Une lecture est déjà en cours.")
     job = Job(kind=JOB_KIND, ref_id=org.id, org_id=org.id, status="pending")
     db.add(job)
@@ -310,8 +321,8 @@ def run_profile_prefill(db: Session, org_id: uuid.UUID, storage: ObjectStorage) 
     scope_session(db, org_id)
     org = db.get(Organization, org_id)
     job = latest_job(db, org_id)
-    if org is None or job is None:
-        return
+    if org is None or job is None or job.status not in ("pending", "running"):
+        return  # closed for dead (and refunded) meanwhile: never read it
     set_job_status(db, JOB_KIND, org_id, "running")
     job.progress = 0
     db.execute(
@@ -347,7 +358,7 @@ def run_profile_prefill(db: Session, org_id: uuid.UUID, storage: ObjectStorage) 
 
 def job_out(job: Job) -> ReadJobOut:
     done = job.status == "done"
-    if job.status in ("pending", "running") and job.created_at < datetime.now(UTC) - STALE:
+    if is_stale(job):
         # the worker died without a word (out of memory, redeploy): say so, allow a new one
         return ReadJobOut(
             status="error",

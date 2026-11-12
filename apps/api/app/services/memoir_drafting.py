@@ -50,6 +50,7 @@ MATRIX_PROMPT = "matrice_conformite"
 EXCERPTS_PER_CHAPTER = 6
 # 3 attempts of at most DRAFT_JOB_TIMEOUT_SECONDS each, plus the retry intervals (60 s, 300 s)
 SECTION_STALE_AFTER = timedelta(seconds=4 * DRAFT_JOB_TIMEOUT_SECONDS)
+SECTION_INTERRUPTED = "La rédaction de ce chapitre s'est interrompue. Relancez-la."
 
 
 def _tag_safe(text: str) -> str:
@@ -209,11 +210,12 @@ def regenerate_section(
     memoir = db.get_one(Memoir, section.memoir_id)
     if memoir.status == "draft":
         raise ApiError(409, "memoir_not_generated", "Lancez d'abord la rédaction du mémoire.")
-    # A worker killed mid-job never resets "generating": past every timeout and retry, the
-    # chapter must not stay locked forever.
-    stale = section.updated_at < datetime.now(UTC) - SECTION_STALE_AFTER
-    if section.status in ("pending", "generating") and not stale:
-        raise ApiError(409, "section_busy", "Ce chapitre est en cours de rédaction.")
+    if section.status in ("pending", "generating"):
+        # A worker killed mid-job never resets "generating": past every timeout and retry, the
+        # chapter is closed (its credits come back) and can be relaunched.
+        if section.updated_at >= datetime.now(UTC) - SECTION_STALE_AFTER:
+            raise ApiError(409, "section_busy", "Ce chapitre est en cours de rédaction.")
+        close_stale_section(db, section)
     # lot 4: relaunching a chapter that failed (or that a dead worker left stuck) is free
     free = section.status == "error" or section.status in ("pending", "generating")
     if add_refs:
@@ -256,6 +258,13 @@ def regenerate_section(
     _enqueue_sections(db, memoir, [section.id], queue)
 
 
+def close_stale_section(db: Session, section: MemoirSection) -> None:
+    """A chapter left for dead: shown as failed, its regeneration credits given back (lot 4).
+    Caller commits, then calls ``maybe_finish``."""
+    section.status, section.error = "error", SECTION_INTERRUPTED
+    set_job_status(db, JOB_SECTION, section.id, "error", SECTION_INTERRUPTED)
+
+
 def _enqueue_sections(db: Session, memoir: Memoir, ids: list[uuid.UUID], queue: JobQueue) -> None:
     for section_id in ids:
         try:
@@ -269,7 +278,7 @@ def _enqueue_sections(db: Session, memoir: Memoir, ids: list[uuid.UUID], queue: 
             )
             set_job_status(db, JOB_SECTION, section_id, "error", section.error)
             db.commit()
-    _maybe_finish(db, memoir.id, queue)
+    maybe_finish(db, memoir.id, queue)
 
 
 # ---------- drafting one chapter (worker) ----------------------------------------------------
@@ -279,8 +288,8 @@ def run_draft_section(
     db: Session, section_id: uuid.UUID, embedder: Embedder, queue: JobQueue
 ) -> None:
     section = db.get(MemoirSection, section_id)
-    if section is None:
-        return
+    if section is None or section.status not in ("pending", "generating"):
+        return  # closed for dead (and refunded) meanwhile: never write it
     scope_session(db, section.org_id)
     memoir = db.get_one(Memoir, section.memoir_id)
     analysis = db.get_one(DceAnalysis, memoir.dce_analysis_id)
@@ -403,7 +412,7 @@ def run_draft_section(
     fresh.status, fresh.error, fresh.edited_by_user, fresh.instruction = "ready", None, False, None
     set_job_status(db, JOB_SECTION, section_id, "done")
     db.commit()
-    _maybe_finish(db, fresh.memoir_id, queue)
+    maybe_finish(db, fresh.memoir_id, queue)
 
 
 def _fail_section(
@@ -419,10 +428,10 @@ def _fail_section(
     set_job_status(db, JOB_SECTION, section_id, "pending" if retrying else "error", message)
     db.commit()
     if not retrying:
-        _maybe_finish(db, section.memoir_id, queue)
+        maybe_finish(db, section.memoir_id, queue)
 
 
-def _maybe_finish(db: Session, memoir_id: uuid.UUID, queue: JobQueue) -> None:
+def maybe_finish(db: Session, memoir_id: uuid.UUID, queue: JobQueue) -> None:
     """When no chapter is still being drafted, the memoir is ready (and the matrix starts)."""
     memoir = db.get(Memoir, memoir_id, populate_existing=True, with_for_update=True)  # serialize
     if memoir is None or memoir.status != "generating":

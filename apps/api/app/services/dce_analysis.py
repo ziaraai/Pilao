@@ -39,6 +39,10 @@ from app.workers.queue import ANALYSIS_JOB_TIMEOUT_SECONDS, JobQueue
 
 logger = logging.getLogger("pilao.dce_analysis")
 JOB_KIND = "analyze_dce"
+# Past two timeouts without a sign of life (each attempt and each retry touches the analysis),
+# the work is dead: a relaunch closes it, the sweep closes it if nobody relaunches.
+STALE_AFTER = timedelta(seconds=2 * ANALYSIS_JOB_TIMEOUT_SECONDS)
+INTERRUPTED = "L'analyse s'est interrompue. Relancez-la."
 TASK = "dce_extraction"
 PROMPT = "extraction_dce"
 MAX_OUTPUT_TOKENS = 16_000
@@ -399,14 +403,22 @@ def request_analysis(
     return analysis
 
 
+def close_stale(db: Session, analysis: DceAnalysis) -> None:
+    """An analysis left for dead (worker killed, timeout, every retry spent): shown as failed,
+    its credits given back (lot 4). Caller commits."""
+    analysis.status, analysis.error = "error", INTERRUPTED
+    set_job_status(db, JOB_KIND, analysis.id, "error", INTERRUPTED)
+
+
 def rerun(db: Session, bid: Bid, queue: JobQueue, user_id: uuid.UUID) -> DceAnalysis:
+    busy = select(DceAnalysis).where(
+        DceAnalysis.bid_id == bid.id, DceAnalysis.status.in_(("pending", "processing"))
+    )
+    cutoff = datetime.now(UTC) - STALE_AFTER
+    for dead in db.scalars(busy.where(DceAnalysis.updated_at <= cutoff)).all():
+        close_stale(db, dead)  # its credits come back before the new analysis is paid
     running = db.scalar(
-        select(DceAnalysis.id).where(
-            DceAnalysis.bid_id == bid.id,
-            DceAnalysis.status.in_(("pending", "processing")),
-            DceAnalysis.updated_at
-            > datetime.now(UTC) - timedelta(seconds=2 * ANALYSIS_JOB_TIMEOUT_SECONDS),
-        )
+        busy.with_only_columns(DceAnalysis.id).where(DceAnalysis.updated_at > cutoff)
     )
     if running is not None:
         raise ApiError(409, "analysis_running", "Une analyse est déjà en cours.")
@@ -433,8 +445,8 @@ def _company_summary(db: Session, org: Organization) -> str:
 
 def run_analyze_dce(db: Session, analysis_id: uuid.UUID) -> None:
     analysis = db.get(DceAnalysis, analysis_id)
-    if analysis is None:
-        return
+    if analysis is None or analysis.status not in ("pending", "processing"):
+        return  # closed for dead (and refunded) or waiting for credits: never run it
     scope_session(db, analysis.org_id)
     org = db.get_one(Organization, analysis.org_id)
     version = db.get_one(DceVersion, analysis.dce_version_id)

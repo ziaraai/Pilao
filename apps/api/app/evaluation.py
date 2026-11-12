@@ -69,6 +69,7 @@ from app.schemas.profile import (
     ProfileIn,
     ReferenceIn,
 )
+from app.services import credits
 from app.services import dce as dce_svc
 from app.services import knowledge as knowledge_svc
 from app.services import memoir as memoir_svc
@@ -78,6 +79,7 @@ from app.services.exports import memoir_data
 from app.services.profile import get_or_create_profile, refresh_completeness, update_profile
 
 logger = logging.getLogger("pilao.evaluation")
+EVALUATION_CREDITS = 100_000  # far more than one passage spends: the balance never stops a run
 DCE_SUFFIXES = {".zip", ".pdf", ".docx", ".xlsx", ".odt", ".doc", ".ods", ".xls"}
 CRITERIA = [  # docs/11 — rating grid, out of 10 each
     ("Conformité au plan", "Le plan imposé par le RC est-il respecté ?"),
@@ -371,6 +373,8 @@ def _company(db: Session, data: dict[str, Any]) -> tuple[Organization, User]:
             db.add(model(org_id=org.id, **schema.model_validate(item).model_dump()))
     db.flush()
     refresh_completeness(db, org)
+    # the evaluation measures the models, never the balance: every paid step goes through
+    credits.grant(db, org, EVALUATION_CREDITS, "Évaluation", None)
     db.commit()
     return org, user
 
