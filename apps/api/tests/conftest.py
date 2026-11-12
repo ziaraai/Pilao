@@ -8,7 +8,7 @@ os.environ.setdefault("DATABASE_URL", "postgresql+psycopg://pilao:pilao@localhos
 import pytest
 from alembic.config import Config
 from fastapi.testclient import TestClient
-from sqlalchemy import Connection, Engine, create_engine, text
+from sqlalchemy import Connection, Engine, create_engine, select, text
 from sqlalchemy.orm import Session
 
 from alembic import command
@@ -42,6 +42,27 @@ def conn(engine: Engine) -> Iterator[Connection]:
     yield connection
     trans.rollback()
     connection.close()
+
+
+@pytest.fixture(autouse=True)
+def runtime_reads_the_test_database(request: pytest.FixtureRequest) -> Iterator[None]:
+    """Lot 5: the settings in use are read through the test's own connection (its rows are
+    never committed); a test without a database sees the server's values only."""
+    from app.core import runtime
+    from app.db.models import PlatformSetting
+
+    if {"conn", "db", "make_client"} & set(request.fixturenames):
+        conn = request.getfixturevalue("conn")
+
+        def load() -> list[PlatformSetting]:
+            with _new_session(conn) as session:
+                return list(session.scalars(select(PlatformSetting)))
+
+        runtime.set_loader(load)
+    else:
+        runtime.set_loader(list)
+    yield
+    runtime.set_loader(None)
 
 
 @pytest.fixture(autouse=True)

@@ -55,6 +55,13 @@ class Settings(BaseSettings):
     llm_model_generation: str = ""
     llm_model_scoring: str = ""
     llm_model_vision: str = ""
+    # The provider's key (OPENROUTER_API_KEY, server's secrets.env): the fallback when none is
+    # set in the administration (lot 5). LiteLLM reads it from the environment as well.
+    openrouter_api_key: str = ""
+    # OpenRouter's API (catalogue, key check, credit) and the LiteLLM prefix of its models;
+    # the browser journey points both at its fake server.
+    openrouter_api_url: str = "https://openrouter.ai/api/v1"
+    llm_catalogue_prefix: str = "openrouter/"
     ai_monthly_budget_eur_per_org: float = 50.0
     # Added to each call's answer limit: recent models reason (billed, hidden) before answering
     llm_reasoning_tokens: int = 8000

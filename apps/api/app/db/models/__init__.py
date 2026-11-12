@@ -13,6 +13,7 @@ from app.db.models.knowledge import DocumentChunk, KnowledgeDocument
 from app.db.models.memoir import ConformityItem, Memoir, MemoirSection, MemoirSectionRevision
 from app.db.models.organization import Organization
 from app.db.models.platform import PlatformAdmin, PlatformAdminSession, PlatformAuditLog
+from app.db.models.platform_setting import PlatformSetting
 from app.db.models.profile import (
     Certification,
     CompanyProfile,
@@ -69,6 +70,7 @@ __all__ = [
     "PlatformAdmin",
     "PlatformAdminSession",
     "PlatformAuditLog",
+    "PlatformSetting",
     "ProfileSuggestion",
     "PurgeLog",
     "Requirement",

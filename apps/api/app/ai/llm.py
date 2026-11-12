@@ -26,16 +26,7 @@ from sqlalchemy.orm import Session
 from app.ai.routing import provider_routing
 from app.core.config import get_settings
 from app.db.models import AiCall
-
-# task name -> Settings attribute holding its model
-TASK_MODELS = {
-    "compliance_reading": "llm_model_vision",
-    "dce_extraction": "llm_model_extraction",
-    "memoir_generation": "llm_model_generation",
-    "memoir_regeneration": "llm_model_generation",  # a new version of one chapter (lot 4)
-    "profile_extraction": "llm_model_extraction",
-    "tender_scoring": "llm_model_scoring",
-}
+from app.platform_settings import TASK_MODELS  # task -> its server setting (re-exported)
 
 
 class LlmError(Exception):
