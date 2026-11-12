@@ -585,7 +585,7 @@ export type AdminSetupDone = { recovery_codes: string[]; me: AdminMe };
 
 export type AdminWatchItem = {
   level: "red" | "amber";
-  kind: "import" | "job" | "ai" | "inactive" | "credits";
+  kind: "import" | "job" | "ai" | "inactive" | "credits" | "settings";
   title: string;
   detail: string | null;
   at: string | null;
@@ -850,4 +850,71 @@ export type AdminOrgCredits = {
   total: number;
   renews_on: string;
   history: CreditLine[];
+};
+
+// ---------- lot 5: the platform settings (ADR-044) ----------------------------------------
+
+export type SettingOrigin = "admin" | "server";
+
+export type AdminModelSetting = {
+  task: string;
+  label: string;
+  model: string;
+  model_name: string | null;
+  source: SettingOrigin;
+  server_model: string;
+  price_in_eur: number | null;
+  price_out_eur: number | null;
+  in_catalogue: boolean | null;
+  cost_30d_eur: number;
+  calls_30d: number;
+  updated_at: string | null;
+};
+
+export type AdminApiKey = {
+  source: "admin" | "server" | "none";
+  last4: string | null;
+  updated_at: string | null;
+  unreadable: boolean;
+  server_key: boolean;
+  credit: { total_usd: number; used_usd: number } | null;
+};
+
+export type AdminImportSetting = {
+  source: string;
+  label: string;
+  enabled: boolean;
+  origin: SettingOrigin;
+  last: {
+    started_at: string;
+    status: string;
+    created: number;
+    updated: number;
+    error: string | null;
+  } | null;
+};
+
+export type AdminGeneralSetting = {
+  name: string;
+  label: string;
+  kind: "int" | "email";
+  value: number | string | null;
+  server_value: number | string | null;
+  source: SettingOrigin;
+};
+
+export type AdminSettings = {
+  models: AdminModelSetting[];
+  embedding_model: string;
+  api_key: AdminApiKey;
+  imports: AdminImportSetting[];
+  general: AdminGeneralSetting[];
+};
+
+export type AdminCatalogueModel = {
+  id: string;
+  name: string;
+  price_in_eur: number;
+  price_out_eur: number;
+  context_length: number;
 };

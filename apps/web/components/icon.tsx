@@ -11,7 +11,8 @@ export type IconName =
   | "close"
   | "todo"
   | "start"
-  | "results";
+  | "results"
+  | "settings";
 
 const PATHS: Record<IconName, React.ReactNode> = {
   dashboard: (
@@ -70,6 +71,13 @@ const PATHS: Record<IconName, React.ReactNode> = {
     </>
   ),
   results: <path d="M4 20.5h16M7 17v-5M12 17V7M17 17v-8" />,
+  settings: (
+    <>
+      <path d="M4 7h9M17 7h3M4 17h3M11 17h9" />
+      <circle cx="15" cy="7" r="2" />
+      <circle cx="9" cy="17" r="2" />
+    </>
+  ),
 };
 
 export function Icon({

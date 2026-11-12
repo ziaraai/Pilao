@@ -13,6 +13,7 @@ export const ADMIN_NAV: { href: string; label: string; icon: IconName }[] = [
   { href: "/admin/journal", label: "Journal", icon: "vault" },
   { href: "/admin/modules", label: "Modules", icon: "start" },
   { href: "/admin/formules", label: "Formules", icon: "bids" },
+  { href: "/admin/reglages", label: "Réglages", icon: "settings" },
 ];
 
 const ACCESS_PAGES = ["/admin/connexion", "/admin/activation"];
@@ -73,6 +74,11 @@ export const AUDIT_LABELS: Record<string, string> = {
   plan_changed: "Formule de l'entreprise changée",
   credits_added: "Crédits ajoutés",
   credit_price_changed: "Prix d'une action changé",
+  setting_changed: "Réglage changé",
+  setting_reset: "Réglage remis à la valeur du serveur",
+  api_key_replaced: "Clé OpenRouter remplacée",
+  api_key_reset: "Clé OpenRouter remise à celle du serveur",
+  import_started: "Import lancé à la main",
 };
 
 export function auditLabel(action: string): string {
@@ -123,7 +129,9 @@ export function auditDetail(meta: Record<string, unknown>): string {
   if (who) parts.push(who);
   if (text("role"))
     parts.push(`rôle : ${label(ROLES, text("role") as string)}`);
-  if (typeof meta.from === "number" && typeof meta.to === "number")
+  if (text("setting") && text("label"))
+    parts.push(`${text("label")} : ${shown(meta.from)} → ${shown(meta.to)}`); // lot 5
+  else if (typeof meta.from === "number" && typeof meta.to === "number")
     parts.push(`${meta.from} → ${meta.to} crédits`); // an action's price
   else if (text("from") && text("to"))
     parts.push(`${text("from")} → ${text("to")}`); // a company's plan
@@ -138,5 +146,15 @@ export function auditDetail(meta: Record<string, unknown>): string {
   if (meta.mode === "scheduled") parts.push("effacement dans 30 jours");
   if (typeof meta.left === "number")
     parts.push(`${meta.left} codes de secours restants`);
+  if (text("last4")) parts.push(`clé •••• ${text("last4")}`); // never the key itself
+  if (text("source")) parts.push((text("source") as string).toUpperCase()); // an import
   return parts.join(" · ") || "—";
+}
+
+/** A setting's value in the journal (lot 5). */
+function shown(value: unknown): string {
+  if (value === true) return "actif";
+  if (value === false) return "coupé";
+  if (value === "" || value === null || value === undefined) return "aucune";
+  return String(value);
 }

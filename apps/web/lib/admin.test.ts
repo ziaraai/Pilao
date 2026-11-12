@@ -48,7 +48,7 @@ describe("administration", () => {
     ).toBe("/admin/technique");
   });
 
-  it("has eight screens, the overview first, the plans last", () => {
+  it("has nine screens, the overview first, the settings last", () => {
     expect(ADMIN_NAV.map((n) => n.href)).toEqual([
       "/admin",
       "/admin/entreprises",
@@ -58,9 +58,11 @@ describe("administration", () => {
       "/admin/journal",
       "/admin/modules",
       "/admin/formules",
+      "/admin/reglages",
     ]);
     expect(ADMIN_NAV[6].label).toBe("Modules");
     expect(ADMIN_NAV[7].label).toBe("Formules");
+    expect(ADMIN_NAV[8].label).toBe("Réglages");
   });
 
   it("names the journal's actions in French", () => {
@@ -170,5 +172,48 @@ describe("actions on a company's user", () => {
       "role",
       "remove",
     ]);
+  });
+});
+
+describe("auditDetail of the settings (lot 5)", () => {
+  it("names the setting and shows before and after", () => {
+    expect(
+      auditDetail({
+        setting: "model.tender_scoring",
+        label: "Note des annonces",
+        from: "openrouter/acme/small",
+        to: "openrouter/acme/vision",
+      }),
+    ).toBe(
+      "Note des annonces : openrouter/acme/small → openrouter/acme/vision",
+    );
+    expect(
+      auditDetail({
+        setting: "import.boamp_enabled",
+        label: "Import BOAMP",
+        from: true,
+        to: false,
+      }),
+    ).toBe("Import BOAMP : actif → coupé");
+    expect(
+      auditDetail({
+        setting: "ai_monthly_budget_eur_per_org",
+        label: "Budget d'IA par entreprise et par mois",
+        from: 50,
+        to: 80,
+      }),
+    ).toBe("Budget d'IA par entreprise et par mois : 50 → 80");
+    expect(
+      auditDetail({
+        setting: "support_email",
+        label: "Adresse de support",
+        from: "",
+        to: "aide@example.fr",
+      }),
+    ).toBe("Adresse de support : aucune → aide@example.fr");
+  });
+  it("shows only the end of a key, and the source of an import", () => {
+    expect(auditDetail({ last4: "abcd" })).toBe("clé •••• abcd");
+    expect(auditDetail({ source: "ted" })).toBe("TED");
   });
 });

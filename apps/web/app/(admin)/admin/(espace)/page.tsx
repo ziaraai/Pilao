@@ -23,6 +23,8 @@ function watchLink(item: AdminWatchItem): { href: string; label: string } {
       label: "Voir la fiche",
     };
   if (item.kind === "ai") return { href: "/admin/couts-ia", label: "Voir" };
+  if (item.kind === "settings")
+    return { href: "/admin/reglages", label: "Voir les réglages" };
   return { href: "/admin/technique", label: "Voir" };
 }
 
