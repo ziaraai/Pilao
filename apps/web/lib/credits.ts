@@ -44,3 +44,12 @@ export function bannerText(
     return `Vous n'avez plus de crédits : les actions payantes sont en pause. ${contact(support)}`;
   return null;
 }
+
+/** A number of credits typed in the administration: a whole number from 0 to `max`, or `null`
+ * (empty, partial, out of range) — never read as 0, which would make an action free. */
+export function creditInput(raw: string, max: number): number | null {
+  const text = raw.trim();
+  if (!/^\d+$/.test(text)) return null;
+  const n = Number(text);
+  return n <= max ? n : null;
+}

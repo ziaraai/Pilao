@@ -308,6 +308,8 @@ export type MemoirSection = {
   covered_refs: string[];
   edited_by_user: boolean;
   revision: number;
+  /** Lot 4: relaunching this failed chapter costs nothing (its failure kept the credits). */
+  relaunch_free: boolean;
 };
 export type Revision = {
   id: string;

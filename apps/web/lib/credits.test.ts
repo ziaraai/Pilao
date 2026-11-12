@@ -1,6 +1,12 @@
 import { describe, expect, it } from "vitest";
 
-import { bannerText, creditLevel, missing, withPrice } from "./credits";
+import {
+  bannerText,
+  creditInput,
+  creditLevel,
+  missing,
+  withPrice,
+} from "./credits";
 
 describe("credits", () => {
   it("tells when the credits run low or out", () => {
@@ -38,5 +44,17 @@ describe("credits", () => {
       "Vous n'avez plus de crédits : les actions payantes sont en pause. Contactez Pilao : aide@pilao.test.",
     );
     expect(bannerText("ok", 50, null)).toBeNull();
+  });
+});
+
+describe("creditInput", () => {
+  it("reads a whole number of credits within the limit", () => {
+    expect(creditInput("0", 1000)).toBe(0);
+    expect(creditInput(" 12 ", 1000)).toBe(12);
+    expect(creditInput("1000", 1000)).toBe(1000);
+  });
+  it("refuses an empty, partial or out-of-range field instead of reading 0", () => {
+    for (const raw of ["", "  ", "-1", "1.5", "1e3", "abc", "1001"])
+      expect(creditInput(raw, 1000)).toBeNull();
   });
 });

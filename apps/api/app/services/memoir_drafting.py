@@ -171,6 +171,8 @@ def _amount(value: Any) -> str:
 
 
 def start_generation(db: Session, user: User, memoir: Memoir, queue: JobQueue) -> None:
+    credits.lock_org(db, memoir.org_id)  # a second click waits here, then finds the first one
+    db.refresh(memoir)
     if memoir.status != "draft":
         raise ApiError(
             409,
@@ -207,7 +209,9 @@ def regenerate_section(
     queue: JobQueue,
 ) -> None:
     """US-4.4 CA2: same prompt + the user's instruction + the previous version."""
-    memoir = db.get_one(Memoir, section.memoir_id)
+    credits.lock_org(db, section.org_id)  # a second click waits here, then finds the first one
+    db.refresh(section)
+    memoir = db.get_one(Memoir, section.memoir_id, populate_existing=True)
     if memoir.status == "draft":
         raise ApiError(409, "memoir_not_generated", "Lancez d'abord la rédaction du mémoire.")
     if section.status in ("pending", "generating"):
@@ -216,8 +220,8 @@ def regenerate_section(
         if section.updated_at >= datetime.now(UTC) - SECTION_STALE_AFTER:
             raise ApiError(409, "section_busy", "Ce chapitre est en cours de rédaction.")
         close_stale_section(db, section)
-    # lot 4: relaunching a chapter that failed (or that a dead worker left stuck) is free
-    free = section.status == "error" or section.status in ("pending", "generating")
+    # lot 4: relaunching a failed chapter is free while its failure kept the credits
+    free = section.id in credits.free_relaunches(db, memoir.id, [section])
     if add_refs:
         known = set(
             db.scalars(

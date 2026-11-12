@@ -411,6 +411,7 @@ def close_stale(db: Session, analysis: DceAnalysis) -> None:
 
 
 def rerun(db: Session, bid: Bid, queue: JobQueue, user_id: uuid.UUID) -> DceAnalysis:
+    credits.lock_org(db, bid.org_id)  # a second click waits here, then finds the first one
     busy = select(DceAnalysis).where(
         DceAnalysis.bid_id == bid.id, DceAnalysis.status.in_(("pending", "processing"))
     )

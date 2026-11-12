@@ -134,3 +134,15 @@ def test_charge_refused_message(
     with pytest.raises(ApiError) as refused:
         credits.charge(db, org, "chapter_regeneration", user_id=None)
     assert refused.value.message.startswith("Il faut 1 crédit, il vous en reste 0.")
+
+
+def test_no_balance_without_a_paid_module(
+    make_client: Callable[[], TestClient], outbox: Outbox, db: Session
+) -> None:
+    """« Veille » alone has no paid action: no balance, so no red banner at 0 (review I6)."""
+    from tests.api.test_modules import set_modules
+
+    c = signed_in_client(make_client, outbox)
+    assert c.get("/auth/me").json()["credits"]["total"] == 7
+    set_modules(db, "user1@example.fr", ["veille"])
+    assert c.get("/auth/me").json()["credits"] is None

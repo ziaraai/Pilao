@@ -74,6 +74,7 @@ class SectionOut(BaseModel):
     covered_refs: list[str]
     edited_by_user: bool
     revision: int
+    relaunch_free: bool = False  # lot 4: relaunching this failed chapter costs nothing
 
 
 class ReferenceChoiceOut(BaseModel):

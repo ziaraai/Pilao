@@ -6,6 +6,7 @@ import { ConfirmDialog } from "@/components/admin/dialogs";
 import { Alert, Button, Field, Input } from "@/components/ui";
 import { useAdminAction } from "@/lib/admin-auth";
 import { api } from "@/lib/api";
+import { creditInput } from "@/lib/credits";
 import { MODULE_KEYS, moduleName } from "@/lib/modules";
 import type { AdminPlan, AdminPlanIn } from "@/lib/types";
 
@@ -30,6 +31,19 @@ export function PlanForm({
   onCancel: () => void;
 }) {
   const [form, setForm] = useState<AdminPlanIn>(plan ?? EMPTY);
+  // the credit fields as typed: an emptied field is not read as 0
+  const [typed, setTyped] = useState({
+    monthly_credits: String((plan ?? EMPTY).monthly_credits),
+    welcome_credits: String((plan ?? EMPTY).welcome_credits),
+  });
+  const amount = (key: keyof typeof typed) => creditInput(typed[key], 100000);
+  const amountsOk =
+    amount("monthly_credits") !== null && amount("welcome_credits") !== null;
+  const type = (key: keyof typeof typed) => (raw: string) => {
+    setTyped((t) => ({ ...t, [key]: raw }));
+    const n = creditInput(raw, 100000);
+    if (n !== null) setForm((f) => ({ ...f, [key]: n }));
+  };
   const [confirming, setConfirming] = useState(false);
   const save = useAdminAction();
   const set =
@@ -52,6 +66,7 @@ export function PlanForm({
       noValidate
       onSubmit={async (e) => {
         e.preventDefault();
+        if (!amountsOk) return;
         if (plan && plan.organizations > 0) setConfirming(true);
         else await save.run(send);
       }}
@@ -125,8 +140,8 @@ export function PlanForm({
             type="number"
             min={0}
             max={100000}
-            value={form.monthly_credits}
-            onChange={(e) => set("monthly_credits")(Number(e.target.value))}
+            value={typed.monthly_credits}
+            onChange={(e) => type("monthly_credits")(e.target.value)}
           />
         </Field>
         <Field
@@ -139,14 +154,18 @@ export function PlanForm({
             type="number"
             min={0}
             max={100000}
-            value={form.welcome_credits}
-            onChange={(e) => set("welcome_credits")(Number(e.target.value))}
+            value={typed.welcome_credits}
+            onChange={(e) => type("welcome_credits")(e.target.value)}
           />
         </Field>
       </div>
       {save.error && <Alert tone="danger">{save.error}</Alert>}
       <div className="flex gap-2">
-        <Button type="submit" busy={save.busy} disabled={!form.name.trim()}>
+        <Button
+          type="submit"
+          busy={save.busy}
+          disabled={!form.name.trim() || !amountsOk}
+        >
           Enregistrer
         </Button>
         <Button type="button" variant="ghost" onClick={onCancel}>

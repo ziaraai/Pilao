@@ -106,14 +106,7 @@ export function PlanCredits() {
                     <td className="whitespace-nowrap px-4 py-2">
                       {formatDateTimeShort(h.at)}
                     </td>
-                    <td className="px-4 py-2">
-                      {what(h)}
-                      {h.kind === "grant" && h.reason && (
-                        <span className="block text-xs text-slate-500">
-                          {h.reason}
-                        </span>
-                      )}
-                    </td>
+                    <td className="px-4 py-2">{what(h)}</td>
                     <td className="px-4 py-2">{h.bid_title ?? "—"}</td>
                     <td className="px-4 py-2">{h.user_name ?? "—"}</td>
                     <td

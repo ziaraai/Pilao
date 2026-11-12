@@ -59,7 +59,7 @@ from app.services import profile as profile_svc
 from app.services.jobs import set_job_status
 from app.services.knowledge import document_blocks
 from app.storage.objects import ObjectStorage
-from app.workers.queue import JobQueue
+from app.workers.queue import JobQueue, will_retry
 
 logger = logging.getLogger("pilao.profile_prefill")
 
@@ -192,6 +192,7 @@ def request_read(
     db: Session, org: Organization, queue: JobQueue, user_id: uuid.UUID | None = None
 ) -> Job:
     """Start a reading of the knowledge base (one at a time per company)."""
+    credits.lock_org(db, org.id)  # a second click waits here, then finds the first one
     if not _ready_documents(db):
         raise ApiError(
             409, "no_documents", "Déposez d'abord un document dans la base documentaire."
@@ -210,7 +211,10 @@ def request_read(
         queue.enqueue_profile_prefill(org.id)
     except Exception:
         logger.exception("could not enqueue the profile pre-fill of %s", org.id)
-        job.status, job.error = "error", "File d'attente indisponible. Relancez la lecture."
+        # through set_job_status: the reading never ran, its credits come back
+        set_job_status(
+            db, JOB_KIND, org.id, "error", "File d'attente indisponible. Relancez la lecture."
+        )
         db.commit()
     return job
 
@@ -349,7 +353,10 @@ def run_profile_prefill(db: Session, org_id: uuid.UUID, storage: ObjectStorage) 
         return
     except Exception:  # never leave the screen waiting on a reading that died
         db.rollback()
-        set_job_status(db, JOB_KIND, org_id, "error", INTERRUPTED)
+        if will_retry():  # RQ runs it again: still waiting, the credits stay taken
+            set_job_status(db, JOB_KIND, org_id, "pending")
+        else:  # the last attempt: failed, its credits come back
+            set_job_status(db, JOB_KIND, org_id, "error", INTERRUPTED)
         db.commit()
         raise
     set_job_status(db, JOB_KIND, org_id, "done", "\n".join(notes) or None)

@@ -5,7 +5,7 @@ from functools import lru_cache
 from typing import Protocol
 
 from redis import Redis
-from rq import Queue, Retry
+from rq import Queue, Retry, get_current_job
 
 from app.core.config import get_settings
 
@@ -163,3 +163,10 @@ class RqJobQueue:
 @lru_cache
 def get_job_queue() -> JobQueue:
     return RqJobQueue(Queue("default", connection=Redis.from_url(get_settings().redis_url)))
+
+
+def will_retry() -> bool:
+    """Inside an RQ job: whether RQ runs it again if this attempt fails (``Retry`` left).
+    Outside RQ (tests, commands), never."""
+    job = get_current_job()
+    return bool(job is not None and job.retries_left)

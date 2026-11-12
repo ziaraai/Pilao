@@ -106,3 +106,16 @@ def test_labels() -> None:
         "compliance_reading",
         "embedding",
     }
+
+
+def test_credit_lines_are_capped() -> None:
+    empty = [(uuid.uuid4(), f"Entreprise {n:02d}") for n in range(1, 13)]
+    items, _ = watch(NOW, [], [], 0, 0, [], empty)
+    assert [i.title for i in items] == [
+        *(f"Entreprise {n:02d} n'a plus de crédits" for n in range(1, 11)),
+        "… et 2 autres entreprises sans crédits",
+    ]
+    assert all(i.kind == "credits" and i.level == "amber" for i in items)
+    assert items[-1].org_id is None
+    one_more, _ = watch(NOW, [], [], 0, 0, [], empty[:11])
+    assert one_more[-1].title == "… et 1 autre entreprise sans crédits"

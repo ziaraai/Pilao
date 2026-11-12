@@ -36,6 +36,7 @@ from app.schemas.memoir import (
     SectionOut,
     SourceRef,
 )
+from app.services import credits
 from app.services import memoir as svc
 from app.services import memoir_drafting as drafting
 from app.services import memoir_editing as editing
@@ -64,6 +65,7 @@ def memoir_out(db: ScopedDb, memoir: Memoir) -> MemoirOut:
         .where(MemoirSection.memoir_id == memoir.id)
         .order_by(MemoirSection.position)
     ).all()
+    free = credits.free_relaunches(db, memoir.id, sections)  # lot 4
     scores = {s["id"]: s for s in memoir.reference_scores}
     selected = {str(r) for r in memoir.reference_ids}
     ids = [uuid.UUID(i) for i in dict.fromkeys([*scores, *selected])]
@@ -108,7 +110,12 @@ def memoir_out(db: ScopedDb, memoir: Memoir) -> MemoirOut:
         outline_source=memoir.outline_source,
         max_pages=memoir.max_pages,
         word_budget=memoir.word_budget,
-        sections=[SectionOut.model_validate(s, from_attributes=True) for s in sections],
+        sections=[
+            SectionOut.model_validate(s, from_attributes=True).model_copy(
+                update={"relaunch_free": s.id in free}
+            )
+            for s in sections
+        ],
         references=references,
         unassigned_requirements=[r for r in all_refs if r not in assigned],
         conformity_status=memoir.conformity_status,

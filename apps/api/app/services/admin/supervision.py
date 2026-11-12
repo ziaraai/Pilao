@@ -41,7 +41,7 @@ from app.db.models import (
 from app.db.models.platform import PlatformAuditLog
 from app.domain import admin_watch
 from app.domain.admin_watch import ImportState, JobIssue, OrgActivity
-from app.modules import MODULES, active_modules, has_module
+from app.modules import MODULES, active_modules, has_module, has_paid_actions
 from app.schemas.admin import (
     AccountStateOut,
     ActivityRowOut,
@@ -258,9 +258,9 @@ def _time_saved(db: Session) -> list[TimeSavedRowOut]:
 
 def overview(db: Session, now: datetime) -> OverviewOut:
     orgs = db.execute(
-        select(Organization.id, Organization.name, Organization.created_at).order_by(
-            Organization.name
-        )
+        select(
+            Organization.id, Organization.name, Organization.created_at, Organization.modules
+        ).order_by(Organization.name)
     ).all()
     active = last_activity(db)
     week, day = now - timedelta(days=7), now - timedelta(days=1)
@@ -282,7 +282,11 @@ def overview(db: Session, now: datetime) -> OverviewOut:
         int(calls),
         int(failures),
         [OrgActivity(o.id, o.name, o.created_at, active.get(o.id)) for o in orgs],
-        [(o.id, o.name) for o in orgs if totals.get(o.id) == 0 and o.id not in suspended],
+        [
+            (o.id, o.name)
+            for o in orgs
+            if totals.get(o.id) == 0 and o.id not in suspended and has_paid_actions(o.modules)
+        ],
     )
     month_cost = sum(_ai_cost_per_org(db, current_month(now)).values(), Decimal(0))
 

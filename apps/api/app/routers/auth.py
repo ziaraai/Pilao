@@ -12,7 +12,7 @@ from app.core.ratelimit import SlidingWindowLimiter
 from app.db.models import Organization, User
 from app.db.session import get_db
 from app.integrations.recherche_entreprises import CompanyDirectory, get_company_directory
-from app.modules import active_modules
+from app.modules import active_modules, has_paid_actions
 from app.schemas.auth import (
     ForgotPasswordIn,
     LoginIn,
@@ -49,7 +49,7 @@ def _me_from(db: Session, user: User, org: Organization) -> MeOut:
         terms_current=user.terms_version == TERMS_VERSION,
         modules=active_modules(org),
         support_email=(get_settings().support_email or "").strip() or None,
-        credits=_credits_of(db, org),
+        credits=_credits_of(db, org) if has_paid_actions(org.modules) else None,
     )
 
 

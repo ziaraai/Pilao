@@ -759,9 +759,7 @@ function ConformityRow({
           <PaidButton
             action="chapter_regeneration"
             label={`Compléter ce point${item.target_section_id && chapter ? ` (${chapter.title})` : ""}`}
-            free={
-              memoir.sections.find((s) => s.id === target)?.status === "error"
-            }
+            free={memoir.sections.find((s) => s.id === target)?.relaunch_free}
             variant="secondary"
             busy={complete.busy}
             disabled={!target || chapterBusy}

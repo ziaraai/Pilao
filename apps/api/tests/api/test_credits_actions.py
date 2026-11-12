@@ -241,6 +241,8 @@ def test_a_failed_chapter_is_relaunched_for_free_a_ready_one_is_paid(
 
     writer.broken = set()
     broken = section(m, "1. Moyens")
+    assert broken["relaunch_free"] is True  # what the button shows: « gratuit »
+    assert section(m, "2. Méthodologie")["relaunch_free"] is False
     assert c.post(f"/memoir-sections/{broken['id']}/regenerate", json={}).status_code == 202
     queue.drain_memoir()
     assert total(c) == before and entries(db, "charge", "chapter_regeneration") == []
@@ -267,6 +269,46 @@ def test_a_failed_regeneration_is_refunded(
     [back] = entries(db, "refund", "chapter_regeneration")
     assert back.reason == "Remboursé : la régénération n'a pas abouti." and total(c) == before
     assert entries(db, "refund", "memoir_generation") == []  # the chapter had a text before
+
+
+def test_a_relaunch_after_a_refunded_drafting_is_paid(
+    make_client: Factory, outbox: Outbox, queue: FakeQueue, writer: WriterModel, db: Session
+) -> None:
+    """Every chapter failed: the drafting gave its 5 credits back, so a relaunch is paid —
+    otherwise the memoir would be written chapter by chapter for nothing."""
+    c = signed_in_client(make_client, outbox)
+    m = prepared(c, queue)  # 5 left
+    writer.broken = {s["title"] for s in m["sections"]}
+    assert c.post(f"/memoirs/{m['id']}/generate").status_code == 202
+    queue.drain_memoir()
+    assert total(c) == 5  # refunded
+    broken = section(latest(c, m["id"]), "1. Moyens")
+    assert broken["status"] == "error" and broken["relaunch_free"] is False
+
+    writer.broken = set()
+    assert c.post(f"/memoir-sections/{broken['id']}/regenerate", json={}).status_code == 202
+    assert len(entries(db, "charge", "chapter_regeneration")) == 1 and total(c) == 4
+
+
+def test_a_relaunch_after_a_refunded_regeneration_is_paid(
+    make_client: Factory, outbox: Outbox, queue: FakeQueue, writer: WriterModel, db: Session
+) -> None:
+    c = signed_in_client(make_client, outbox)
+    top_up(db, 10)
+    m = prepared(c, queue)
+    assert c.post(f"/memoirs/{m['id']}/generate").status_code == 202
+    queue.drain_memoir()
+    ready = section(latest(c, m["id"]), "2. Méthodologie")
+    writer.broken = {"2. Méthodologie"}
+    assert c.post(f"/memoir-sections/{ready['id']}/regenerate", json={}).status_code == 202
+    queue.drain_memoir()  # failed: its credit came back
+    before = total(c)
+    failed = section(latest(c, m["id"]), "2. Méthodologie")
+    assert failed["status"] == "error" and failed["relaunch_free"] is False
+
+    writer.broken = set()
+    assert c.post(f"/memoir-sections/{ready['id']}/regenerate", json={}).status_code == 202
+    assert len(entries(db, "charge", "chapter_regeneration")) == 2 and total(c) == before - 1
 
 
 # ---------- reading the documents for the profile -------------------------------------------
@@ -331,3 +373,58 @@ def test_without_credits_nothing_is_launched(
     set_price(db, "profile_prefill", 6)
     _read_ready(c, queue, monkeypatch)
     assert c.post("/profile/suggestions/read").status_code == 402
+
+
+def test_a_reading_the_queue_never_took_is_refunded(
+    make_client: Factory,
+    outbox: Outbox,
+    queue: FakeQueue,
+    db: Session,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    c = signed_in_client(make_client, outbox)
+    _read_ready(c, queue, monkeypatch)
+    queue.down = True
+    assert c.post("/profile/suggestions/read").status_code == 202
+    assert c.get("/profile/suggestions").json()["job"]["status"] == "error"
+    [back] = entries(db, "refund", "profile_prefill")
+    assert back.reason == "Remboursé : la lecture n'a pas abouti." and total(c) == 7
+
+
+def test_a_reading_retried_by_the_queue_is_paid_once(
+    make_client: Factory,
+    outbox: Outbox,
+    queue: FakeQueue,
+    db: Session,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    from app.services import profile_prefill
+
+    c = signed_in_client(make_client, outbox)
+    _read_ready(c, queue, monkeypatch)
+    real = profile_prefill.document_blocks
+    monkeypatch.setattr(profile_prefill, "document_blocks", _fails_once(real))
+    monkeypatch.setattr(profile_prefill, "will_retry", lambda: True)  # RQ runs it again
+    assert c.post("/profile/suggestions/read").status_code == 202
+    org_id = list(queue.pending_prefill)
+    with pytest.raises(RuntimeError):
+        queue.drain_profile_prefill()
+    assert c.get("/profile/suggestions").json()["job"]["status"] == "pending"  # still waiting
+    assert entries(db, "refund") == [] and total(c) == 6
+
+    queue.pending_prefill = org_id  # the retry, which succeeds
+    queue.drain_profile_prefill()
+    assert c.get("/profile/suggestions").json()["job"]["status"] == "done"
+    assert entries(db, "refund") == [] and total(c) == 6  # paid once, for a reading made
+
+
+def _fails_once(real: Callable[..., object]) -> Callable[..., object]:
+    calls: list[int] = []
+
+    def blocks(*args: object) -> object:
+        calls.append(1)
+        if len(calls) == 1:
+            raise RuntimeError("disk unplugged")
+        return real(*args)
+
+    return blocks

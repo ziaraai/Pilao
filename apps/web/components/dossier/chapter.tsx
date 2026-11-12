@@ -336,7 +336,7 @@ function Regenerate({
         <PaidButton
           action="chapter_regeneration"
           label="Régénérer"
-          free={section.status === "error"}
+          free={section.relaunch_free}
           variant="secondary"
           busy={regenerate.busy}
           onClick={async () => {

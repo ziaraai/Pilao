@@ -6,6 +6,7 @@ modules are ``organizations.modules``; the routes of a module are guarded by
 module later (a CRM, stock) means writing its code and adding one entry to ``MODULES``.
 """
 
+from collections.abc import Iterable
 from dataclasses import dataclass
 
 from app.core.config import get_settings
@@ -86,6 +87,13 @@ def active_modules(org: Organization) -> list[str]:
 
 def has_module(org: Organization, key: str) -> bool:
     return key in active_modules(org)
+
+
+def has_paid_actions(modules: Iterable[str] | None) -> bool:
+    """Lot 4: whether one of a company's modules (``org.modules``) has a paid action. Without
+    any, its credits mean nothing to it: no balance shown, no « plus de crédits » alert."""
+    present = set(modules or ())
+    return any(m.actions for m in MODULES if m.key in present)
 
 
 def module_disabled_error() -> ApiError:

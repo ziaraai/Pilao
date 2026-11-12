@@ -15,6 +15,7 @@ INACTIVE_AFTER = timedelta(days=10)
 AI_MIN_CALLS = 10  # below: too few calls for a rate to mean anything
 AI_MAX_FAILURE_RATE = 0.20
 MAX_JOB_LINES = 10
+CREDIT_LINES = 10  # lot 4: companies without credits shown by name, the others counted
 
 # ``jobs.kind`` -> what the job does, in the words of the interface.
 JOB_LABELS = {
@@ -158,8 +159,13 @@ def watch(
     job_items, more = _jobs(jobs)
     reds = job_items + _imports(now, imports) + _ai(ai_calls, ai_failures)
     reds.sort(key=lambda i: (i.at is None, -(i.at.timestamp() if i.at else 0)))
+    out = out_of_credits or []
     empty = [  # lot 4: a good moment to offer a top-up or a bigger plan
         WatchItem("amber", "credits", f"{name} n'a plus de crédits", None, None, org_id)
-        for org_id, name in out_of_credits or []
+        for org_id, name in out[:CREDIT_LINES]
     ]
+    if len(out) > CREDIT_LINES:
+        n = len(out) - CREDIT_LINES
+        others = "1 autre entreprise" if n == 1 else f"{n} autres entreprises"
+        empty.append(WatchItem("amber", "credits", f"… et {others} sans crédits", None, None, None))
     return reds + _inactive(now, orgs) + empty, more

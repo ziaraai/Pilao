@@ -22,6 +22,7 @@ import {
 import { moduleShort } from "@/lib/admin";
 import { useAdminAction, useAdminApi } from "@/lib/admin-auth";
 import { api } from "@/lib/api";
+import { creditInput } from "@/lib/credits";
 import { formatEuros } from "@/lib/format";
 import { moduleName } from "@/lib/modules";
 import type { AdminCreditPrice, AdminPlan } from "@/lib/types";
@@ -237,11 +238,19 @@ function PriceTable({
                       <Button
                         className="px-2 py-1 text-xs"
                         busy={save.busy}
+                        disabled={
+                          creditInput(values[r.action] ?? "", 1000) === null
+                        }
                         onClick={async () => {
+                          const credits = creditInput(
+                            values[r.action] ?? "",
+                            1000,
+                          );
+                          if (credits === null) return; // empty: never saved as « free »
                           const done = await save.run(() =>
                             api(`/admin/credit-prices/${r.action}`, {
                               method: "PUT",
-                              json: { credits: Number(values[r.action]) },
+                              json: { credits },
                             }),
                           );
                           if (done) onSaved();

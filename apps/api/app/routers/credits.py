@@ -24,5 +24,9 @@ def my_credits(ctx: CurrentAuth, db: ScopedDb) -> CreditsOut:
         total=balance.total,
         renews_on=balance.renews_on,
         prices=[PriceOut(action=a.key, name=a.name, credits=prices[a.key]) for a in PAID_ACTIONS],
-        history=[HistoryOut(**vars(r)) for r in svc.history(db, ctx.org, HISTORY)],
+        history=[
+            # the note a super admin writes with a top-up stays in the administration
+            HistoryOut(**{**vars(r), "reason": None if r.kind == "grant" else r.reason})
+            for r in svc.history(db, ctx.org, HISTORY)
+        ],
     )

@@ -65,7 +65,7 @@ def test_welcome_credits_are_never_given_twice(
 
 
 def test_top_up_and_history(make_client: Factory, outbox: Outbox, db: Session) -> None:
-    signed_in_client(make_client, outbox)
+    company = signed_in_client(make_client, outbox)
     org = org_id_of(db, "user1@example.fr")
     client, _, _ = admin(make_client, db)
     url = f"/admin/organizations/{org}/credits"
@@ -80,6 +80,9 @@ def test_top_up_and_history(make_client: Factory, outbox: Outbox, db: Session) -
         "Geste commercial",
         "Pilao",
     )
+    seen = company.get("/credits").json()["history"][0]  # the company's own screen
+    assert (seen["kind"], seen["credits"], seen["user_name"]) == ("grant", 20, "Pilao")
+    assert seen["reason"] is None  # Pilao's note stays in the administration (review I8)
     [line] = journal(db, "credits_added")
     assert line.meta == {"amount": 20, "reason": "Geste commercial"}
     for bad in (
@@ -131,3 +134,24 @@ def test_company_session_refused(make_client: Factory, outbox: Outbox, db: Sessi
         ("get", f"/admin/organizations/{org}/credits"),
     ]:
         assert company.request(method, path, json={}).status_code == 401, path
+
+
+def test_the_watch_skips_a_company_without_paid_modules(
+    make_client: Factory, outbox: Outbox, db: Session
+) -> None:
+    signed_in_client(make_client, outbox)
+    one = org_id_of(db, "user1@example.fr")
+    db.add(
+        CreditEntry(
+            org_id=uuid.UUID(one),
+            kind="charge",
+            action="memoir_generation",
+            extra=-7,
+            month=paris_month(db.scalar(select(Plan.created_at))),  # type: ignore[arg-type]
+        )
+    )
+    db.commit()
+    set_modules(db, "user1@example.fr", ["veille"])  # nothing to spend credits on
+    client, _, _ = admin(make_client, db)
+    watch = client.get("/admin/overview").json()["watch"]
+    assert [w for w in watch if w["kind"] == "credits"] == []

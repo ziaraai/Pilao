@@ -6,6 +6,7 @@ a work that fails gives them back (``refund``).
 """
 
 import uuid
+from collections.abc import Sequence
 from dataclasses import dataclass
 from datetime import UTC, datetime
 
@@ -19,6 +20,7 @@ from app.db.models import (
     CreditEntry,
     CreditPrice,
     Job,
+    MemoirSection,
     Organization,
     Plan,
     PlatformAdmin,
@@ -168,6 +170,17 @@ def prices(db: Session) -> dict[str, int]:
 # ---------- movements ------------------------------------------------------------------------
 
 
+def lock_org(db: Session, org_id: uuid.UUID) -> None:
+    """One paid action at a time per company, until the caller commits. Taken first, before
+    the « one at a time » check of the action, so the second click waits and then sees the
+    first one's work. FOR NO KEY UPDATE: the rows a paid action inserts (works, jobs, credit
+    lines) lock the company in key-share mode through their foreign key, which never
+    conflicts with this lock: two requests cannot deadlock on it."""
+    db.execute(
+        select(Organization.id).where(Organization.id == org_id).with_for_update(key_share=True)
+    )
+
+
 def charge(
     db: Session,
     org: Organization,
@@ -182,8 +195,7 @@ def charge(
     cost = price(db, action)
     if cost <= 0:
         return None
-    # one charge at a time per company: two clicks cannot both spend the same credits
-    db.execute(select(Organization.id).where(Organization.id == org.id).with_for_update())
+    lock_org(db, org.id)  # one charge at a time per company: no two spend the same credits
     now = _now()
     try:
         monthly, extra = split_charge(org_balance(db, org, now), cost)
@@ -246,6 +258,49 @@ def grant(
     db.add(entry)
     db.flush()
     return entry
+
+
+def free_relaunches(
+    db: Session, memoir_id: uuid.UUID, sections: Sequence[MemoirSection]
+) -> set[uuid.UUID]:
+    """The failed chapters whose relaunch costs nothing: their failure kept its credits. A
+    failure that gave them back makes the relaunch paid again — the chapter's last paid
+    regeneration refunded, or, for a chapter never regenerated, the whole drafting refunded
+    (every chapter failed). Otherwise a memoir could be written chapter by chapter for free."""
+    failed = [s.id for s in sections if s.status == "error"]
+    if not failed:
+        return set()
+    last_regeneration: dict[uuid.UUID, uuid.UUID] = {}
+    for ref_id, entry_id in db.execute(
+        select(CreditEntry.ref_id, CreditEntry.id)
+        .where(
+            CreditEntry.kind == "charge",
+            CreditEntry.action == "chapter_regeneration",
+            CreditEntry.ref_id.in_(failed),
+        )
+        .order_by(CreditEntry.at)
+    ):
+        if ref_id is not None:  # always set here: the query filters on it
+            last_regeneration[ref_id] = entry_id  # the latest wins
+    drafting = db.scalars(
+        select(CreditEntry.id)
+        .where(
+            CreditEntry.kind == "charge",
+            CreditEntry.action == "memoir_generation",
+            CreditEntry.ref_id == memoir_id,
+        )
+        .order_by(CreditEntry.at.desc())
+    ).first()
+    charges = [*last_regeneration.values(), *([drafting] if drafting else [])]
+    refunded = set(
+        db.scalars(select(CreditEntry.refund_of).where(CreditEntry.refund_of.in_(charges)))
+    )
+    drafting_kept = drafting is None or drafting not in refunded
+    return {
+        sid
+        for sid in failed
+        if (last_regeneration[sid] not in refunded if sid in last_regeneration else drafting_kept)
+    }
 
 
 # The works whose failure gives back their charge: job kind -> (paid action, history line).
