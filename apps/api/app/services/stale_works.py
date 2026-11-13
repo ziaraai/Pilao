@@ -13,6 +13,7 @@ from sqlalchemy.orm import Session
 
 from app.db.models import DceAnalysis, Job, MemoirSection
 from app.services import dce_analysis as analysis_svc
+from app.services import dce_retrieval as retrieval
 from app.services import memoir_drafting as drafting
 from app.services import profile_prefill as prefill
 from app.workers.queue import JobQueue
@@ -52,7 +53,8 @@ def sweep_stale_works(db: Session, queue: JobQueue, now: datetime | None = None)
             prefill.close_stale(db, job.ref_id)
         else:  # an older one, forgotten under a newer reading: no charge of its own to find
             job.status, job.error, job.finished_at = "error", prefill.INTERRUPTED, now
+    fetches = retrieval.close_stale(db, now)  # a DCE retrieval left « en cours »
     db.commit()
     for memoir_id in {s.memoir_id for s in sections}:
         drafting.maybe_finish(db, memoir_id, queue)  # the memoir may have nothing left to draft
-    return len(analyses) + len(sections) + len(readings)
+    return len(analyses) + len(sections) + len(readings) + fetches

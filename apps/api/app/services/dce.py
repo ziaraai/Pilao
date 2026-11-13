@@ -13,6 +13,7 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from app.core.config import get_settings
+from app.core.email import Mailer
 from app.core.errors import ApiError
 from app.core.tenancy import scope_session
 from app.db.models import Bid, DceFile, DcePage, DceVersion, File, Job, Organization, User
@@ -260,8 +261,10 @@ def run_process_dce(
     scanner: VirusScanner,
     ocr: OcrEngine | None = None,
     queue: JobQueue | None = None,
+    mailer: Mailer | None = None,
 ) -> None:
-    """Expand, store, extract and type the pieces; then start the AI analysis (if a queue)."""
+    """Expand, store, extract and type the pieces; then start the AI analysis (if a queue).
+    An update found by the robot's watch is not analysed: its mail says so (``mailer``)."""
     version = db.get(DceVersion, version_id)
     if version is None:
         return
@@ -312,6 +315,12 @@ def run_process_dce(
         return
     fresh.diff, fresh.diff_summary = compute_diff(db, fresh)
     _finish(db, version_id, "ready", None, ctx.skipped)
+    if fresh.origin == "update":  # never analysed without a click (spec « Récupération des DCE »)
+        if mailer is not None:
+            from app.services.dce_retrieval import notify_update  # avoid an import cycle
+
+            notify_update(db, fresh, mailer)
+        return
     if queue is not None:
         from app.services.dce_analysis import request_analysis  # avoid an import cycle
 

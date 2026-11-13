@@ -1,8 +1,9 @@
 """Background job queue (RQ on Redis). API code only sees the ``JobQueue`` interface."""
 
 import uuid
+from datetime import timedelta
 from functools import lru_cache
-from typing import Protocol
+from typing import Any, Protocol
 
 from redis import Redis
 from rq import Queue, Retry, get_current_job
@@ -15,6 +16,7 @@ DRAFT_JOB_TIMEOUT_SECONDS = 900
 INDEX_JOB_TIMEOUT_SECONDS = 900
 TENDER_JOB_TIMEOUT_SECONDS = 1800
 PREFILL_JOB_TIMEOUT_SECONDS = 900
+FETCH_JOB_TIMEOUT_SECONDS = 600  # the DCE robot: a few pages and a ZIP of up to 250 Mo
 
 
 class JobQueue(Protocol):
@@ -31,6 +33,7 @@ class JobQueue(Protocol):
     def enqueue_org_export(self, request_id: uuid.UUID) -> None: ...
     def enqueue_profile_prefill(self, org_id: uuid.UUID) -> None: ...
     def enqueue_import_source(self, source: str) -> None: ...
+    def enqueue_fetch_dce(self, fetch_id: uuid.UUID, delay_seconds: int = 0) -> None: ...
 
 
 class RqJobQueue:
@@ -169,6 +172,24 @@ class RqJobQueue:
             result_ttl=3600,
             failure_ttl=7 * 24 * 3600,
         )
+
+    def enqueue_fetch_dce(self, fetch_id: uuid.UUID, delay_seconds: int = 0) -> None:
+        # The DCE robot (spec « Récupération des DCE »): later when its site is busy
+        options: dict[str, Any] = {
+            "job_timeout": FETCH_JOB_TIMEOUT_SECONDS,
+            "result_ttl": 3600,
+            "failure_ttl": 7 * 24 * 3600,
+            "retry": Retry(max=2, interval=[60, 300]),
+        }
+        if delay_seconds > 0:
+            self._q.enqueue_in(
+                timedelta(seconds=delay_seconds),
+                "app.workers.jobs.fetch_dce_job",
+                str(fetch_id),
+                **options,
+            )
+        else:
+            self._q.enqueue("app.workers.jobs.fetch_dce_job", str(fetch_id), **options)
 
 
 @lru_cache

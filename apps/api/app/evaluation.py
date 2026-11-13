@@ -180,6 +180,9 @@ class InlineQueue:
     def enqueue_import_source(self, source: str) -> None:
         pass  # nor imports notices
 
+    def enqueue_fetch_dce(self, fetch_id: uuid.UUID, delay_seconds: int = 0) -> None:
+        pass  # nor retrieves DCEs: the evaluation's DCE are given
+
     def drain(self) -> None:
         embedder = get_embedder()
         while self.jobs:

@@ -9,9 +9,11 @@ from app.core.logging import configure_logging
 from app.db.session import get_sessionmaker
 from app.documents.ocr import get_ocr_engine
 from app.exports.pdf import get_pdf_converter
+from app.integrations.atexo import get_robot
 from app.services.alerts import run_daily
 from app.services.dce import run_process_dce
 from app.services.dce_analysis import run_analyze_dce
+from app.services.dce_retrieval import run_fetch
 from app.services.document_reading import get_document_reader
 from app.services.exports import run_export
 from app.services.knowledge import run_index_document
@@ -25,6 +27,7 @@ from app.services.tenders import match_tenders, rematch_org, score_org
 from app.services.vault import run_read_document
 from app.storage.antivirus import get_scanner
 from app.storage.objects import get_storage
+from app.workers.host_gate import get_host_gate
 from app.workers.queue import get_job_queue
 
 configure_logging()
@@ -49,6 +52,20 @@ def process_dce_job(version_id: str) -> None:
             get_scanner(),
             get_ocr_engine(),
             queue=get_job_queue(),
+            mailer=get_mailer(),
+        )
+
+
+def fetch_dce_job(fetch_id: str) -> None:
+    with get_sessionmaker()() as db:
+        run_fetch(
+            db,
+            uuid.UUID(fetch_id),
+            get_robot(),
+            get_storage(),
+            get_scanner(),
+            get_job_queue(),
+            get_host_gate(),
         )
 
 

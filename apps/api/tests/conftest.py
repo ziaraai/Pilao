@@ -213,8 +213,11 @@ class FakeQueue:
         self.pending_org_exports: list[uuid.UUID] = []
         self.pending_prefill: list[uuid.UUID] = []
         self.pending_imports: list[str] = []
+        self.pending_fetches: list[tuple[uuid.UUID, int]] = []  # (fetch, delay in seconds)
         self.ocr = None  # set to an OCR engine to exercise scanned pages
         self.down = False
+        self.outbox: Outbox | None = None  # mails of the DCE updates (set by the fixture)
+        self.gate = FreeGate()
 
     def enqueue_index_document(self, doc_id: uuid.UUID) -> None:
         if self.down:
@@ -246,8 +249,31 @@ class FakeQueue:
             version_id = self.pending_dce.pop(0)
             with _new_session(self._conn) as session:
                 run_process_dce(
-                    session, version_id, self._storage, self._scanner, self.ocr, queue=self
+                    session,
+                    version_id,
+                    self._storage,
+                    self._scanner,
+                    self.ocr,
+                    queue=self,
+                    mailer=self.outbox,
                 )
+
+    def enqueue_fetch_dce(self, fetch_id: uuid.UUID, delay_seconds: int = 0) -> None:
+        if self.down:
+            raise ConnectionError("redis down")
+        self.pending_fetches.append((fetch_id, delay_seconds))
+
+    def run_fetch(self, fetch_id: uuid.UUID, robot) -> None:  # type: ignore[no-untyped-def]
+        from app.services.dce_retrieval import run_fetch
+
+        with _new_session(self._conn) as session:
+            run_fetch(session, fetch_id, robot, self._storage, self._scanner, self, self.gate)
+
+    def drain_fetches(self, robot) -> None:  # type: ignore[no-untyped-def]
+        """One pass over what is queued now (a postponed fetch is queued again, not rerun)."""
+        batch, self.pending_fetches = self.pending_fetches, []
+        for fetch_id, _ in batch:
+            self.run_fetch(fetch_id, robot)
 
     def enqueue_analyze_dce(self, analysis_id: uuid.UUID) -> None:
         if self.down:
@@ -380,9 +406,83 @@ def embedder() -> CountingEmbedder:
 
 @pytest.fixture
 def queue(
-    conn: Connection, storage: MemoryStorage, embedder: CountingEmbedder, scanner: FakeScanner
+    conn: Connection,
+    storage: MemoryStorage,
+    embedder: CountingEmbedder,
+    scanner: FakeScanner,
+    outbox: Outbox,
 ) -> FakeQueue:
-    return FakeQueue(conn, storage, embedder, scanner)
+    fake = FakeQueue(conn, storage, embedder, scanner)
+    fake.outbox = outbox
+    return fake
+
+
+class FreeGate:
+    """The per-site lock of the DCE robot, always free (``free=False``: the site is busy)."""
+
+    def __init__(self) -> None:
+        self.free = True
+        self.calls: list[tuple[str, str]] = []
+
+    def acquire(self, host: str) -> bool:
+        self.calls.append(("acquire", host))
+        return self.free
+
+    def release(self, host: str) -> None:
+        self.calls.append(("release", host))
+
+    def wait_gap(self, host: str) -> None:
+        self.calls.append(("wait_gap", host))
+
+
+class FakeRobot:
+    """The DCE robot without a browser: ``result`` is the ZIP's bytes or the error to raise;
+    ``facts`` what ``inspect`` reads (or the error to raise); ``on_fetch`` runs mid-fetch."""
+
+    def __init__(
+        self,
+        result: "bytes | Exception | None" = None,
+        facts: "Any" = None,
+        filename: str = "DCE.zip",
+        on_fetch: "Callable[[], None] | None" = None,
+    ) -> None:
+        from datetime import UTC, datetime
+
+        from app.domain.dce_sources import PageFacts
+        from tests.fixtures.fake_atexo import dce_zip
+
+        self.result = dce_zip() if result is None else result
+        deadline = datetime(2026, 11, 30, 11, 0, tzinfo=UTC)
+        self.facts = facts if facts is not None else PageFacts("0,01 Mo", deadline, False)
+        self.filename = filename
+        self.on_fetch = on_fetch
+        self.calls: list[tuple[str, Any]] = []
+        self.written: list[Any] = []
+
+    def inspect(self, src: Any) -> Any:
+        self.calls.append(("inspect", src.url))
+        if isinstance(self.facts, Exception):
+            raise self.facts
+        return self.facts
+
+    def fetch(self, src: Any, identity: Any, dest: Any, max_bytes: int) -> Any:
+        from app.integrations.atexo import Fetched
+
+        self.calls.append(("fetch", identity))
+        if isinstance(self.result, Exception):
+            raise self.result
+        path = dest / self.filename
+        path.write_bytes(self.result)
+        self.written.append(path)
+        if self.on_fetch is not None:
+            self.on_fetch()
+        facts = self.facts if not isinstance(self.facts, Exception) else None
+        return Fetched(
+            path,
+            self.filename,
+            facts.size_label if facts else None,
+            facts.deadline_at if facts else None,
+        )
 
 
 class FakeReader:
