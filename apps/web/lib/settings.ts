@@ -3,6 +3,8 @@
  * decides (catalogue, trial, key check).
  */
 
+import type { AdminDceRobot } from "./types";
+
 /** A price in euros per million tokens, e.g. « 0,086 € »; « — » when unknown. */
 export function eur(n: number | null): string {
   if (n === null) return "—";
@@ -31,4 +33,10 @@ export function originLabel(source: "admin" | "server" | "none"): string {
   if (source === "admin") return "réglé ici";
   if (source === "server") return "valeur du serveur";
   return "aucune";
+}
+
+/** The DCE robot's line in « Réglages » (spec « Récupération des DCE », § 4.5). */
+export function robotSummary(robot: AdminDceRobot): string {
+  if (!robot.enabled) return "Coupé — mode guidé pour tous les clients";
+  return `Activé — ${robot.succeeded_24h} réussies, ${robot.failed_24h} en échec sur 24 h`;
 }

@@ -951,12 +951,21 @@ export type AdminGeneralSetting = {
   source: SettingOrigin;
 };
 
+export type AdminDceRobot = {
+  enabled: boolean;
+  origin: SettingOrigin;
+  server_value: boolean;
+  succeeded_24h: number;
+  failed_24h: number;
+};
+
 export type AdminSettings = {
   models: AdminModelSetting[];
   embedding_model: string;
   api_key: AdminApiKey;
   imports: AdminImportSetting[];
   general: AdminGeneralSetting[];
+  dce_robot: AdminDceRobot;
 };
 
 export type AdminCatalogueModel = {

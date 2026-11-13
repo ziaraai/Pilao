@@ -123,6 +123,12 @@ export default function Privacy() {
             .
           </li>
           <li>
+            Plateformes des acheteurs publics (PLACE et plateformes Atexo) : à
+            votre demande, Pilao transmet la raison sociale, le SIRET et le
+            contact de votre entreprise à la plateforme de l&apos;acheteur pour
+            retirer le DCE en votre nom.
+          </li>
+          <li>
             Envoi des e-mails :{" "}
             <Fact>
               {fact(

@@ -3,6 +3,7 @@
 import { Fragment, useState } from "react";
 
 import { ApiKeyCard } from "@/components/admin/api-key-card";
+import { DceRobotCard } from "@/components/admin/dce-robot-card";
 import { ModelPicker } from "@/components/admin/model-picker";
 import {
   AdminTitle,
@@ -81,6 +82,7 @@ export default function AdminSettingsPage() {
             />
             <ApiKeyCard apiKey={s.api_key} onSaved={state.reload} />
             <Imports imports={s.imports} run={run} onStarted={setNotice} />
+            <DceRobotCard robot={s.dce_robot} run={run} />
             <General settings={s.general} run={run} />
           </>
         )}

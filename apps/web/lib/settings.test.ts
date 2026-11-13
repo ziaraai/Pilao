@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { dollars, eur, matches, originLabel } from "./settings";
+import { dollars, eur, matches, originLabel, robotSummary } from "./settings";
 
 describe("settings", () => {
   it("writes prices in euros per million tokens, and dollars", () => {
@@ -25,5 +25,21 @@ describe("settings", () => {
     expect(originLabel("admin")).toBe("réglé ici");
     expect(originLabel("server")).toBe("valeur du serveur");
     expect(originLabel("none")).toBe("aucune");
+  });
+
+  it("sums up the DCE robot", () => {
+    const robot = {
+      enabled: true,
+      origin: "server" as const,
+      server_value: true,
+      succeeded_24h: 12,
+      failed_24h: 1,
+    };
+    expect(robotSummary(robot)).toBe(
+      "Activé — 12 réussies, 1 en échec sur 24 h",
+    );
+    expect(robotSummary({ ...robot, enabled: false })).toBe(
+      "Coupé — mode guidé pour tous les clients",
+    );
   });
 });

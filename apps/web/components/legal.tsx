@@ -49,13 +49,15 @@ export function LegalPage({
 
 export function Section({
   title,
+  id,
   children,
 }: {
   title: string;
+  id?: string;
   children: ReactNode;
 }) {
   return (
-    <section className="space-y-2">
+    <section id={id} className="space-y-2">
       <h2 className="text-base font-semibold text-brand-navy">{title}</h2>
       {children}
     </section>

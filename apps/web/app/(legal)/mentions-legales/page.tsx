@@ -47,6 +47,18 @@ export default function LegalNotice() {
           pour vous restent les vôtres (voir les conditions d&apos;utilisation).
         </p>
       </Section>
+      <Section title="Robot de Pilao" id="robot">
+        <p>
+          À la demande de ses clients, Pilao récupère les dossiers de
+          consultation publiés sur les plateformes des acheteurs publics (PLACE
+          et plateformes Atexo). Il se présente sous le nom « Pilao », respecte
+          les règles robots.txt, ne contourne jamais une vérification anti-robot
+          et ne charge pas plus d&apos;une page toutes les 10 secondes sur un
+          même site. Pour toute question, ou pour demander l&apos;arrêt sur
+          votre plateforme :{" "}
+          <Fact>{fact(p.email, "adresse e-mail de contact")}</Fact>.
+        </p>
+      </Section>
       <Section title="Données personnelles">
         <p>
           Voir la politique de confidentialité et l&apos;accord de traitement
