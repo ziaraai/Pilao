@@ -66,7 +66,11 @@ SETTINGS: tuple[SettingDef, ...] = (
     ),
     SettingDef("support_email", "Adresse de support", "email", _attr("support_email")),
     SettingDef("feedback_email", "Adresse des avis des testeurs", "email", _attr("feedback_email")),
+    SettingDef(
+        "dce_robot.enabled", "Robot de récupération des DCE", "bool", _attr("dce_robot_enabled")
+    ),
 )
 BY_NAME: dict[str, SettingDef] = {s.name: s for s in SETTINGS}
 GENERAL = ("ai_monthly_budget_eur_per_org", "support_email", "feedback_email")
 IMPORTS = {"ted": "import.ted_enabled", "boamp": "import.boamp_enabled"}
+DCE_ROBOT = "dce_robot.enabled"

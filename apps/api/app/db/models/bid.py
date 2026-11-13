@@ -49,6 +49,9 @@ class Bid(IdMixin, TimestampMixin, OrgScoped, Base):
     owner_user_id: Mapped[uuid.UUID | None] = mapped_column(
         UUID(as_uuid=True), ForeignKey("users.id", ondelete="SET NULL")
     )
+    # DCE retrieval: a link pasted in the dossier, and the daily watch's last reading
+    dce_url: Mapped[str | None] = mapped_column(Text)
+    dce_watch: Mapped[dict[str, Any] | None] = mapped_column(JSONB)
 
 
 class DceVersion(IdMixin, TimestampMixin, OrgScoped, Base):
@@ -58,6 +61,7 @@ class DceVersion(IdMixin, TimestampMixin, OrgScoped, Base):
     __table_args__ = (
         UniqueConstraint("bid_id", "version", name="uq_dce_versions_bid_id_version"),
         CheckConstraint("status in ('pending','processing','ready','error')", name="status"),
+        CheckConstraint("origin in ('deposit','retrieval','update')", name="origin"),
     )
 
     bid_id: Mapped[uuid.UUID] = mapped_column(
@@ -76,6 +80,11 @@ class DceVersion(IdMixin, TimestampMixin, OrgScoped, Base):
     skipped: Mapped[list[dict[str, Any]]] = mapped_column(JSONB, nullable=False, default=list)
     diff: Mapped[dict[str, Any] | None] = mapped_column(JSONB)
     diff_summary: Mapped[str | None] = mapped_column(Text)
+    # deposited by a user, retrieved by the robot on request, or an update found by the watch
+    origin: Mapped[str] = mapped_column(
+        Text, nullable=False, default="deposit", server_default="deposit"
+    )
+    source_url: Mapped[str | None] = mapped_column(Text)
 
 
 class DceFile(IdMixin, TimestampMixin, OrgScoped, Base):

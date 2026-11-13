@@ -5,6 +5,7 @@ from app.db.models.auth import AuthToken, LoginAttempt, UserSession
 from app.db.models.bid import Bid, DceFile, DcePage, DceVersion
 from app.db.models.billing import CREDIT_KINDS, CreditEntry, CreditPrice, Plan
 from app.db.models.data_request import DataRequest, PurgeLog
+from app.db.models.dce_fetch import DceFetch
 from app.db.models.document import DOCUMENT_KINDS, GeneratedDocument
 from app.db.models.feedback import Feedback
 from app.db.models.file import File
@@ -49,6 +50,7 @@ __all__ = [
     "CreditPrice",
     "DataRequest",
     "DceAnalysis",
+    "DceFetch",
     "DceFile",
     "DcePage",
     "DceVersion",

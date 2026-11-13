@@ -113,6 +113,10 @@ class Settings(BaseSettings):
     admin_setup_ttl_minutes: int = 30  # validity of the activation link
     admin_login_max_failures: int = 5  # per e-mail, over login_window_minutes
     admin_audit_retention_days: int = 365
+    # DCE retrieval (spec « Récupération des DCE »): the robot on PLACE and Atexo platforms
+    dce_robot_enabled: bool = True  # the administration's switch wins (dce_robot.enabled)
+    dce_robot_allow_private_hosts: bool = False  # tests and the local journey only
+    dce_robot_browser_path: str = ""  # empty: the Chromium installed by Playwright
 
     @property
     def cookie_secure(self) -> bool:
@@ -138,6 +142,11 @@ class Settings(BaseSettings):
             problems.append("CLAMAV_HOST est requis (antivirus des fichiers déposés).")
         if not self.embedding_model:
             problems.append("EMBEDDING_MODEL est requis (recherche dans la base documentaire).")
+        if self.dce_robot_allow_private_hosts:
+            problems.append(
+                "DCE_ROBOT_ALLOW_PRIVATE_HOSTS doit rester faux en production "
+                "(le robot ne doit jamais joindre le réseau interne)."
+            )
         return problems
 
 

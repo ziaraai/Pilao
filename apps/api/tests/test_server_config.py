@@ -37,6 +37,24 @@ def test_the_server_settings_pass_the_production_checks() -> None:
     assert not any(k in values for k in ("OPENROUTER_API_KEY", "SMTP_PASSWORD", "APP_SECRET_KEY"))
 
 
+def test_private_hosts_refused_in_production() -> None:
+    values = env_file(SERVER / "app.env")
+    secrets = {
+        "DATABASE_URL": "postgresql+psycopg://pilao:0123456789abcdef@postgres:5432/pilao",
+        "APP_SECRET_KEY": "a" * 64,
+    }
+    base = {k.lower(): v for k, v in {**values, **secrets}.items()}
+    message = (
+        "DCE_ROBOT_ALLOW_PRIVATE_HOSTS doit rester faux en production "
+        "(le robot ne doit jamais joindre le réseau interne)."
+    )
+    risky = Settings(_env_file=None, **{**base, "dce_robot_allow_private_hosts": True})  # type: ignore[arg-type]
+    assert message in risky.production_problems()
+    local = Settings(_env_file=None, **{**base, "environment": "local", "dce_robot_allow_private_hosts": True})  # type: ignore[arg-type]
+    assert local.production_problems() == []
+    assert Settings(_env_file=None).dce_robot_enabled is True  # type: ignore[call-arg]
+
+
 def test_ports_agree_between_compose_nginx_and_the_deploy_check() -> None:
     compose = (SERVER / "docker-compose.yml").read_text(encoding="utf-8")
     nginx = (SERVER / "nginx-plesk.conf").read_text(encoding="utf-8")

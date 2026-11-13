@@ -63,7 +63,12 @@ def create_version(
     storage: ObjectStorage,
     scanner: VirusScanner,
     queue: JobQueue,
+    *,
+    origin: str = "deposit",
+    source_url: str | None = None,
 ) -> DceVersion:
+    """A new version of the DCE from deposited files, or from the robot's ZIP (``origin``
+    ``retrieval`` or ``update``, spec « Récupération des DCE »): the same checks either way."""
     if not uploads:
         raise ApiError(422, "no_file", "Déposez au moins un fichier.")
     if len(uploads) > MAX_FILES_PER_DEPOSIT:
@@ -108,6 +113,8 @@ def create_version(
             uploaded_by=user.id,
             status="pending",
             source_file_ids=[f.id for f in stored],
+            origin=origin,
+            source_url=source_url,
         )
         db.add(version)
         db.add(Job(kind=JOB_KIND, ref_id=version.id, org_id=org.id, status="pending"))

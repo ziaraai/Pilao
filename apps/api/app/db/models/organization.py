@@ -1,7 +1,7 @@
 import uuid
 from datetime import datetime
 
-from sqlalchemy import CHAR, DateTime, ForeignKey, String, Text
+from sqlalchemy import CHAR, CheckConstraint, DateTime, ForeignKey, String, Text
 from sqlalchemy.dialects.postgresql import ARRAY, UUID
 from sqlalchemy.orm import Mapped, mapped_column
 
@@ -12,6 +12,12 @@ class Organization(IdMixin, TimestampMixin, Base):
     """Tenant root. A scoped session only sees its own organization (app.core.tenancy)."""
 
     __tablename__ = "organizations"
+    __table_args__ = (
+        CheckConstraint(
+            "dce_retrieval_mode is null or dce_retrieval_mode in ('identified','anonymous')",
+            name="dce_retrieval_mode",
+        ),
+    )
 
     siren: Mapped[str] = mapped_column(CHAR(9), nullable=False, index=True)
     siret: Mapped[str] = mapped_column(CHAR(14), unique=True, nullable=False)
@@ -47,3 +53,9 @@ class Organization(IdMixin, TimestampMixin, Base):
     welcome_credits_at: Mapped[datetime | None] = mapped_column(  # welcome credits: given once
         DateTime(timezone=True)
     )
+    # DCE retrieval: on the company's behalf or anonymously (None = ask), and the contact
+    # given to the buyers' platforms when on its behalf
+    dce_retrieval_mode: Mapped[str | None] = mapped_column(Text)
+    buyer_contact_first_name: Mapped[str | None] = mapped_column(Text)
+    buyer_contact_last_name: Mapped[str | None] = mapped_column(Text)
+    buyer_contact_email: Mapped[str | None] = mapped_column(Text)

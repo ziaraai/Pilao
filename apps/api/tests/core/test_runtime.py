@@ -74,10 +74,12 @@ def test_unreadable_key_falls_back_to_server(db: Session, monkeypatch: pytest.Mo
 
 def test_registry() -> None:
     names = [s.name for s in SETTINGS]
-    assert len(names) == 12 and len(set(names)) == 12
+    assert len(names) == 13 and len(set(names)) == 13
     assert [s.kind for s in SETTINGS].count("model") == 6
     assert {f"model.{task}" for task in TASK_MODELS} <= set(names)
     budget = BY_NAME["ai_monthly_budget_eur_per_org"]
     assert (budget.kind, budget.minimum, budget.maximum) == ("int", 1, 10_000)
     assert BY_NAME["model.tender_scoring"].label == "Note des annonces"
     assert BY_NAME["import.boamp_enabled"].label == "Import BOAMP"
+    robot = BY_NAME["dce_robot.enabled"]
+    assert (robot.kind, robot.label) == ("bool", "Robot de récupération des DCE")

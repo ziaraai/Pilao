@@ -457,3 +457,16 @@ def test_rq_enqueue_targets_the_dce_job() -> None:
     (job,) = q.jobs
     assert job.func_name == "app.workers.jobs.process_dce_job" and job.args == (str(version_id),)
     assert job.timeout == DCE_JOB_TIMEOUT_SECONDS and job.retries_left == 2
+
+
+def test_deposit_origin_is_deposit(
+    make_client: Factory, outbox: Outbox, queue: FakeQueue, db: Session
+) -> None:
+    from app.db.models import DceVersion
+
+    c = signed_in_client(make_client, outbox)
+    bid_id = new_bid(c)
+    processed(c, queue, bid_id, ("RC.pdf", RC))
+    version = db.scalars(select(DceVersion).where(DceVersion.bid_id == uuid.UUID(bid_id))).one()
+    assert version.origin == "deposit"
+    assert version.source_url is None
