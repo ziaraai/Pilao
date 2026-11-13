@@ -150,3 +150,52 @@ def test_another_company_dossier(make_client: Any, outbox: Outbox, db: Session) 
     assert b.client.put(f"{base}/source", json={"url": PLACE}).status_code == 404
     assert b.client.post(f"{base}/retrieve", json={"mode": "anonymous"}).status_code == 404
     assert b.client.get(f"/bids/{uuid.uuid4()}/dce/source").status_code == 404
+
+
+# ---------- final review: C1, I2, M3, M6, M9 -----------------------------------------------
+
+
+def test_an_unknown_atexo_host_is_guided(make_client: Any, outbox: Outbox, db: Session) -> None:
+    w = World(make_client, outbox, db)
+    url = "https://atexo.exemple.fr/entreprise/consultation/1?orgAcronyme=a"
+    body = w.client.put(f"/bids/{w.bid_id}/dce/source", json={"url": url}).json()
+    assert (body["platform"], body["automatic"]) == ("atexo", False)
+    assert len(body["guide"]) == 3
+    res = w.client.post(f"/bids/{w.bid_id}/dce/retrieve", json={"mode": "anonymous"})
+    assert (res.status_code, res.json()["error"]["code"]) == (422, "not_automatic")
+
+
+def test_an_http_link_to_place_is_upgraded(make_client: Any, outbox: Outbox, db: Session) -> None:
+    w = World(make_client, outbox, db)
+    url = "http://www.marches-publics.gouv.fr/entreprise/consultation/7?orgAcronyme=a"
+    body = w.client.put(f"/bids/{w.bid_id}/dce/source", json={"url": url}).json()
+    assert body["url"].startswith("https://") and body["automatic"] is True
+
+
+def test_a_link_with_a_nul_is_refused(make_client: Any, outbox: Outbox, db: Session) -> None:
+    w = World(make_client, outbox, db)
+    res = w.client.put(
+        f"/bids/{w.bid_id}/dce/source", json={"url": "https://www.marches-publics.gouv.fr/a\u0000"}
+    )
+    assert (res.status_code, res.json()["error"]["code"]) == (422, "bad_link")
+
+
+def test_a_new_link_forgets_the_old_failure(
+    make_client: Any, outbox: Outbox, db: Session, queue: FakeQueue
+) -> None:
+    from app.integrations.atexo import RobotError
+
+    w = World(make_client, outbox, db)
+    w.client.post(f"/bids/{w.bid_id}/dce/retrieve", json={"mode": "anonymous"})
+    queue.drain_fetches(FakeRobot(RobotError("closed")))
+    source = w.client.get(f"/bids/{w.bid_id}/dce/source").json()
+    assert source["last_fetch"]["outcome"] == "closed"
+    other = "https://www.marches-publics.gouv.fr/entreprise/consultation/42?orgAcronyme=a"
+    source = w.client.put(f"/bids/{w.bid_id}/dce/source", json={"url": other}).json()
+    assert source["last_fetch"] is None  # the robot can be tried on the new link
+
+
+def test_identified_mode_needs_a_contact(make_client: Any, outbox: Outbox, db: Session) -> None:
+    w = World(make_client, outbox, db)
+    res = w.client.put("/profile/dce-retrieval", json={"mode": "identified", "contact": {}})
+    assert (res.status_code, res.json()["error"]["code"]) == (422, "contact_incomplete")

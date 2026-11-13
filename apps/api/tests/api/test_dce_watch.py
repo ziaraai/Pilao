@@ -89,7 +89,8 @@ def test_identified_update_without_contact_goes_anonymous(
     world: World, queue: FakeQueue, db: Session, outbox: Outbox
 ) -> None:
     retrieved(world, queue, mode="identified", contact=CONTACT)
-    svc.save_settings(db, world.user, world.org, "identified", svc.Contact(None, None, None))
+    # the contact removed (« me demander » kept): the retrieval was made on its behalf
+    svc.save_settings(db, world.user, world.org, None, svc.Contact(None, None, None))
     watch(db, FakeRobot(facts=PageFacts("0,02 Mo", DEADLINE, False)), queue, outbox)
     [(update_id, _)] = queue.pending_fetches
     assert db.get_one(DceFetch, update_id).mode == "anonymous"
@@ -113,15 +114,26 @@ def test_deadline_changed(world: World, queue: FakeQueue, db: Session, outbox: O
 def test_missing_facts_are_not_changes(
     world: World, queue: FakeQueue, db: Session, outbox: Outbox
 ) -> None:
+    """A page that shows neither size nor date is not a change (no alert, no download), but a
+    failure: the watch must not report « vérifié » while it reads nothing (final review I3)."""
     retrieved(world, queue)
     report = watch(db, FakeRobot(facts=PageFacts(None, None, False)), queue, outbox)
-    assert report.changed == 0
+    assert (report.changed, report.failed) == (0, 1)
     assert queue.pending_fetches == []
-    assert checks(db, world)[0].outcome == "unchanged"
+    assert checks(db, world)[0].outcome == "unreadable"
     state = world.bid.dce_watch
     assert state is not None
     assert state["size_label"] == "0,01 Mo"  # the last known values are kept
     assert state["deadline_at"] == DEADLINE.isoformat()
+    assert state["failures"] == 1
+
+
+def test_a_size_that_vanished_is_a_failure(
+    world: World, queue: FakeQueue, db: Session, outbox: Outbox
+) -> None:
+    retrieved(world, queue)
+    report = watch(db, FakeRobot(facts=PageFacts(None, DEADLINE, False)), queue, outbox)
+    assert report.failed == 1 and queue.pending_fetches == []
 
 
 def test_three_failures_stop_the_watch(

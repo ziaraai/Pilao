@@ -210,3 +210,46 @@ def test_watch_change() -> None:
     assert not blank.size_changed and not blank.deadline_changed
     first = watch_change(None, PageFacts("10,56 Mo", deadline, False))
     assert not first.size_changed and not first.deadline_changed
+
+
+# ---------- final review: C1, I2, M6 -------------------------------------------------------
+
+
+def test_known_atexo_hosts_upgrade_to_https() -> None:
+    src = recognize("http://www.marches-publics.gouv.fr/entreprise/consultation/1?orgAcronyme=a")
+    assert src is not None and src.scheme == "https" and src.url.startswith("https://")
+    assert src.known
+    unknown = recognize("https://atexo.exemple.fr/entreprise/consultation/1?orgAcronyme=a")
+    assert unknown is not None and unknown.automatic and not unknown.known
+
+
+def test_control_characters_refused() -> None:
+    assert recognize("https://www.marches-publics.gouv.fr/a\x00b") is None
+    assert recognize("https://www.marches-publics.gouv.fr/a\nb") is None
+
+
+def test_keys_are_case_insensitive() -> None:
+    src = recognize(
+        f"{PLACE}/?page=entreprise.EntrepriseAdvancedSearch&allcons&id=3&orgacronyme=f2h"
+    )
+    assert src is not None and src.automatic
+    assert (src.consultation_id, src.org_acronym) == ("3", "f2h")
+
+
+def test_only_ascii_digits() -> None:
+    src = recognize(f"{PLACE}/entreprise/consultation/３０９?orgAcronyme=a")
+    assert src is not None and not src.automatic
+
+
+def test_the_buyer_code_is_encoded_in_built_urls() -> None:
+    src = recognize(f"{PLACE}/entreprise/consultation/1?orgAcronyme=a%26x%3D1")
+    assert src is not None and src.org_acronym == "a&x=1"
+    assert download_url(src).endswith("&id=1&orgAcronyme=a%26x%3D1")
+    assert consultation_url(src).endswith("?orgAcronyme=a%26x%3D1")
+
+
+def test_default_port_dropped() -> None:
+    src = recognize(
+        "https://www.marches-publics.gouv.fr:443/entreprise/consultation/1?orgAcronyme=a"
+    )
+    assert src is not None and src.host == "www.marches-publics.gouv.fr"

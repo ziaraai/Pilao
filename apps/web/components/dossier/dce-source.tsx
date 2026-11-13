@@ -33,6 +33,7 @@ export function DceSourcePanel({
   onChanged: () => void;
 }) {
   const [dialog, setDialog] = useState(false);
+  const [editing, setEditing] = useState(false);
   const [link, setLink] = useState("");
   const retrieve = useAction();
   const save = useAction();
@@ -68,6 +69,7 @@ export function DceSourcePanel({
       )
     ) {
       setLink("");
+      setEditing(false);
       onChanged();
     }
   }
@@ -154,7 +156,16 @@ export function DceSourcePanel({
         </div>
       )}
       {(which === "guided" || failed) && guided}
-      {which === "link" && (
+      {which !== "link" && !editing && (
+        <Button
+          variant="ghost"
+          className="px-2 py-1 text-xs"
+          onClick={() => setEditing(true)}
+        >
+          Modifier le lien
+        </Button>
+      )}
+      {(which === "link" || editing) && (
         <form onSubmit={onSaveLink} className="space-y-2" noValidate>
           <Field
             label="Collez le lien de la consultation"

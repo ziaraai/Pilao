@@ -10,7 +10,7 @@ import re
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from typing import Any, Literal
-from urllib.parse import parse_qs, urlsplit, urlunsplit
+from urllib.parse import parse_qs, quote, urlsplit, urlunsplit
 from zoneinfo import ZoneInfo
 
 Platform = Literal["atexo", "aws", "achatpublic", "e_marchespublics", "marches_securises", "other"]
@@ -34,12 +34,16 @@ _OTHER_PLATFORMS: tuple[tuple[str, Platform], ...] = (
     ("e-marchespublics.com", "e_marchespublics"),
     ("marches-securises.fr", "marches_securises"),
 )
-_CONSULTATION_PATH = re.compile(r"^(?:/(?:app|index)\.php)?/entreprise/consultation/(\d+)/?$")
+_CONSULTATION_PATH = re.compile(
+    r"^(?:/(?:app|index)\.php)?/entreprise/consultation/([0-9]+)/?$", re.IGNORECASE
+)
 _DETAIL_PAGES = {
-    "Entreprise.EntrepriseDetailConsultation",
-    "Entreprise.EntrepriseDetailsConsultation",
-    "Entreprise.EntrepriseDemandeTelechargementDce",
+    "entreprise.entreprisedetailconsultation",
+    "entreprise.entreprisedetailsconsultation",
+    "entreprise.entreprisedemandetelechargementdce",
 }
+_DEFAULT_PORTS = {"http": 80, "https": 443}
+_CONTROL = re.compile(r"[\x00-\x1f\x7f]")
 _SIZE = re.compile(r"(\d+(?:[.,]\d+)?)\s*(Ko|Mo|Go)\b", re.IGNORECASE)
 _FACTORS = {"ko": 1024, "mo": 1024**2, "go": 1024**3}
 _DEADLINE = re.compile(r"(\d{2})/(\d{2})/(\d{4})\s+(\d{1,2})[:h](\d{2})")
@@ -58,6 +62,11 @@ class DceSource:
     @property
     def automatic(self) -> bool:
         return self.platform == "atexo" and bool(self.consultation_id and self.org_acronym)
+
+    @property
+    def known(self) -> bool:
+        """One of the Atexo platforms Pilao knows: the only hosts its robot visits."""
+        return self.platform == "atexo" and self.host in ATEXO_SITES
 
     @property
     def home_only(self) -> bool:
@@ -90,39 +99,55 @@ def _platform(hostname: str) -> Platform | None:
     return None
 
 
+def _first(query: dict[str, list[str]], *keys: str) -> str | None:
+    for key in keys:
+        if query.get(key):
+            return query[key][0] or None
+    return None
+
+
 def _atexo_ids(path: str, query: dict[str, list[str]]) -> tuple[bool, str | None, str | None]:
-    """(is an Atexo link, consultation number, buyer's code)."""
-    code = next(iter(query.get("orgAcronyme") or []), None) or None
+    """(is an Atexo link, consultation number, buyer's code). ``query`` keys are lower case."""
+    code = _first(query, "orgacronyme")
     match = _CONSULTATION_PATH.match(path)
     if match:
         return True, match.group(1), code
-    page = (query.get("page") or [""])[0]
+    page = (_first(query, "page") or "").lower()
     if page in _DETAIL_PAGES or (
-        page == "Entreprise.EntrepriseAdvancedSearch" and "AllCons" in query
+        page == "entreprise.entrepriseadvancedsearch" and "allcons" in query
     ):
-        number = next(iter(query.get("id") or query.get("refConsultation") or []), None)
-        return True, number if number and number.isdigit() else None, code
-    if page.startswith("Entreprise."):
+        number = _first(query, "id", "refconsultation")
+        return True, number if number and re.fullmatch(r"[0-9]+", number) else None, code
+    if page.startswith("entreprise."):
         return True, None, code
     return False, None, None
 
 
 def recognize(url: str | None) -> DceSource | None:
-    """The source behind a link, or ``None`` when it is not an http(s) link."""
+    """The source behind a link, or ``None`` when it is not an http(s) link (control
+    characters refused). A known Atexo platform is always reached in HTTPS."""
     if not url or not url.strip():
         return None
+    text = html.unescape(url.strip())
+    if _CONTROL.search(text):
+        return None
     try:
-        parts = urlsplit(html.unescape(url.strip()))
+        parts = urlsplit(text)
         hostname = (parts.hostname or "").lower()
         port = parts.port
     except ValueError:
         return None
-    if parts.scheme.lower() not in ("http", "https") or not hostname:
-        return None
     scheme = parts.scheme.lower()
+    if scheme not in ("http", "https") or not hostname:
+        return None
+    if hostname in ATEXO_SITES:
+        scheme = "https"  # a notice's http:// link to PLACE: same consultation
+    if port == _DEFAULT_PORTS.get(scheme) or (hostname in ATEXO_SITES):
+        port = None
     host = f"{hostname}:{port}" if port else hostname
     clean = urlunsplit((scheme, host, parts.path, parts.query, ""))
-    query = parse_qs(parts.query, keep_blank_values=True)
+    raw = parse_qs(parts.query, keep_blank_values=True)
+    query = {key.lower(): values for key, values in raw.items()}
     is_atexo, number, code = _atexo_ids(parts.path, query)
     if is_atexo or hostname in ATEXO_SITES:
         return DceSource(
@@ -134,14 +159,14 @@ def recognize(url: str | None) -> DceSource | None:
 def consultation_url(src: DceSource) -> str:
     return (
         f"{src.scheme}://{src.host}/entreprise/consultation/{src.consultation_id}"
-        f"?orgAcronyme={src.org_acronym}"
+        f"?orgAcronyme={quote(src.org_acronym or '', safe='')}"
     )
 
 
 def download_url(src: DceSource) -> str:
     return (
         f"{src.scheme}://{src.host}/index.php?page=Entreprise.EntrepriseDemandeTelechargementDce"
-        f"&id={src.consultation_id}&orgAcronyme={src.org_acronym}"
+        f"&id={src.consultation_id}&orgAcronyme={quote(src.org_acronym or '', safe='')}"
     )
 
 

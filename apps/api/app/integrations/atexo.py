@@ -20,7 +20,7 @@ from urllib.parse import urlsplit
 from urllib.robotparser import RobotFileParser
 
 from playwright.sync_api import Error as PlaywrightError
-from playwright.sync_api import Page, Route
+from playwright.sync_api import Page, Request, Response, Route
 from playwright.sync_api import TimeoutError as PlaywrightTimeoutError
 
 from app.core.config import get_settings
@@ -141,7 +141,7 @@ class AtexoRobot:
 
     def inspect(self, src: DceSource) -> PageFacts:
         url = consultation_url(src)
-        self._precheck(url)
+        self._precheck(src, url)
         with self._errors(), self._page() as page:
             self._check_robots(page, src, url)
             self._goto(page, url)
@@ -151,7 +151,7 @@ class AtexoRobot:
         self, src: DceSource, identity: Identity | None, dest: Path, max_bytes: int
     ) -> Fetched:
         url = consultation_url(src)
-        self._precheck(url)
+        self._precheck(src, url)
         with self._errors(), self._page() as page:
             self._check_robots(page, src, url)
             self._goto(page, url)
@@ -172,6 +172,7 @@ class AtexoRobot:
                 "input[type=submit][name$='validateButton'], input[type=submit][value='Valider']"
             ).first.click()
             self._settle(page)
+            self._check_page(page)
             link = page.get_by_text("Télécharger le Dossier de consultation", exact=True)
             if link.count() == 0:
                 error = self._error_text(page)
@@ -182,6 +183,9 @@ class AtexoRobot:
             with page.expect_download(timeout=DOWNLOAD_TIMEOUT_SECONDS * 1000) as info:
                 link.first.click()
             download = info.value
+            if not self._allowed(download.url):  # a redirect led it elsewhere
+                download.cancel()
+                raise RobotError("unreadable")
             filename = _safe_name(download.suggested_filename)
             path = dest / filename
             download.save_as(path)
@@ -193,7 +197,11 @@ class AtexoRobot:
 
     # ---------- addresses, robots.txt, pace --------------------------------------------------
 
-    def _precheck(self, url: str) -> None:
+    def _precheck(self, src: DceSource, url: str) -> None:
+        """Only the known Atexo platforms (``ATEXO_SITES``), never a host a user chose: a page
+        there could send the browser into the server's network (final review C1)."""
+        if not self._allow_private and not src.known:
+            raise RobotError("unreadable")
         if url_allowed(url, self._allow_private):
             return
         host = urlsplit(url).hostname or ""
@@ -208,6 +216,19 @@ class AtexoRobot:
             self._hosts[key] = url_allowed(url, self._allow_private)
         return self._hosts[key]
 
+    def _check_page(self, page: Page) -> None:
+        if not self._allowed(page.url):
+            raise RobotError("unreadable")
+
+    def _check_chain(self, response: Response) -> None:
+        """Playwright routes only the first request of a redirect chain: every hop is checked
+        afterwards, and a refused one stops the robot before it reads anything."""
+        request: Request | None = response.request
+        while request is not None:
+            if not self._allowed(request.url):
+                raise RobotError("unreadable")
+            request = request.redirected_from
+
     def _filter(self, route: Route) -> None:
         request = route.request
         if request.resource_type in _SKIPPED_RESOURCES or not self._allowed(request.url):
@@ -220,7 +241,9 @@ class AtexoRobot:
         cached = self._robots.get(base)
         if cached is None or time.monotonic() - cached[0] > self._robots_ttl:
             self._pause()
-            response = page.context.request.get(f"{base}/robots.txt", timeout=15_000)
+            response = page.context.request.get(
+                f"{base}/robots.txt", timeout=15_000, max_redirects=0  # never followed elsewhere
+            )
             if response.status >= 500:
                 raise RobotUnavailable(f"robots.txt answered {response.status}")
             parser: RobotFileParser | None = None
@@ -252,7 +275,10 @@ class AtexoRobot:
                     f"Chrome/{browser.version} Safari/537.36 {USER_AGENT_SUFFIX}"
                 )
                 context = browser.new_context(
-                    locale="fr-FR", accept_downloads=True, user_agent=agent
+                    locale="fr-FR",
+                    accept_downloads=True,
+                    user_agent=agent,
+                    service_workers="block",  # they would bypass the address filter
                 )
                 context.route("**/*", self._filter)
                 page = context.new_page()
@@ -278,6 +304,8 @@ class AtexoRobot:
     def _goto(self, page: Page, url: str) -> None:
         self._pause()
         response = page.goto(url, wait_until="domcontentloaded")
+        if response is not None:
+            self._check_chain(response)
         if response is not None and response.status >= 500:
             raise RobotUnavailable(f"{url} answered {response.status}")
         if response is not None and response.status >= 400:

@@ -67,3 +67,7 @@ def test_unresolvable_name_is_refused(monkeypatch: pytest.MonkeyPatch) -> None:
 
     monkeypatch.setattr(socket, "getaddrinfo", fail)
     assert not url_allowed("https://nulle-part.exemple/", False)
+
+
+def test_shared_address_space_is_not_public() -> None:
+    assert not is_public_address("100.100.100.200")  # CGNAT, a cloud's metadata on some hosts

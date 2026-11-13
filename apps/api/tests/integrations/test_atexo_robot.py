@@ -157,3 +157,47 @@ def test_inspect(platform: tuple[str, State], robot: AtexoRobot) -> None:
     deadline = datetime(2026, 11, 30, 11, 0, tzinfo=UTC)
     assert robot.inspect(_src(base, 1001)) == PageFacts("0,01 Mo", deadline, False)
     assert robot.inspect(_src(base, 1002)).closed
+
+
+# ---------- final review C1: only known platforms, never through a redirect -----------------
+
+
+def test_an_unknown_platform_is_refused_before_any_request(tmp_path: Path) -> None:
+    strict = AtexoRobot(allow_private=False, page_gap=0)
+    src = recognize("https://atexo.attacker.example/entreprise/consultation/1?orgAcronyme=x")
+    assert src is not None and src.automatic and not src.known
+    with pytest.raises(RobotError) as caught:
+        strict.fetch(src, None, tmp_path, MAX)
+    assert caught.value.outcome == "unreadable"
+    with pytest.raises(RobotError):
+        strict.inspect(src)
+
+
+class _Refusing(AtexoRobot):
+    """Refuses one port: the « inside » address a redirect points to."""
+
+    def __init__(self, refused_port: int) -> None:
+        super().__init__(allow_private=True, page_gap=0)
+        self.refused_port = refused_port
+
+    def _allowed(self, url: str) -> bool:
+        from urllib.parse import urlsplit
+
+        return urlsplit(url).port != self.refused_port
+
+
+def test_a_redirect_to_a_refused_address_stops_the_robot(tmp_path: Path) -> None:
+    inside, inside_state = serve()
+    inside_base = f"http://127.0.0.1:{inside.server_address[1]}"
+    outside, _ = serve(redirect_to=inside_base)
+    try:
+        robot = _Refusing(inside.server_address[1])
+        src = _src(f"http://127.0.0.1:{outside.server_address[1]}", 1007)
+        with pytest.raises(RobotError) as caught:
+            robot.fetch(src, None, tmp_path, MAX)
+    finally:
+        outside.shutdown()
+        inside.shutdown()
+    assert caught.value.outcome == "unreadable"
+    assert "/robots.txt" not in inside_state.hits  # robots.txt is never followed elsewhere
+    assert list(tmp_path.iterdir()) == []

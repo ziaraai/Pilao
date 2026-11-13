@@ -41,6 +41,7 @@ def dce_zip() -> bytes:
 @dataclass
 class State:
     deny_robots: bool = False
+    redirect_to: str | None = None  # consultation 1007 and robots.txt answer 302 to this base
     received: dict[str, Any] = field(default_factory=dict)
     hits: list[str] = field(default_factory=list)
 
@@ -138,7 +139,17 @@ def handler_for(state: State) -> type[BaseHTTPRequestHandler]:
             state.hits.append(self.path)
             parts = urlsplit(self.path)
             query = {k: v[0] for k, v in parse_qs(parts.query, keep_blank_values=True).items()}
-            if parts.path == "/robots.txt":
+            if state.redirect_to and (parts.path == "/robots.txt" or parts.path.endswith("/1007")):
+                self.send_response(302)
+                target = (
+                    "/robots.txt"
+                    if parts.path == "/robots.txt"
+                    else ("/entreprise/consultation/1001?orgAcronyme=t1x")
+                )
+                self.send_header("Location", state.redirect_to + target)
+                self.send_header("Content-Length", "0")
+                self.end_headers()
+            elif parts.path == "/robots.txt":
                 rule = "/" if state.deny_robots else ""
                 self._send(f"User-agent: *\nDisallow: {rule}\n".encode(), "text/plain")
             elif parts.path == "/_received":
@@ -183,9 +194,11 @@ def handler_for(state: State) -> type[BaseHTTPRequestHandler]:
     return Handler
 
 
-def serve(port: int = 0, deny_robots: bool = False) -> tuple[ThreadingHTTPServer, State]:
+def serve(
+    port: int = 0, deny_robots: bool = False, redirect_to: str | None = None
+) -> tuple[ThreadingHTTPServer, State]:
     """Start the fake platform in a thread; ``port=0`` picks a free port."""
-    state = State(deny_robots=deny_robots)
+    state = State(deny_robots=deny_robots, redirect_to=redirect_to)
     server = ThreadingHTTPServer(("127.0.0.1", port), handler_for(state))
     threading.Thread(target=server.serve_forever, daemon=True).start()
     return server, state

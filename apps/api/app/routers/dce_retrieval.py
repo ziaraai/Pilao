@@ -46,13 +46,13 @@ def _settings(org: Organization) -> RetrievalSettingsIO:
 
 def _source_out(db: ScopedDb, org: Organization, bid: Bid) -> DceSourceOut:
     src = svc.source_for(db, bid)
-    fetch = svc.latest_fetch(db, bid.id)
+    fetch = svc.latest_fetch(db, bid.id, src.url) if src else None
     settings = _settings(org)
     return DceSourceOut(
         url=src.url if src else None,
         platform=src.platform if src else None,
         site=src.site if src else None,
-        automatic=bool(src and src.automatic),
+        automatic=svc.robot_ready(src),
         home_only=bool(src and src.home_only),
         guide=list(guide(src.platform, bid.reference)) if src else [],
         terms_url=terms_url(src) if src else None,

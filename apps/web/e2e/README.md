@@ -31,7 +31,7 @@ uv run moto_server -p 5555 &                       # puis créer le bucket « e2
 uv run python ../web/e2e/fake_openai.py 5577 &
 uv run python -m tests.fixtures.fake_atexo --port 8765 &   # fausse plateforme Atexo (robot des DCE)
 uv run alembic upgrade head && uv run python ../web/e2e/run_api.py > $W/api.log 2>&1 &
-uv run rq worker -u $REDIS_URL &
+uv run rq worker --with-scheduler -u $REDIS_URL &
 cd ../web && pnpm build && pnpm start -p 3000 &
 node e2e/journey.cjs $W                            # captures dans $W/*.png
 ```
@@ -39,7 +39,7 @@ node e2e/journey.cjs $W                            # captures dans $W/*.png
 L'annuaire des entreprises pointe vers un port fermé et la lecture IA des attestations n'est pas
 configurée : le parcours vérifie donc la saisie manuelle dans ces deux cas.
 
-Erreurs de console attendues à la fin du parcours : 1 × 422 (formulaire refusé exprès), 30 × 404
+Erreurs de console attendues à la fin du parcours : 1 × 422 (formulaire refusé exprès), 32 × 404
 (ressources effacées ou absentes exprès, et l'analyse et le mémoire des dossiers qui n'en ont pas encore : les trois dossiers de la récupération des DCE en ajoutent) et 1 × 403 (la page « Dossiers » refusée pendant que le
 module « Réponse » est désactivé). Avant de relancer, videz les entreprises et les annonces des
 parcours précédents (`delete from organizations; delete from tenders where source_id like 'E2E-%';`

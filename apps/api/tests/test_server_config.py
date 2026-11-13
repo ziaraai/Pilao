@@ -102,3 +102,14 @@ def test_a_client_cannot_choose_the_address_the_api_sees() -> None:
         "10.0.0.1",
     ):
         assert gateway in trusted, gateway
+
+
+def test_the_worker_runs_the_scheduler() -> None:
+    """RQ only re-queues delayed jobs (a busy site, a retry's wait) when a worker runs its
+    scheduler: without it the DCE robot's retries never run (final review I1)."""
+    root = SERVER.parent
+    for compose in (SERVER / "docker-compose.yml", root / "docker-compose.prod.yml"):
+        text = compose.read_text(encoding="utf-8")
+        workers = re.findall(r"exec rq worker[^\"]*", text)
+        assert workers, compose
+        assert all("--with-scheduler" in w for w in workers), (compose, workers)

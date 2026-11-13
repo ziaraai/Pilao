@@ -136,6 +136,9 @@ def save_settings(
         raise ApiError(422, "bad_mode", CHOICE_NEEDED)
     org.dce_retrieval_mode = mode
     _store_contact(org, contact)
+    if mode == "identified" and identity_for(org) is None:  # else every click would fail
+        db.rollback()
+        raise ApiError(422, "contact_incomplete", CONTACT_INCOMPLETE)
     db.add(
         AuditLog(
             org_id=org.id,
@@ -161,13 +164,13 @@ def identity_for(org: Organization) -> Identity | None:
     return Identity(first, last, email, org.name, org.siren, org.siret)
 
 
-def latest_fetch(db: Session, bid_id: uuid.UUID) -> DceFetch | None:
-    """The latest retrieval or update of the dossier (not the daily checks)."""
-    return db.scalars(
-        select(DceFetch)
-        .where(DceFetch.bid_id == bid_id, DceFetch.kind.in_(REQUESTED))
-        .order_by(DceFetch.created_at.desc())
-    ).first()
+def latest_fetch(db: Session, bid_id: uuid.UUID, url: str | None = None) -> DceFetch | None:
+    """The latest retrieval or update of the dossier (not the daily checks); with ``url``, the
+    latest one for that link only (a corrected link starts afresh)."""
+    query = select(DceFetch).where(DceFetch.bid_id == bid_id, DceFetch.kind.in_(REQUESTED))
+    if url is not None:
+        query = query.where(DceFetch.source_url == url)
+    return db.scalars(query.order_by(DceFetch.created_at.desc())).first()
 
 
 def last_success(db: Session, bid: Bid) -> DceFetch | None:
@@ -189,9 +192,20 @@ def last_success(db: Session, bid: Bid) -> DceFetch | None:
     ).first()
 
 
-def _automatic(src: DceSource | None) -> DceSource:
+def robot_ready(src: DceSource | None) -> bool:
+    """The robot may go there: an Atexo consultation link on a platform Pilao knows (any
+    address in tests), HTTPS to a public address (final review C1, I2)."""
     allow_private = get_settings().dce_robot_allow_private_hosts
-    if src is None or not src.automatic or not url_allowed(src.url, allow_private, resolve=False):
+    return bool(
+        src is not None
+        and src.automatic
+        and (src.known or allow_private)
+        and url_allowed(src.url, allow_private, resolve=False)
+    )
+
+
+def _automatic(src: DceSource | None) -> DceSource:
+    if src is None or not robot_ready(src):
         raise ApiError(422, "not_automatic", NOT_AUTOMATIC)
     return src
 
@@ -242,6 +256,7 @@ def create_fetch(
         mode=mode,
         status="pending",
         site=src.site,
+        source_url=src.url,
         requested_by=requested_by,
     )
     db.add(fetch)
@@ -346,7 +361,7 @@ def run_fetch(
     scope_session(db, fetch.org_id)  # the worker's session: this company's rows only
     bid = db.get_one(Bid, fetch.bid_id)
     src = source_for(db, bid)
-    if src is None or not src.automatic:
+    if src is None or not robot_ready(src):
         _close(db, fetch, "unreadable", MESSAGES["unreadable"])
         return
     if not robot_enabled():
@@ -532,7 +547,7 @@ def _check_one(
     """One check; returns ``changed``, ``unchanged``, ``failed`` or ``None`` (skipped)."""
     src = source_for(db, bid)
     success = last_success(db, bid)
-    if src is None or not src.automatic or success is None:
+    if src is None or not robot_ready(src) or success is None:
         return None
     if not gate.acquire(src.host):
         return None  # a retrieval is on this site: tomorrow
@@ -547,6 +562,10 @@ def _check_one(
         facts = robot.inspect(src)
         if facts.closed:
             raise RobotError("closed")
+        if facts.size_label is None and (facts.deadline_at is None or previous.get("size_label")):
+            # nothing readable, or the size is gone: the page changed (final review I3). A
+            # failure, not a change: no alert and no download, and « À surveiller » sees it
+            raise RobotError("unreadable")
     except (RobotError, RobotUnavailable) as exc:
         failures = int(previous.get("failures") or 0) + 1
         outcome = exc.outcome if isinstance(exc, RobotError) else "unavailable"

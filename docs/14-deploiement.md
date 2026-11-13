@@ -26,7 +26,7 @@ Les services gérés restent hors des images : PostgreSQL 16 avec `pgvector`, Re
 |---|---|---|
 | migrations | `alembic upgrade head` | une fois par déploiement, avant le reste |
 | api | (commande par défaut) uvicorn, port 8000 | 2 ou plus derrière le répartiteur |
-| worker | `rq worker -u "$REDIS_URL" default` | selon la charge (DCE, IA, exports) |
+| worker | `rq worker --with-scheduler -u "$REDIS_URL" default` (le planificateur remet en file les tâches différées et les nouvelles tentatives) | selon la charge (DCE, IA, exports) |
 | planificateur | `rq cron app/workers/cron.py -u "$REDIS_URL"` | 1 (un second ne gêne pas, ADR-024) |
 | web | (commande par défaut) `node server.js`, port 3000 | 2 ou plus |
 | antivirus | ClamAV (`StreamMaxLength 260M`) | 1 |

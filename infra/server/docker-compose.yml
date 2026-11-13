@@ -49,7 +49,7 @@ services:
     ports: ["127.0.0.1:8100:8000"]  # only nginx (Plesk) reaches it: /api/ of app.pilao.pro
   worker:  # DCE processing, AI analysis, drafting, exports, watch
     <<: *app
-    command: ["sh", "-c", "exec rq worker -u \"$$REDIS_URL\" default"]
+    command: ["sh", "-c", "exec rq worker --with-scheduler -u \"$$REDIS_URL\" default"]
     healthcheck: { disable: true }
   scheduler:  # hourly: alerts, digests, purges (ADR-024); every 2 h: notices (ADR-036)
     <<: *app

@@ -176,6 +176,7 @@ dce_fetches (
   outcome text null,                    -- ok, unchanged, changed, closed, unreadable, refused_identity,
                                         -- too_big, captcha, robots, unavailable, disabled, busy
   message text null, site text, size_label text null,
+  source_url text null,                 -- le lien de cette tentative (migration 0029) : un lien corrigé repart de zéro
   dce_version_id uuid null, requested_by uuid null, created_at, finished_at
 )  -- une seule récupération active par dossier (index unique partiel)
 

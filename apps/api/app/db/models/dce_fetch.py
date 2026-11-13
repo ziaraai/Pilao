@@ -45,6 +45,7 @@ class DceFetch(IdMixin, OrgScoped, Base):
     outcome: Mapped[str | None] = mapped_column(Text)
     message: Mapped[str | None] = mapped_column(Text)  # shown as is
     site: Mapped[str] = mapped_column(Text, nullable=False)
+    source_url: Mapped[str | None] = mapped_column(Text)  # the link this attempt was for
     size_label: Mapped[str | None] = mapped_column(Text)
     dce_version_id: Mapped[uuid.UUID | None] = mapped_column(
         UUID(as_uuid=True), ForeignKey("dce_versions.id", ondelete="SET NULL")

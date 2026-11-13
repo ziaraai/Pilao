@@ -1,4 +1,4 @@
-"""RQ entry points. Run a worker with:  ``uv run rq worker -u $REDIS_URL``."""
+"""RQ entry points. Run a worker with:  ``uv run rq worker --with-scheduler -u $REDIS_URL``."""
 
 import uuid
 from datetime import UTC, datetime

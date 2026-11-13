@@ -854,7 +854,15 @@ let current; // the page, for a screenshot when a step fails
     .getByText("1. Cliquez sur « retirer le DCE en mode anonyme ».")
     .waitFor();
   await page.getByText("Glissez ici le ZIP téléchargé").first().waitFor();
-  step("guided retrieval on AWS: the page's link, the memo, the drop zone");
+  // a wrong link can be corrected: the robot comes back for an Atexo consultation
+  await page.getByRole("button", { name: "Modifier le lien" }).click();
+  await pasteLink(`${ATEXO}/entreprise/consultation/1002?orgAcronyme=t1x`);
+  await page
+    .getByRole("button", { name: "Récupérer le DCE", exact: true })
+    .waitFor();
+  step(
+    "guided retrieval on AWS: the page's link, the memo, the drop zone; the link corrected",
+  );
   const robotOffBid = await newBid("Nettoyage Atexo sans robot E2E");
   await pasteLink(`${ATEXO}/entreprise/consultation/1002?orgAcronyme=t1x`);
   await page

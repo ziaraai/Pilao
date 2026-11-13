@@ -21,7 +21,7 @@ services:
     ports: ["8000:8000"]
   worker:  # DCE processing, AI analysis, drafting, exports, watch: scale with --scale worker=N
     <<: *api
-    command: ["sh", "-c", "exec rq worker -u \"$$REDIS_URL\" default"]
+    command: ["sh", "-c", "exec rq worker --with-scheduler -u \"$$REDIS_URL\" default"]
     depends_on:
       migrate: { condition: service_completed_successfully }
     healthcheck: { disable: true }

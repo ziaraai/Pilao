@@ -77,7 +77,7 @@ En attente : **Phase 0 — test des modèles d'IA** (clé OpenRouter, 3 vrais DC
 docker compose -f infra/docker-compose.yml up -d   # postgres+pgvector, redis, minio
 cp .env.example apps/api/.env                       # contient ENVIRONMENT=local (sinon règles de production)
 cd apps/api && uv sync && uv run alembic upgrade head && uv run fastapi dev app/main.py
-cd apps/api && uv run rq worker -u $REDIS_URL        # worker (indexation, lecture IA, DCE, rédaction, exports, veille)
+cd apps/api && uv run rq worker --with-scheduler -u $REDIS_URL  # worker (retries, délais) (indexation, lecture IA, DCE, rédaction, exports, veille)
 cd apps/api && uv run rq cron app/workers/cron.py -u $REDIS_URL  # tâches planifiées (alertes, veille, travaux bloqués remboursés)
 cd apps/api && uv run python -m app.cli load-tenders annonces.json  # charger des annonces au format normalisé
 cd apps/api && uv run python -m app.cli import-tenders --source ted [--since 2026-10-01] [--essai]  # importer TED / BOAMP maintenant
