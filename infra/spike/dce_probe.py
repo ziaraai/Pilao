@@ -1,92 +1,168 @@
 """THROWAWAY spike (to delete): how do the main buyer platforms let a company download a DCE?
 
-Run by .github/workflows/dce-probe.yml (manual). For each page: what it is, the download
-links and buttons, forms, captcha, terms; then it follows « télécharger le DCE » and an
-anonymous option, and reports whether a file download starts (name and size only, nothing
-is kept). One pass, a handful of pages: no load on the platforms.
+Run by .github/workflows/dce-probe.yml (manual). Second pass, more patient: waits for the
+page to settle, prints what a person sees, then walks the usual path (« télécharger le
+dossier », the anonymous option, accept the terms, validate) step by step and reports
+captcha, forms and whether a file download starts (name and size only, nothing is kept).
+It never fills a captcha. One pass, a handful of pages: no load on the platforms.
 """
 
+import os
 import re
 import sys
+import urllib.request
 
 from playwright.sync_api import Page, sync_playwright
 
 URLS = [
-    ("AWS marches-publics.info", "https://www.marches-publics.info/mpiaws/index.cfm?fuseaction=dematEnt.login&type=DCE&IDM=1878216"),
-    ("AWS gm.aws-achat.info", "https://gm.aws-achat.info//avis/index.cfm?fuseaction=dematEnt.login&type=DCE&IDM=7195"),
-    ("Atexo Maximilien", "https://marches.maximilien.fr/entreprise/consultation/946696?orgAcronyme=b4a"),
-    ("Atexo Megalis", "https://marches.megalis.bretagne.bzh/entreprise/consultation/241352?orgAcronyme=a2u"),
-    ("PLACE (home)", "https://www.marches-publics.gouv.fr/?page=Entreprise.AccueilEntreprise"),
-    ("achatpublic (home)", "https://www.achatpublic.com/"),
-    ("achatpublic CACEM", "https://cacem.achatpublic.com/sdm/ent/gen/ent_detail.do?PCSLID=CSL_2026_vcaE_eZJD5"),
-    ("marches-securises (home)", "https://www.marches-securises.fr/"),
-    ("e-marchespublics BRL", "https://brl.e-marchespublics.com/pack/annonce_marche_public_34156_1186318.html"),
+    ("PLACE consultation", "https://www.marches-publics.gouv.fr/entreprise/consultation/3091292?orgAcronyme=h8j"),
+    ("PLACE ancienne adresse", "https://www.marches-publics.gouv.fr/?page=Entreprise.EntrepriseDetailConsultation&id=3094882&orgAcronyme=f5j"),
+    ("Atexo Maximilien", "https://marches.maximilien.fr/entreprise/consultation/948922?orgAcronyme=p1v"),
+    ("Atexo Megalis", "https://marches.megalis.bretagne.bzh/entreprise/consultation/241683?orgAcronyme=f9x"),
+    ("Atexo Ternum", "https://marches.ternum-bfc.fr/entreprise/consultation/695276?orgAcronyme=e9m"),
+    ("e-marchespublics anonyme", "https://brl.e-marchespublics.com/dossier_de_consultation_marche_public_anonyme_a6dff22f74ffe517b975c8473fad8935ae7afd31"),
+    ("e-marchespublics MNHN", "https://mnhn.e-marchespublics.com/pack/annonce_marche_public_533_1187646.html"),
+    ("achatpublic fiche", "https://www.achatpublic.com/sdm/ent2/gen/ficheCsl.action?PCSLID=CSL_2026_l0LUrAK4iD"),
 ]
-KEY = re.compile(r"t[ée]l[ée]charg|dce|dossier de consultation|anonym|identifi|connexion|inscri|retrait", re.I)
-LINES = re.compile(r"t[ée]l[ée]charg|anonym|identifi|captcha|robot|automatis|conditions g|cgu|dossier de consultation|retrait", re.I)
-DOWNLOAD = re.compile(r"(t[ée]l[ée]charg|retir|acc[ée]der).{0,40}(dce|dossier|consultation|pi[èe]ces)|dossier de consultation|t[ée]l[ée]charger le dce", re.I)
-ANON = re.compile(r"anonym|sans (vous )?identifi|sans compte|acc[èe]s libre", re.I)
+ROBOTS = [
+    "https://www.marches-publics.gouv.fr",
+    "https://marches.maximilien.fr",
+    "https://www.marches-publics.info",
+    "https://www.e-marchespublics.com",
+    "https://www.achatpublic.com",
+    "https://www.marches-securises.fr",
+]
+WANTED = re.compile(r"t[ée]l[ée]charg|dce|dossier|anonym|identifi|connexion|inscri|retrait|conditions|cgu|valider|captcha", re.I)
+LINES = re.compile(r"t[ée]l[ée]charg|anonym|identifi|captcha|robot|automatis|conditions g|cgu|dossier de consultation|retrait|date limite|cl[ôo]tur", re.I)
+STEPS = [
+    ("dossier", re.compile(r"(t[ée]l[ée]charg|retir|acc[ée]d).{0,40}(dce|dossier|consultation|pi[èe]ces)|^dossier de consultation|t[ée]l[ée]charger le dce|^dce$", re.I)),
+    ("anonyme", re.compile(r"anonym|sans (vous )?identifi|sans compte|rester anonyme", re.I)),
+    ("valider", re.compile(r"^(valider|confirmer|continuer|suivant|t[ée]l[ée]charger( (la s[ée]lection|tout|le dce|l'ensemble).*)?|retrait anonyme)$", re.I)),
+    ("valider encore", re.compile(r"^(valider|confirmer|continuer|t[ée]l[ée]charger( (la s[ée]lection|tout|le dce|l'ensemble).*)?)$", re.I)),
+]
+
+
+def robots() -> None:
+    print("\n===== robots.txt")
+    for base in ROBOTS:
+        try:
+            req = urllib.request.Request(base + "/robots.txt", headers={"User-Agent": "Mozilla/5.0"})
+            body = urllib.request.urlopen(req, timeout=20).read().decode("utf-8", "replace")
+            rules = [l.strip() for l in body.splitlines() if l.strip() and not l.startswith("#")][:14]
+            print(f"  {base}: {rules}")
+        except Exception as exc:  # noqa: BLE001
+            print(f"  {base}: {type(exc).__name__}: {str(exc)[:100]}")
 
 
 def report(page: Page, label: str) -> None:
-    print(f"  [{label}] url={page.url}")
-    print(f"  [{label}] title={page.title()!r}")
+    print(f"  [{label}] url={page.url[:160]}")
+    print(f"  [{label}] title={page.title()[:120]!r}")
     html = page.content().lower()
-    flags = [w for w in ("recaptcha", "hcaptcha", "captcha", "turnstile", "cf-challenge", "just a moment") if w in html]
-    print(f"  [{label}] captcha/challenge markers: {flags or 'none'}")
+    flags = [w for w in ("recaptcha", "hcaptcha", "captcha", "turnstile", "cf-challenge", "just a moment", "friendly-captcha", "altcha") if w in html]
+    print(f"  [{label}] captcha markers: {flags or 'none'}")
+    text = page.inner_text("body") if page.query_selector("body") else ""
+    seen = [l.strip() for l in text.splitlines() if l.strip()]
+    print(f"  [{label}] visible text: {len(seen)} lines; first: {[l[:70] for l in seen[:12]]}")
+    for line in [l for l in seen if LINES.search(l)][:16]:
+        print(f"    TEXT {line[:170]!r}")
     items = page.eval_on_selector_all(
-        "a, button, input[type=submit], input[type=button]",
-        "els => els.map(e => [e.tagName, (e.innerText || e.value || e.title || '').trim().slice(0, 90), e.getAttribute('href') || ''])",
+        "a, button, input[type=submit], input[type=button], input[type=checkbox], input[type=radio], label",
+        "els => els.filter(e => e.offsetParent !== null).map(e => [e.tagName + (e.type ? ':' + e.type : ''), (e.innerText || e.value || e.title || e.getAttribute('aria-label') || '').trim().slice(0, 90), e.getAttribute('href') || e.name || ''])",
     )
-    shown = [i for i in items if KEY.search(i[1] or "") or KEY.search(i[2] or "")][:30]
-    for tag, text, href in shown:
-        print(f"    {tag:6} {text!r} -> {href[:120]}")
+    for tag, txt, href in [i for i in items if WANTED.search(i[1] or "") or WANTED.search(i[2] or "")][:28]:
+        print(f"    {tag:16} {txt!r} -> {href[:110]}")
     forms = page.eval_on_selector_all(
         "form",
-        "fs => fs.map(f => [f.getAttribute('action') || '', Array.from(f.querySelectorAll('input,select,textarea')).filter(i => i.type !== 'hidden').map(i => (i.name || i.id) + ':' + i.type).slice(0, 14)])",
+        "fs => fs.map(f => [f.getAttribute('action') || '', Array.from(f.querySelectorAll('input,select,textarea')).filter(i => i.type !== 'hidden').map(i => (i.name || i.id) + ':' + i.type).slice(0, 12)])",
     )
-    for action, fields in forms[:6]:
-        print(f"    FORM action={action[:100]} fields={fields}")
-    text = page.inner_text("body") if page.query_selector("body") else ""
-    hits = [l.strip() for l in text.splitlines() if LINES.search(l)][:14]
-    for line in hits:
-        print(f"    TEXT {line[:160]!r}")
+    for action, fields in [f for f in forms if f[1]][:6]:
+        print(f"    FORM action={action[:90]} fields={fields}")
 
 
-def click_first(page: Page, pattern: re.Pattern[str], label: str, downloads: list[str]) -> bool:
-    for el in page.query_selector_all("a, button, input[type=submit], input[type=button], label"):
-        text = (el.inner_text() or el.get_attribute("value") or el.get_attribute("title") or "").strip()
-        if text and pattern.search(text) and el.is_visible():
-            print(f"  -> clicking {text[:80]!r} ({label})")
-            try:
+def accept_terms(page: Page) -> None:
+    for box in page.query_selector_all("input[type=checkbox]"):
+        try:
+            if not box.is_visible() or box.is_checked():
+                continue
+            label = page.evaluate(
+                "b => ((b.labels && b.labels[0] && b.labels[0].innerText) || b.closest('label, div, td, p')?.innerText || '').slice(0, 120)",
+                box,
+            )
+            if re.search(r"accept|conditions|cgu|reconna|anonym|lu et", label or "", re.I):
+                box.check(timeout=4000)
+                print(f"  -> ticked {label.strip()[:90]!r}")
+        except Exception as exc:  # noqa: BLE001
+            print(f"     tick failed: {type(exc).__name__}")
+    for radio in page.query_selector_all("input[type=radio]"):
+        try:
+            label = page.evaluate(
+                "b => ((b.labels && b.labels[0] && b.labels[0].innerText) || b.closest('label, div, td, p')?.innerText || '').slice(0, 120)",
+                radio,
+            )
+            if radio.is_visible() and re.search(r"anonym|sans (vous )?identifi", label or "", re.I):
+                radio.check(timeout=4000)
+                print(f"  -> chose {label.strip()[:90]!r}")
+        except Exception as exc:  # noqa: BLE001
+            print(f"     radio failed: {type(exc).__name__}")
+
+
+def click_first(page: Page, pattern: re.Pattern[str], label: str) -> bool:
+    for el in page.query_selector_all("a, button, input[type=submit], input[type=button]"):
+        try:
+            text = (el.inner_text() or el.get_attribute("value") or el.get_attribute("title") or "").strip()
+            if text and pattern.search(text) and el.is_visible():
+                print(f"  -> clicking {text[:80]!r} ({label})")
                 el.click(timeout=8000)
-                page.wait_for_timeout(5000)
-            except Exception as exc:  # noqa: BLE001
-                print(f"     click failed: {type(exc).__name__}: {str(exc)[:160]}")
+                try:
+                    page.wait_for_load_state("networkidle", timeout=15000)
+                except Exception:  # noqa: BLE001
+                    pass
+                page.wait_for_timeout(4000)
+                return True
+        except Exception as exc:  # noqa: BLE001
+            print(f"     click failed: {type(exc).__name__}: {str(exc)[:140]}")
             return True
     print(f"  -> nothing matching ({label})")
     return False
 
 
 def main() -> int:
+    robots()
     with sync_playwright() as p:
         browser = p.chromium.launch()
         for name, url in URLS:
             print(f"\n===== {name}")
-            ctx = browser.new_context(locale="fr-FR", accept_downloads=True)
+            ctx = browser.new_context(locale="fr-FR", accept_downloads=True, viewport={"width": 1366, "height": 900})
             page = ctx.new_page()
             downloads: list[str] = []
-            page.on("download", lambda d: downloads.append(d.suggested_filename))
+
+            def on_download(d) -> None:  # type: ignore[no-untyped-def]
+                try:
+                    path = d.path()
+                    size = os.path.getsize(path) if path else -1
+                    downloads.append(f"{d.suggested_filename} ({size} octets)")
+                    if path:
+                        os.remove(path)
+                except Exception as exc:  # noqa: BLE001
+                    downloads.append(f"{d.suggested_filename} (?: {type(exc).__name__})")
+
+            page.on("download", on_download)
             try:
                 resp = page.goto(url, wait_until="domcontentloaded", timeout=45000)
-                page.wait_for_timeout(3000)
+                try:
+                    page.wait_for_load_state("networkidle", timeout=20000)
+                except Exception:  # noqa: BLE001
+                    pass
+                page.wait_for_timeout(6000)
                 print(f"  status={resp.status if resp else '?'}")
                 report(page, "page")
-                if click_first(page, DOWNLOAD, "download link", downloads):
-                    report(page, "after download link")
-                    if click_first(page, ANON, "anonymous option", downloads):
-                        report(page, "after anonymous option")
-                        click_first(page, DOWNLOAD, "download again", downloads)
+                for step, pattern in STEPS:
+                    accept_terms(page)
+                    if click_first(page, pattern, step):
+                        report(page, f"after {step}")
+                    if downloads:
+                        break
+                page.wait_for_timeout(5000)
                 print(f"  DOWNLOADS STARTED: {downloads or 'none'}")
             except Exception as exc:  # noqa: BLE001
                 print(f"  ERROR {type(exc).__name__}: {str(exc)[:300]}")
