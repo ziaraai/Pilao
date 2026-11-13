@@ -15,15 +15,14 @@ import urllib.request
 from playwright.sync_api import Page, sync_playwright
 
 URLS = [
-    ("PLACE consultation", "https://www.marches-publics.gouv.fr/entreprise/consultation/3091292?orgAcronyme=h8j"),
     ("PLACE ancienne adresse", "https://www.marches-publics.gouv.fr/?page=Entreprise.EntrepriseDetailConsultation&id=3094882&orgAcronyme=f5j"),
     ("Atexo Maximilien", "https://marches.maximilien.fr/entreprise/consultation/948922?orgAcronyme=p1v"),
-    ("Atexo Megalis", "https://marches.megalis.bretagne.bzh/entreprise/consultation/241683?orgAcronyme=f9x"),
-    ("Atexo Ternum", "https://marches.ternum-bfc.fr/entreprise/consultation/695276?orgAcronyme=e9m"),
-    ("e-marchespublics anonyme", "https://brl.e-marchespublics.com/dossier_de_consultation_marche_public_anonyme_a6dff22f74ffe517b975c8473fad8935ae7afd31"),
-    ("e-marchespublics MNHN", "https://mnhn.e-marchespublics.com/pack/annonce_marche_public_533_1187646.html"),
-    ("achatpublic fiche", "https://www.achatpublic.com/sdm/ent2/gen/ficheCsl.action?PCSLID=CSL_2026_l0LUrAK4iD"),
 ]
+CGU = [
+    "https://www.marches-publics.gouv.fr/entreprise/footer/conditions-utilisation",
+    "https://marches.maximilien.fr/entreprise/footer/conditions-utilisation",
+]
+CGU_LINES = re.compile(r"robot|automat|aspir|extraction|scrap|collecte|r[ée]utilis|interdit|t[ée]l[ée]charg|anonym|logiciel|massi", re.I)
 ROBOTS = [
     "https://www.marches-publics.gouv.fr",
     "https://marches.maximilien.fr",
@@ -38,7 +37,7 @@ STEPS = [
     ("dossier", re.compile(r"(t[ée]l[ée]charg|retir|acc[ée]d).{0,40}(dce|dossier|consultation|pi[èe]ces)|^dossier de consultation|t[ée]l[ée]charger le dce|^dce$", re.I)),
     ("anonyme", re.compile(r"anonym|sans (vous )?identifi|sans compte|rester anonyme", re.I)),
     ("valider", re.compile(r"^(valider|confirmer|continuer|suivant|t[ée]l[ée]charger( (la s[ée]lection|tout|le dce|l'ensemble).*)?|retrait anonyme)$", re.I)),
-    ("valider encore", re.compile(r"^(valider|confirmer|continuer|t[ée]l[ée]charger( (la s[ée]lection|tout|le dce|l'ensemble).*)?)$", re.I)),
+    ("fichier", re.compile(r"^t[ée]l[ée]charger le dossier de consultation$", re.I)),
 ]
 
 
@@ -126,25 +125,58 @@ def click_first(page: Page, pattern: re.Pattern[str], label: str) -> bool:
     return False
 
 
+def cgu(browser) -> None:  # type: ignore[no-untyped-def]
+    print("\n===== CGU")
+    for url in CGU:
+        page = browser.new_page()
+        try:
+            page.goto(url, wait_until="domcontentloaded", timeout=45000)
+            try:
+                page.wait_for_load_state("networkidle", timeout=20000)
+            except Exception:  # noqa: BLE001
+                pass
+            text = page.inner_text("body")
+            lines = [l.strip() for l in text.splitlines() if l.strip()]
+            print(f"  {url}: {len(lines)} lines")
+            for line in [l for l in lines if CGU_LINES.search(l)][:25]:
+                print(f"    CGU {line[:300]!r}")
+        except Exception as exc:  # noqa: BLE001
+            print(f"  {url}: {type(exc).__name__}: {str(exc)[:160]}")
+        page.close()
+
+
 def main() -> int:
-    robots()
     with sync_playwright() as p:
         browser = p.chromium.launch()
+        cgu(browser)
         for name, url in URLS:
             print(f"\n===== {name}")
             ctx = browser.new_context(locale="fr-FR", accept_downloads=True, viewport={"width": 1366, "height": 900})
             page = ctx.new_page()
+            pending: list = []  # type: ignore[type-arg]
             downloads: list[str] = []
 
             def on_download(d) -> None:  # type: ignore[no-untyped-def]
-                try:
-                    path = d.path()
-                    size = os.path.getsize(path) if path else -1
-                    downloads.append(f"{d.suggested_filename} ({size} octets)")
-                    if path:
-                        os.remove(path)
-                except Exception as exc:  # noqa: BLE001
-                    downloads.append(f"{d.suggested_filename} (?: {type(exc).__name__})")
+                pending.append(d)  # read after the click, outside the event handler
+
+            def collect() -> None:
+                import zipfile
+
+                while pending:
+                    d = pending.pop()
+                    try:
+                        path = d.path()
+                        size = os.path.getsize(path) if path else -1
+                        try:
+                            with zipfile.ZipFile(path) as z:
+                                names = [i.filename for i in z.infolist()][:30]
+                        except Exception as exc:  # noqa: BLE001
+                            names = [f"(pas un zip : {type(exc).__name__})"]
+                        downloads.append(f"{d.suggested_filename} ({size} octets) contenu={names}")
+                        if path:
+                            os.remove(path)
+                    except Exception as exc:  # noqa: BLE001
+                        downloads.append(f"{d.suggested_filename} (?: {type(exc).__name__}: {str(exc)[:120]})")
 
             page.on("download", on_download)
             try:
@@ -160,9 +192,13 @@ def main() -> int:
                     accept_terms(page)
                     if click_first(page, pattern, step):
                         report(page, f"after {step}")
-                    if downloads:
+                    if pending:
                         break
-                page.wait_for_timeout(5000)
+                for _ in range(24):  # up to 2 minutes for the zip to start
+                    if pending:
+                        break
+                    page.wait_for_timeout(5000)
+                collect()
                 print(f"  DOWNLOADS STARTED: {downloads or 'none'}")
             except Exception as exc:  # noqa: BLE001
                 print(f"  ERROR {type(exc).__name__}: {str(exc)[:300]}")
