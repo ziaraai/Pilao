@@ -1,6 +1,7 @@
 """RQ entry points. Run a worker with:  ``uv run rq worker -u $REDIS_URL``."""
 
 import uuid
+from datetime import UTC, datetime
 from typing import cast
 
 from app.ai.embeddings import get_embedder
@@ -13,7 +14,7 @@ from app.integrations.atexo import get_robot
 from app.services.alerts import run_daily
 from app.services.dce import run_process_dce
 from app.services.dce_analysis import run_analyze_dce
-from app.services.dce_retrieval import run_fetch
+from app.services.dce_retrieval import run_fetch, watch_dces
 from app.services.document_reading import get_document_reader
 from app.services.exports import run_export
 from app.services.knowledge import run_index_document
@@ -53,6 +54,14 @@ def process_dce_job(version_id: str) -> None:
             get_ocr_engine(),
             queue=get_job_queue(),
             mailer=get_mailer(),
+        )
+
+
+def watch_dces_job() -> None:
+    """Every morning: the DCE retrieved by the robot (spec « Récupération des DCE », § 4.3)."""
+    with get_sessionmaker()() as db:
+        watch_dces(
+            db, get_robot(), get_job_queue(), get_mailer(), get_host_gate(), datetime.now(UTC)
         )
 
 

@@ -22,7 +22,14 @@ from app.core.email import Email, Mailer, send_quietly
 from app.core.errors import ApiError
 from app.core.tenancy import scope_session
 from app.db.models import AuditLog, Bid, DceFetch, DceVersion, Job, Organization, Tender, User
-from app.domain.dce_sources import DceSource, PageFacts, recognize, watch_state
+from app.domain.dce_sources import (
+    PARIS,
+    DceSource,
+    PageFacts,
+    recognize,
+    watch_change,
+    watch_state,
+)
 from app.integrations.atexo import MESSAGES, DceRobot, Identity, RobotError, RobotUnavailable
 from app.integrations.robot_net import url_allowed
 from app.platform_settings import DCE_ROBOT
@@ -436,6 +443,193 @@ def notify_update(db: Session, version: DceVersion, mailer: Mailer) -> None:
     send_quietly(
         mailer, Email(to=recipient.email, subject=f"Le DCE de « {bid.title} » a changé", body=body)
     )
+
+
+# ---------- the daily watch (spec § 4.3) ----------------------------------------------------
+
+MAX_FAILURES = 3
+WATCHED_STATUSES = ("to_review", "in_progress")
+
+
+@dataclass(frozen=True)
+class WatchReport:
+    checked: int
+    changed: int
+    failed: int
+
+
+def _watched(db: Session, now: datetime) -> list[Bid]:
+    """Open dossiers of active companies with « Réponse » whose DCE the robot retrieved."""
+    retrieved = (
+        select(DceFetch.id)
+        .where(
+            DceFetch.bid_id == Bid.id,
+            DceFetch.kind == "retrieval",
+            DceFetch.status == "done",
+            DceFetch.outcome == "ok",
+        )
+        .exists()
+    )
+    bids = db.scalars(
+        select(Bid)
+        .join(Organization, Organization.id == Bid.org_id)
+        .where(
+            Bid.status.in_(WATCHED_STATUSES),
+            (Bid.deadline_at.is_(None)) | (Bid.deadline_at > now),
+            Organization.suspended_at.is_(None),
+            Organization.modules.contains(["reponse"]),
+            retrieved,
+        )
+        .order_by(Bid.created_at)
+    ).all()
+    return [b for b in bids if not (b.dce_watch or {}).get("stopped")]
+
+
+def _paris(value: datetime | None) -> str:
+    return value.astimezone(PARIS).strftime("%d/%m %H:%M") if value else "non renseignée"
+
+
+def _recipient(db: Session, bid: Bid, fallback: uuid.UUID | None) -> User | None:
+    for user_id in (bid.owner_user_id, fallback):
+        if user_id is not None and (user := db.get(User, user_id)) is not None:
+            return user
+    return None
+
+
+def _deadline_mail(
+    db: Session,
+    bid: Bid,
+    site: str,
+    old: datetime | None,
+    new: datetime,
+    requester: uuid.UUID | None,
+    mailer: Mailer,
+) -> None:
+    recipient = _recipient(db, bid, requester)
+    if recipient is None:
+        return
+    link = f"{get_settings().app_base_url}/dossiers/{bid.id}"
+    body = (
+        f"Bonjour,\n\nLa date limite de « {bid.title} » a changé sur {site} : "
+        f"{_paris(old)} → {_paris(new)} (heure de Paris).\n\n"
+        f"La date du dossier a été mise à jour :\n{link}\n\n— Pilao"
+    )
+    send_quietly(
+        mailer,
+        Email(to=recipient.email, subject=f"La date limite de « {bid.title} » a changé", body=body),
+    )
+
+
+def _check_one(
+    db: Session,
+    bid: Bid,
+    robot: DceRobot,
+    queue: JobQueue,
+    mailer: Mailer,
+    gate: HostGate,
+    now: datetime,
+) -> str | None:
+    """One check; returns ``changed``, ``unchanged``, ``failed`` or ``None`` (skipped)."""
+    src = source_for(db, bid)
+    success = last_success(db, bid)
+    if src is None or not src.automatic or success is None:
+        return None
+    if not gate.acquire(src.host):
+        return None  # a retrieval is on this site: tomorrow
+    check = DceFetch(
+        org_id=bid.org_id, bid_id=bid.id, kind="check", status="running", site=src.site
+    )
+    db.add(check)
+    db.commit()
+    previous = dict(bid.dce_watch or {})
+    try:
+        gate.wait_gap(src.host)
+        facts = robot.inspect(src)
+        if facts.closed:
+            raise RobotError("closed")
+    except (RobotError, RobotUnavailable) as exc:
+        failures = int(previous.get("failures") or 0) + 1
+        outcome = exc.outcome if isinstance(exc, RobotError) else "unavailable"
+        message = exc.message if isinstance(exc, RobotError) else MESSAGES["unavailable"]
+        bid.dce_watch = {**previous, "failures": failures, "stopped": failures >= MAX_FAILURES}
+        check.status, check.outcome, check.message = "error", outcome, message
+        check.finished_at = now
+        db.commit()
+        return "failed"
+    finally:
+        gate.release(src.host)
+    change = watch_change(previous, facts)
+    seen = previous.get("deadline_at")  # the date the platform showed last time
+    old_deadline = datetime.fromisoformat(seen) if seen else bid.deadline_at
+    if change.deadline_changed and change.new_deadline is not None:
+        bid.deadline_at = change.new_deadline  # the platform is the authority
+    # the size seen stays the old one until the update brings the new files
+    known = PageFacts(
+        (
+            previous.get("size_label")
+            if change.size_changed
+            else (facts.size_label or previous.get("size_label"))
+        ),
+        facts.deadline_at
+        or (
+            datetime.fromisoformat(previous["deadline_at"]) if previous.get("deadline_at") else None
+        ),
+        False,
+    )
+    bid.dce_watch = watch_state(known, now)
+    check.status = "done"
+    check.outcome = "changed" if (change.size_changed or change.deadline_changed) else "unchanged"
+    check.size_label, check.finished_at = facts.size_label, now
+    db.commit()
+    if change.deadline_changed and change.new_deadline is not None:
+        _deadline_mail(
+            db, bid, src.site, old_deadline, change.new_deadline, success.requested_by, mailer
+        )
+    if change.size_changed:
+        org = db.get_one(Organization, bid.org_id)
+        mode = success.mode or "anonymous"
+        if mode == "identified" and identity_for(org) is None:
+            mode = "anonymous"
+        try:
+            create_fetch(
+                db,
+                bid,
+                src,
+                kind="update",
+                mode=mode,
+                requested_by=success.requested_by,
+                queue=queue,
+            )
+        except ApiError:
+            pass  # a retrieval is already running: it brings the new files
+    return check.outcome
+
+
+def watch_dces(
+    db: Session,
+    robot: DceRobot,
+    queue: JobQueue,
+    mailer: Mailer,
+    gate: HostGate,
+    now: datetime,
+) -> WatchReport:
+    """Every morning: read each watched consultation's page and react to a change."""
+    if not robot_enabled():
+        return WatchReport(0, 0, 0)
+    checked = changed = failed = 0
+    for bid in _watched(db, now):
+        try:
+            outcome = _check_one(db, bid, robot, queue, mailer, gate, now)
+        except Exception:
+            db.rollback()
+            logger.exception("DCE watch failed for dossier %s", bid.id)
+            continue
+        if outcome is None:
+            continue
+        checked += 1
+        changed += outcome == "changed"
+        failed += outcome == "failed"
+    return WatchReport(checked, changed, failed)
 
 
 # ---------- dead attempts -------------------------------------------------------------------
