@@ -88,8 +88,22 @@ Les appels d'IA passent par LiteLLM (`app/ai/llm.py`). L'administration (lot 5, 
 - `GET /key` avec `Authorization: Bearer <clé>` : 200 et `data.usage`, `data.limit`… ; 401 pour une clé refusée. Sert à vérifier une clé avant de l'enregistrer.
 - `GET /credits` avec la clé : `data.total_credits` et `data.total_usage`, en dollars (le crédit du compte).
 
+## 8. Plateformes des acheteurs (DCE) — vérifié le 2026-11-13
+
+Essai réel depuis GitHub (ADR-045), 250 avis TED récents :
+
+| Plateforme | Avis | Retrait sans compte | Robot de Pilao |
+|---|---|---|---|
+| PLACE + Atexo régionales (Maximilien, Mégalis, Ternum, AMPA…) | 55 | oui, sans captcha ; robots.txt `Disallow:` vide | **oui** (ZIP de 11 et 12 Mo obtenus) |
+| AWS (`marches-publics.info`, `aws-achat.info`) | 65 | oui, mais code captcha (et hCaptcha) | non : récupération guidée |
+| achatpublic | 31 | robots.txt `Disallow: /`, hCaptcha | non |
+| e-marchespublics | 24 | accès anonyme derrière un captcha | non |
+| marches-securises | 25 | non testé (les avis ne donnent que l'accueil) | non |
+
+Parcours Atexo : `…/entreprise/consultation/<n>?orgAcronyme=<code>` (taille « Dossier de consultation - 10,56 Mo », date limite) → `index.php?page=Entreprise.EntrepriseDemandeTelechargementDce&id=<n>&orgAcronyme=<code>` → choix `…$choixAnonyme` ou `…$choixTelechargement` (+ `nom`, `prenom`, `email`, `raisonSocial`, `etablissementEntreprise`, `siren`, `siret`), case `…$accepterConditions`, « Valider » → « Télécharger le Dossier de consultation » (`…completeDownload`). Close ou réservée : « L'accès à cette consultation n'est pas autorisé ». **À vérifier au premier vrai usage** : le sens du champ `siret` (le robot y met les 5 derniers chiffres quand il en attend 5) et le mode identifié.
+
 ## Règles techniques communes
 
 - Client HTTP unique (`httpx`) avec timeouts, 3 tentatives avec attente exponentielle, journalisation des erreurs.
-- Respecter les limites de débit ; pas de scraping des profils acheteurs en V1.
+- Respecter les limites de débit ; sur les profils acheteurs, seulement le robot de l'ADR-045 (PLACE et Atexo, à la demande, une page toutes les 10 s par site, robots.txt, jamais de captcha).
 - Conserver la réponse brute (`tenders.raw`) pour pouvoir re-parser sans rappeler l'API.

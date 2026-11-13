@@ -50,7 +50,11 @@ export function DceSection({
     wasFetching.current = busy;
     return busy;
   });
-  const analysis = useApi<Analysis>(`/bids/${bidId}/analysis`);
+  // read only when Pilao brought an update: the banner's « analysed yet? »
+  const hasUpdate = versions.data?.some((v) => v.origin === "update") ?? false;
+  const analysis = useApi<Analysis>(
+    hasUpdate ? `/bids/${bidId}/analysis` : null,
+  );
   const deposit = useAction();
   const kind = useAction();
   const analyse = useAction();

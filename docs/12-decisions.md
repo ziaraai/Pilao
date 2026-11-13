@@ -24,7 +24,7 @@ Format : numéro, date, décision, raison, statut. Ajouter une entrée pour chaq
 - **Date** : 2026-11-04
 - **Décision** : l'utilisateur ouvre le lien du DCE et dépose les fichiers.
 - **Raison** : les profils acheteurs n'ont pas d'API publique et demandent souvent un compte ; l'automatisation est longue et fragile.
-- **Statut** : validé.
+- **Statut** : **remplacée par l'ADR-045** (2026-11-13) : un essai sur les vraies plateformes a montré que PLACE et les plateformes Atexo permettent un retrait sans compte ni captcha.
 
 ## ADR-005 — Choix des modèles par tâche
 - **Date** : à remplir après la phase 0.
@@ -461,3 +461,18 @@ Format : numéro, date, décision, raison, statut. Ajouter une entrée pour chaq
   - Restent sur le serveur : base, stockage, antivirus, e-mails, modèle d'indexation (en changer oblige à tout réindexer), taux dollar → euro.
 - **Alternatives écartées** : l'admin réécrit `app.env` et redémarre les conteneurs (il faudrait piloter Docker ; une erreur arrête le site) ; les réglages dans Redis (ni durable, ni sauvegardé) ; taper le nom du modèle (une faute ne se voit qu'à l'usage).
 - **Statut** : validé (lot 5 livré).
+
+## ADR-045 — Récupération des DCE : un robot sur PLACE et Atexo, une aide ailleurs
+
+- **Date** : 2026-11-13
+- **Contexte** : chercher et télécharger le DCE de chaque annonce prend du temps à l'entreprise. Un essai sur les vraies plateformes (depuis GitHub, 2026-11-13) a montré, sur 250 avis TED récents : PLACE et les plateformes Atexo régionales (55 avis) permettent un retrait sans compte ni captcha, robots.txt autorise tout, leurs conditions d'utilisation n'interdisent pas l'accès automatisé, et deux vrais ZIP ont été obtenus (11 et 12 Mo) ; AWS (65), e-marchespublics (24) et achatpublic (31, qui interdit aussi les robots) demandent un captcha. Spécification : `docs/superpowers/specs/2026-11-13-recuperation-dce-design.md`.
+- **Décision** :
+  - **Un robot** (navigateur Chromium sans écran, Playwright, dans le worker) fait sur PLACE et toute plateforme Atexo le parcours d'une personne : page de la consultation, formulaire de retrait, conditions d'utilisation, téléchargement. Le ZIP suit le chemin d'un dépôt (antivirus, décompression sûre, typage, version, différences, analyse).
+  - **Ailleurs, une récupération guidée** : la page ouverte au bon endroit, un aide-mémoire par plateforme, la zone de dépôt. **Jamais de captcha** contourné ou résolu ; robots.txt respecté ; le robot se présente (« Pilao/1.0 », lien vers les mentions légales) ; une tâche à la fois par site, 10 s entre deux pages ; seulement des adresses publiques en HTTPS (protection du réseau interne).
+  - **Au nom de l'entreprise par défaut, avec son accord** au premier clic (raison sociale, SIREN/SIRET, contact) : l'acheteur la prévient des modifications. Anonymement si elle le préfère, ou si la plateforme refuse l'identification.
+  - **Surveillance quotidienne** des DCE récupérés par le robot jusqu'à la date limite : taille et date limite relues sur la page publique ; une nouvelle version est récupérée seule, ses différences montrées et un e-mail envoyé, **son analyse attend un clic** ; la date limite du dossier suit la plateforme.
+  - **Crédits** : récupérer est gratuit ; le clic « Récupérer le DCE » vaut un dépôt (l'analyse coûte ses crédits) ; une mise à jour n'est jamais analysée sans clic.
+  - **Rien n'est téléchargé quand on clique « Suivre »** : un retrait au nom de l'entreprise l'enregistre chez l'acheteur, ce doit être voulu.
+  - Un interrupteur dans l'admin (`dce_robot.enabled`, lot 5) coupe tout si une plateforme se plaint ; le mode guidé reste.
+- **Alternatives écartées** : appels HTTP sans navigateur (le formulaire PRADO d'Atexo dépend de son script ; fragile) ; extension de navigateur (publication sur trois magasins, installation chez chaque utilisateur ; à revoir si le dépôt à la main gêne) ; résoudre les captchas (contraire à la volonté des sites, risque juridique).
+- **Statut** : validé ; à vérifier au premier vrai usage avec l'entreprise d'Abdraouf (champ SIRET d'Atexo, mode identifié). Lot suivant : le DCE récupéré par l'équipe Pilao pour les sites à captcha.

@@ -90,6 +90,8 @@ Reste à faire :
   - [x] Lot 3 — socle des modules (ADR-041) : deux modules, « Veille des annonces » et « Réponse aux appels d'offres », activés par défaut ; carte « Modules » de la fiche, colonne de la liste, écran « Modules » ; menu, pages, tableau de bord, profil et travail de fond qui suivent les modules actifs ; rien n'est effacé (US-6.9, US-6.10)
   - [x] Lot 4 — formules et crédits (ADR-043) : formules réglées dans l'admin (« Découverte » par défaut, « Pilote » pour les entreprises existantes), prix en crédits de 4 actions payantes avec leur coût réel, crédits du mois et supplémentaires, recharges à la main, remboursement automatique des échecs ; le client ne voit que des crédits (US-6.11 à US-6.14) ; Stripe plus tard
   - [x] Lot 5 — réglages de la plateforme : modèle d'IA par tâche (catalogue OpenRouter, essai), clé OpenRouter chiffrée en base, imports TED/BOAMP (actif, « Importer maintenant »), budget d'IA et adresses (ADR-044)
+- [x] P4-07 Récupération des DCE (US-3.4, US-3.5, US-6.19, ADR-045) : robot sur PLACE et les plateformes Atexo (au nom de l'entreprise ou anonymement), récupération guidée ailleurs, surveillance quotidienne, interrupteur dans l'admin — reste le premier vrai usage avec Abdraouf (Q18)
+- [ ] P4-08 DCE des sites à captcha récupéré par l'équipe Pilao (lot suivant, Q17)
 
 ## V2 (après validation)
 

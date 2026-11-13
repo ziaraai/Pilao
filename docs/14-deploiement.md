@@ -131,6 +131,13 @@ docker run --rm -v pilao_files:/data -v /var/backups/pilao:/backup alpine:3.20 s
 ./pilao.sh start api worker scheduler web
 ```
 
+### Robot de récupération des DCE (ADR-045)
+
+- L'image de l'API, du worker et du planificateur contient Chromium (sa version sans écran, dans `/opt/pw-browsers`, ≈ 300 Mo de plus) ; le job `images` de la CI vérifie qu'il démarre.
+- Le worker doit pouvoir joindre en HTTPS les plateformes des acheteurs (`www.marches-publics.gouv.fr`, `marches.maximilien.fr`…) : pas de pare-feu sortant qui les bloque.
+- `DCE_ROBOT_ALLOW_PRIVATE_HOSTS` reste faux (le serveur refuse de démarrer sinon).
+- Premier contrôle après la mise en ligne : dans un dossier d'essai, coller le lien d'une consultation PLACE ouverte, « Récupérer le DCE » en anonyme, vérifier les pièces, puis supprimer le dossier. En cas de souci avec une plateforme : Admin › Réglages › « Robot de récupération des DCE » coupé (le mode guidé reste).
+
 ## Avant d'ouvrir aux clients
 
 - [ ] Compléter `apps/web/lib/legal.ts` (éditeur, hébergeur, e-mails, sauvegardes, prix, plafond de responsabilité, tribunal). Les pages légales affichent `[À COMPLÉTER : …]` pour tout ce qui manque, et `missingFacts()` en donne la liste.

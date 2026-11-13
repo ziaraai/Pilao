@@ -27,12 +27,14 @@ Les mémoires techniques et les prix sont des secrets d'affaires pour nos client
 - **Suspension d'une entreprise** : sessions fermées, connexion refusée (le message n'apparaît qu'après le bon mot de passe), liens d'e-mail refusés, aucun envoi, veille arrêtée ; rien n'est effacé.
 - **Mot de passe oublié** : même réponse que le compte existe ou non ; lien de 1 heure à usage unique (seule son empreinte est en base), 5 envois par heure et par adresse, limite par adresse IP ; le changement ferme toutes les autres sessions.
 - **Clé OpenRouter réglée dans l'admin** (lot 5, ADR-044) : vérifiée auprès d'OpenRouter, puis le code de l'application d'authentification est redemandé (qui choisit la clé reçoit tous les textes envoyés à l'IA), chiffrée en base (Fernet, clé dérivée d'`APP_SECRET_KEY`, usage « openrouter_api_key »), jamais renvoyée par l'API, jamais au journal (seuls ses 4 derniers caractères), retirée des messages d'erreur ; la clé des secrets GitHub reste la clé de secours.
+- **Robot de récupération des DCE** (ADR-045) : n'ouvre que des adresses publiques en HTTPS (vérifié avant de mettre en file, sans réseau, puis à chaque requête du navigateur, après résolution du nom) pour qu'un lien collé ne fasse jamais joindre le réseau interne ; `DCE_ROBOT_ALLOW_PRIVATE_HOSTS` est refusé en production ; robots.txt respecté, jamais de captcha, il se présente (`Pilao/1.0`, lien vers les mentions légales) ; images et polices non chargées ; le ZIP passe par l'antivirus et la décompression sûre comme un dépôt.
 - Sauvegardes quotidiennes chiffrées, restauration testée.
 - Analyse antivirus des fichiers déposés (ClamAV ou équivalent).
 
 ## RGPD
 
 - Données personnelles traitées : comptes utilisateurs, dirigeants (issus des registres publics), CV et noms dans les moyens humains, éventuellement des photos.
+- **Transmises aux plateformes des acheteurs** (ADR-045), seulement à la demande de l'entreprise et avec son accord au premier clic : raison sociale, SIREN/SIRET et contact (prénom, nom, e-mail) pour retirer un DCE en son nom ; dit dans la politique de confidentialité.
 - Base légale : exécution du contrat (abonnement).
 - Pilao est **sous-traitant** pour les données que les clients déposent : contrat de sous-traitance (DPA) à faire signer.
 - Droits : export et suppression complète des données de l'org sur demande et à la résiliation (job de purge, y compris S3 et index vectoriel). **Fait** (ADR-026) : Profil > Vos données, export ZIP et suppression programmée à 30 jours, purge horaire avec reçu `purge_logs`.

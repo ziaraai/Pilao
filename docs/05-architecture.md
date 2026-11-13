@@ -69,6 +69,8 @@ pilao/
 | `analyze_dce(bid_id)` | Après `process_dce` | Fiche d'analyse + exigences |
 | `generate_memoir(bid_id)` | Action utilisateur | Plan → chapitres → matrice |
 | `read_compliance_document(doc_id)` | Dépôt d'une attestation | Lecture IA des dates |
+| `fetch_dce(fetch_id)` | « Récupérer le DCE », ou une mise à jour trouvée | Robot Playwright (Chromium sans écran, `app/integrations/atexo.py`) sur PLACE et Atexo : ZIP déposé comme un dépôt (ADR-045) ; une tâche à la fois par site (verrou Redis), 600 s au plus |
+| `watch_dces` | Planifié, 05:40 UTC (06:40 Paris en hiver) | Relit la page des consultations récupérées par le robot : nouvelle version, date limite, 3 échecs → surveillance interrompue |
 | `send_daily_digest` | Planifié, 7 h (Paris) | E-mail des nouvelles annonces |
 | `check_expirations` | Planifié, 1×/jour | Alertes J-30 / J-7 |
 
@@ -121,6 +123,10 @@ SOFFICE_PATH=soffice
 PDF_TIMEOUT_SECONDS=180
 # E-mail (plus tard)
 SMTP_URL=...
+# Robot de récupération des DCE (ADR-045) ; l'admin peut le couper (dce_robot.enabled)
+DCE_ROBOT_ENABLED=true
+DCE_ROBOT_ALLOW_PRIVATE_HOSTS=false   # vrai seulement pour les tests et le parcours local
+DCE_ROBOT_BROWSER_PATH=               # vide : le Chromium installé par Playwright (/opt/pw-browsers dans l'image)
 ```
 
 ## Principes

@@ -159,7 +159,25 @@ bids (
   result_rank int null, result_notes text null, owner_user_id uuid
 )
 
-dce_versions ( id, org_id, bid_id, version int, uploaded_by uuid, status text, diff_summary text null )
+dce_versions (
+  id, org_id, bid_id, version int, uploaded_by uuid, status text, diff_summary text null,
+  origin text default 'deposit',        -- deposit | retrieval (robot) | update (surveillance), ADR-045
+  source_url text null                  -- le lien d'où le robot l'a récupérée
+)
+
+-- Récupération des DCE (migration 0028, ADR-045) : bids.dce_url (lien collé), bids.dce_watch jsonb
+-- (taille, date limite, dernière vérification, échecs, interrompue) ; organizations.dce_retrieval_mode
+-- (identified | anonymous | null = demander), buyer_contact_first_name / _last_name / _email
+dce_fetches (
+  id, org_id, bid_id,
+  kind text,                            -- retrieval | update | check
+  mode text null,                       -- identified | anonymous
+  status text,                          -- pending | running | done | error
+  outcome text null,                    -- ok, unchanged, changed, closed, unreadable, refused_identity,
+                                        -- too_big, captcha, robots, unavailable, disabled, busy
+  message text null, site text, size_label text null,
+  dce_version_id uuid null, requested_by uuid null, created_at, finished_at
+)  -- une seule récupération active par dossier (index unique partiel)
 
 dce_files (
   id, org_id, dce_version_id, file_id,

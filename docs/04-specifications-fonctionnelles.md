@@ -96,6 +96,20 @@ Je dépose le ZIP ou les fichiers du DCE dans un dossier.
 - CA5 : pièces acceptées : PDF, Word (DOCX, DOC), Excel (XLSX, XLS), LibreOffice (ODT, ODS), images ; les documents texte non PDF gardent leurs numéros de page (ADR-034).
 - CA4 : un nouveau dépôt (DCE modifié) crée une nouvelle version et signale les différences.
 
+**US-3.4 Récupérer le DCE** (ADR-045)
+Dans le dossier, je récupère le DCE sans le chercher.
+- CA1 : sur PLACE et une plateforme Atexo (lien de consultation avec son numéro et le code de l'acheteur), « Récupérer le DCE » : Pilao télécharge le ZIP et le dépose comme un dépôt (pièces typées, version, analyse qui coûte ses crédits habituels).
+- CA2 : au premier clic, je choisis « Au nom de [entreprise] » (recommandé : raison sociale, SIRET et contact transmis, conditions d'utilisation de la plateforme acceptées en mon nom) ou « Anonymement », et je peux retenir ce choix ; modifiable dans le profil (« Récupération des DCE »).
+- CA3 : ailleurs (AWS, achatpublic, e-marchespublics, marches-securises…) : « Ouvrir la page du DCE », un aide-mémoire de 3 lignes propre au site, la zone de dépôt ; sans lien ou avec un lien vers l'accueil d'une plateforme, je colle le lien de la consultation.
+- CA4 : un refus est expliqué (consultation close ou réservée, page non comprise, identification refusée → « Récupérer anonymement pour ce dossier », DCE de plus de 250 Mo, vérification humaine demandée, robots refusés, plateforme sans réponse → « Réessayer ») et le dépôt à la main reste possible.
+- CA5 : jamais de captcha contourné ; robots.txt respecté ; une page toutes les 10 s au plus par site ; rien n'est téléchargé quand je clique « Suivre » une annonce.
+
+**US-3.5 Surveillance du DCE** (ADR-045)
+Chaque matin jusqu'à la date limite, Pilao relit la page de la consultation des DCE qu'il a récupérés.
+- CA1 : taille du dossier changée → nouvelle version récupérée, différences montrées, e-mail « Le DCE de « … » a changé », bandeau « Le DCE a changé » avec « Analyser la nouvelle version » (jamais d'analyse sans clic).
+- CA2 : date limite changée → la date du dossier suit la plateforme, e-mail « La date limite de « … » a changé ».
+- CA3 : « Surveillé par Pilao — dernière vérification : … » ; après 3 échecs de suite, « Surveillance interrompue » ; une récupération réussie la relance.
+
 **US-3.2 Fiche d'analyse**
 Le système produit une fiche d'analyse structurée (`schemas/dce_analysis.schema.json`).
 - CA1 : infos clés : acheteur, objet, lots, montant estimé, durée, date et heure limite, visite (obligatoire ?, date), date limite des questions.
@@ -269,8 +283,11 @@ Pour TED et BOAMP : « Actif » (le planificateur n'importe que les sources acti
 **US-6.18 Les réglages généraux**
 Budget d'IA maximum par entreprise et par mois (1 à 10 000 €), adresse de support (« Contactez Pilao : … »), adresse des avis des testeurs ; chacun avec sa valeur du serveur et « Revenir à la valeur du serveur ». Un réglage compte partout en moins d'une minute et va au journal (avant → après).
 
+**US-6.19 Le robot de récupération des DCE** (ADR-045)
+Dans « Réglages », un interrupteur coupe le robot pour tous les clients (bouton « Récupérer » remplacé par le mode guidé, surveillance arrêtée) ; réussites et échecs sur 24 h ; au journal. « À surveiller » signale les pages que le robot ne comprend plus et les plateformes sans réponse.
+
 ---
 
 ## Hors périmètre V1
 
-Téléchargement automatique des DCE, chiffrage, dépôt de l'offre, marchés privés, application mobile, analyse DECP, facturation Stripe (prévoir l'emplacement, ne pas coder).
+Téléchargement automatique des DCE hors PLACE et plateformes Atexo (sites à captcha : récupération guidée), chiffrage, dépôt de l'offre, marchés privés, application mobile, analyse DECP, facturation Stripe (prévoir l'emplacement, ne pas coder).

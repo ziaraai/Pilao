@@ -807,6 +807,69 @@ let current; // the page, for a screenshot when a step fails
     await page.getByRole("heading", { level: 1, name: title }).waitFor();
   }
   step("legal pages reachable from the footer");
+
+  // 12b. DCE retrieval (spec « Récupération des DCE »): a fake Atexo platform on :8765
+  // (`python -m tests.fixtures.fake_atexo`), the worker's robot allowed on local addresses.
+  const ATEXO = "http://127.0.0.1:8765";
+  async function newBid(title) {
+    await page.goto(`${WEB}/dossiers`);
+    await page.reload();
+    await page.getByLabel("Intitulé").fill(title);
+    await page.getByRole("button", { name: "Créer", exact: true }).click();
+    await page.waitForURL(/\/dossiers\/[0-9a-f-]+$/);
+    return page.url();
+  }
+  async function pasteLink(url) {
+    await page.getByLabel("Collez le lien de la consultation").fill(url);
+    await page
+      .getByRole("button", { name: "Enregistrer", exact: true })
+      .click();
+  }
+  await newBid("Nettoyage PLACE E2E");
+  await pasteLink(`${ATEXO}/entreprise/consultation/1001?orgAcronyme=t1x`);
+  await page
+    .getByRole("button", { name: "Récupérer le DCE", exact: true })
+    .click();
+  const choice = page.getByRole("dialog", {
+    name: "Comment récupérer le DCE ?",
+  });
+  await choice.getByLabel("Prénom").fill("Camille");
+  await choice.getByLabel("Nom", { exact: true }).fill("Durand");
+  await choice.getByLabel("E-mail du contact").fill("camille@example.fr");
+  await choice.getByRole("button", { name: "Récupérer le DCE" }).click();
+  await page
+    .getByRole("cell", { name: "CCTP.pdf", exact: true })
+    .waitFor({ timeout: 150000 });
+  await page.getByText("Récupéré sur 127.0.0.1", { exact: false }).waitFor();
+  await page.screenshot({ path: `${S}/dce-recupere.png`, fullPage: true });
+  step(
+    "DCE retrieved by the robot on a (fake) Atexo platform, on the company's behalf, pieces read",
+  );
+  await newBid("Nettoyage AWS E2E");
+  await pasteLink(
+    "https://www.marches-publics.info/mpiaws/index.cfm?fuseaction=dematEnt.login&IDM=1878216",
+  );
+  await page.getByRole("link", { name: "Ouvrir la page du DCE" }).waitFor();
+  await page
+    .getByText("1. Cliquez sur « retirer le DCE en mode anonyme ».")
+    .waitFor();
+  await page.getByText("Glissez ici le ZIP téléchargé").first().waitFor();
+  step("guided retrieval on AWS: the page's link, the memo, the drop zone");
+  const robotOffBid = await newBid("Nettoyage Atexo sans robot E2E");
+  await pasteLink(`${ATEXO}/entreprise/consultation/1002?orgAcronyme=t1x`);
+  await page
+    .getByRole("button", { name: "Récupérer le DCE", exact: true })
+    .waitFor();
+  await page.goto(`${WEB}/profil?onglet=identite`);
+  const remembered = page.getByRole("radio", {
+    name: "Au nom de l'entreprise (recommandé)",
+  });
+  await remembered.waitFor();
+  if (!(await remembered.isChecked()))
+    throw new Error("the retrieval mode was not remembered");
+  if ((await page.getByLabel("Prénom du contact").inputValue()) !== "Camille")
+    throw new Error("the buyers' contact was not saved");
+  step("profile: the remembered mode and the buyers' contact");
   await page.goto(`${WEB}/profil`);
 
   // 14. Platform administration (US-6.1, US-6.2): its own account, created from the server
@@ -1216,6 +1279,23 @@ let current; // the page, for a screenshot when a step fails
       disabled: true,
     })
     .waitFor(); // saved: the value shown is the one typed
+  // the DCE robot switched off: the client is guided, then it is switched on again
+  await admin.getByLabel("Robot de récupération des DCE actif").click();
+  await admin.getByText("Coupé — mode guidé pour tous les clients").waitFor();
+  await page.goto(robotOffBid);
+  await page.getByRole("link", { name: "Ouvrir la page du DCE" }).waitFor();
+  if (
+    await page
+      .getByRole("button", { name: "Récupérer le DCE", exact: true })
+      .count()
+  )
+    throw new Error("the robot's button is still shown");
+  await admin.getByLabel("Robot de récupération des DCE actif").click();
+  await admin.getByText(/^Activé — /).waitFor();
+  await page.reload();
+  await page
+    .getByRole("button", { name: "Récupérer le DCE", exact: true })
+    .waitFor();
   await admin.screenshot({ path: `${S}/admin-reglages.png`, fullPage: true });
   await page.goto(`${WEB}/profil?onglet=formule`);
   await page
@@ -1230,7 +1310,7 @@ let current; // the page, for a screenshot when a step fails
   ])
     await admin.getByRole("cell", { name: label }).first().waitFor();
   step(
-    "settings: a model tried then saved, the key replaced (never shown again), TED off and on, imported now, the support address seen by the client, all in the journal",
+    "settings: a model tried then saved, the key replaced (never shown again), TED off and on, imported now, the support address seen by the client, the DCE robot off then on, all in the journal",
   );
   // the account closed from the server: the next screen asks to sign in again
   execFileSync(PY, ["-m", "app.cli", "admin-access", adminEmail, "--disable"], {

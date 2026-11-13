@@ -1,7 +1,7 @@
 # Récupération des DCE — conception
 
 - **Date** : 2026-11-13
-- **Statut** : à valider.
+- **Statut** : validé et livré.
 - **Stories** : US-3.4 (récupérer le DCE), US-3.5 (surveillance du DCE), US-6.19 (interrupteur
   du robot dans l'administration) ; ADR-045, qui remplace l'ADR-004.
 - **S'appuie sur** : US-3.1 et ADR-014 (dépôt du DCE : versions, décompression sûre, typage,

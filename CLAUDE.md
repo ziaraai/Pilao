@@ -62,12 +62,13 @@ Ce fichier est le point d'entrée. Lis-le en entier au début de chaque session,
 2. Chaque information extraite d'un DCE garde sa **source** (fichier + page).
 3. Les données d'une entreprise ne servent **jamais** à générer pour une autre entreprise.
 4. Le plan imposé par le RC prime toujours sur le plan modèle de l'entreprise.
-5. Pas de téléchargement automatique des DCE en V1 : l'utilisateur dépose le DCE (voir ADR-004).
+5. Le DCE n'est récupéré par le robot que sur PLACE et les plateformes Atexo, à la demande de l'entreprise (au nom de l'entreprise avec son accord, ou anonymement) ; **jamais** de captcha contourné, robots.txt respecté, adresses publiques seulement ; ailleurs, l'utilisateur dépose le DCE avec une aide (ADR-045, qui remplace l'ADR-004).
 
 ## 6. Phase en cours
 
 Phases 1 (socle) et 2 (mémoire, documents, export) faites ; Phase 3 (veille) faite : TED et BOAMP importés toutes les 2 h (ADR-036, `docs/10-roadmap-taches.md`).
 Administration de la plateforme (back-office du SaaS, ADR-040) : lot 1 fait (compte super admin séparé, supervision en lecture seule sur `/admin`) ; lot 2 fait (créer, suspendre, réactiver, supprimer une entreprise, dépanner ses utilisateurs, journal ; « Mot de passe oublié ? » côté client, ADR-042) ; lot 3 fait (deux modules activables par entreprise, « Veille des annonces » et « Réponse aux appels d'offres », registre `app/modules.py`, ADR-041) ; lot 4 fait (formules et crédits réglés dans l'admin, prix des actions en crédits, journal des crédits, le client ne voit jamais d'euros, ADR-043) ; lot 5 fait (réglages dans l'admin : modèle d'IA par tâche choisi dans le catalogue OpenRouter et essayé, clé OpenRouter chiffrée, imports TED/BOAMP, budget d'IA et adresses ; la valeur de l'admin passe avant celle du serveur, ADR-044).
+Récupération des DCE faite (ADR-045) : « Récupérer le DCE » dans le dossier (robot Playwright dans le worker sur PLACE et Atexo, au nom de l'entreprise ou anonymement), récupération guidée ailleurs (aide-mémoire, dépôt du ZIP), surveillance chaque matin (nouvelle version, date limite), interrupteur du robot dans l'admin. Lot suivant prévu : le DCE récupéré par l'équipe Pilao pour les sites à captcha (`docs/13-questions-ouvertes.md`).
 En attente : **Phase 0 — test des modèles d'IA** (clé OpenRouter, 3 vrais DCE + mémoires techniques + plan type envoyés par Abdraouf, à placer dans `samples/` — dossier **non versionné**, ajouté au `.gitignore`).
 
 ## 7. Commandes (à compléter quand le repo sera initialisé)
