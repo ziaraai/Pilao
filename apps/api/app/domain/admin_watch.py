@@ -20,6 +20,7 @@ CREDIT_LINES = 10  # lot 4: companies without credits shown by name, the others 
 # ``jobs.kind`` -> what the job does, in the words of the interface.
 JOB_LABELS = {
     "process_dce": "Lecture du DCE",
+    "fetch_dce": "Récupération du DCE",
     "analyze_dce": "Analyse du DCE",
     "index_knowledge_document": "Lecture d'un document",
     "read_compliance_document": "Lecture d'une attestation",
@@ -81,7 +82,7 @@ class OrgActivity:
 @dataclass(frozen=True)
 class WatchItem:
     level: Literal["red", "amber"]
-    kind: Literal["import", "job", "ai", "inactive", "credits", "settings"]
+    kind: Literal["import", "job", "ai", "inactive", "credits", "settings", "robot"]
     title: str
     detail: str | None
     at: datetime | None
@@ -147,6 +148,19 @@ def _inactive(now: datetime, orgs: list[OrgActivity]) -> list[WatchItem]:
     return items
 
 
+def _robot(unreadable: int, unavailable: int) -> list[WatchItem]:
+    """The DCE robot over 24 hours (spec « Récupération des DCE », § 4.5): a page it no longer
+    reads means the platform changed; a platform that does not answer may only be down."""
+    items = []
+    if unreadable:
+        title = f"Robot des DCE : {unreadable} page(s) non comprise(s) en 24 h"
+        items.append(WatchItem("red", "robot", title, None, None, None))
+    if unavailable:
+        title = f"Robot des DCE : {unavailable} plateforme(s) sans réponse en 24 h"
+        items.append(WatchItem("amber", "robot", title, None, None, None))
+    return items
+
+
 def watch(
     now: datetime,
     imports: list[ImportState],
@@ -156,6 +170,7 @@ def watch(
     orgs: list[OrgActivity],
     out_of_credits: list[tuple[uuid.UUID, str]] | None = None,
     settings_alerts: list[WatchItem] | None = None,
+    robot: tuple[int, int] = (0, 0),
 ) -> tuple[list[WatchItem], int]:
     """The lines to show, and how many job issues were left out (beyond ten). Lot 5: the
     red settings lines (an unreadable key) go with the reds, the orange ones come last."""
@@ -163,6 +178,7 @@ def watch(
     alerts = settings_alerts or []
     reds = job_items + _imports(now, imports) + _ai(ai_calls, ai_failures)
     reds += [a for a in alerts if a.level == "red"]
+    reds += _robot(*robot)
     reds.sort(key=lambda i: (i.at is None, -(i.at.timestamp() if i.at else 0)))
     out = out_of_credits or []
     empty = [  # lot 4: a good moment to offer a top-up or a bigger plan

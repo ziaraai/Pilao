@@ -11,6 +11,8 @@ from app.schemas.admin import (
     ApiKeyIn,
     ApiKeyOut,
     CatalogueModelOut,
+    DceRobotSettingOut,
+    DceRobotSwitchIn,
     GeneralSettingOut,
     GeneralValueIn,
     ImportSettingOut,
@@ -85,6 +87,20 @@ def import_now(
 ) -> Response:
     svc.start_import(db, ctx.admin, queue, source, client_ip(request))
     return Response(status_code=202)
+
+
+@router.put("/dce-robot")
+def switch_dce_robot(
+    data: DceRobotSwitchIn, request: Request, ctx: CurrentAdmin, db: AdminDb
+) -> DceRobotSettingOut:
+    """The DCE robot on or off for every company (spec « Récupération des DCE », § 4.5)."""
+    return svc.set_dce_robot(db, ctx.admin, data.enabled, client_ip(request))
+
+
+@router.delete("/dce-robot", status_code=204)
+def reset_dce_robot(request: Request, ctx: CurrentAdmin, db: AdminDb) -> Response:
+    svc.reset_dce_robot(db, ctx.admin, client_ip(request))
+    return Response(status_code=204)
 
 
 @router.put("/general/{name}")

@@ -74,7 +74,7 @@ class CountersOut(BaseModel):
 
 class WatchItemOut(BaseModel):
     level: Literal["red", "amber"]
-    kind: Literal["import", "job", "ai", "inactive", "credits", "settings"]
+    kind: Literal["import", "job", "ai", "inactive", "credits", "settings", "robot"]
     title: str
     detail: str | None
     at: datetime | None
@@ -554,12 +554,27 @@ class GeneralSettingOut(BaseModel):
     source: Origin
 
 
+class DceRobotSettingOut(BaseModel):
+    """The DCE robot's switch (spec « Récupération des DCE », § 4.5) and its last day."""
+
+    enabled: bool
+    origin: Origin
+    server_value: bool
+    succeeded_24h: int
+    failed_24h: int
+
+
+class DceRobotSwitchIn(BaseModel):
+    enabled: bool
+
+
 class SettingsOut(BaseModel):
     models: list[ModelSettingOut]
     embedding_model: str
     api_key: ApiKeyOut
     imports: list[ImportSettingOut]
     general: list[GeneralSettingOut]
+    dce_robot: DceRobotSettingOut
 
 
 class CatalogueModelOut(BaseModel):

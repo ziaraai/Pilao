@@ -14,6 +14,7 @@ from app.db.models import (
     DceVersion,
     Organization,
     Requirement,
+    User,
 )
 from app.routers.files import Storage, _scanner
 from app.schemas.bids import (
@@ -54,7 +55,13 @@ def _version_out(db: ScopedDb, version: DceVersion) -> DceVersionOut:
         select(DceFile).where(DceFile.dce_version_id == version.id).order_by(DceFile.path)
     )
     out = DceVersionOut.model_validate(version)
-    return out.model_copy(update={"files": [DceFileOut.model_validate(f) for f in files]})
+    uploader = db.get(User, version.uploaded_by) if version.uploaded_by else None
+    return out.model_copy(
+        update={
+            "files": [DceFileOut.model_validate(f) for f in files],
+            "uploaded_by_name": (uploader.full_name or uploader.email) if uploader else None,
+        }
+    )
 
 
 @router.post("/bids", status_code=201)

@@ -562,3 +562,32 @@ def test_a_stuck_job_that_was_retried_or_is_too_old_is_not_shown(
         i["title"] for i in admin.get("/admin/overview").json()["watch"] if i["kind"] == "job"
     ]
     assert watched == ["Lecture des documents du profil bloquée"]
+
+
+def test_robot_issues_in_watch(make_client: Factory, outbox: Outbox, db: Session) -> None:
+    from app.db.models import DceFetch
+    from tests.db.test_tenancy import make_org
+
+    now = datetime.now(UTC)
+    for n, outcomes in ((901, ("unreadable", "unreadable")), (902, ("unavailable", "closed"))):
+        bid = seed_bid(db, make_org(db, n).id, title=f"Dossier {n}")
+        for outcome in outcomes:
+            db.add(
+                DceFetch(
+                    org_id=bid.org_id,
+                    bid_id=bid.id,
+                    kind="check",
+                    status="error",
+                    outcome=outcome,
+                    site="PLACE",
+                    created_at=now - timedelta(hours=2),
+                )
+            )
+    db.commit()
+    admin, _ = activated_admin(make_client, db)
+    titles = {(i["kind"], i["title"]) for i in admin.get("/admin/overview").json()["watch"]}
+    robot = {t for k, t in titles if k == "robot"}
+    assert robot == {
+        "Robot des DCE : 2 page(s) non comprise(s) en 24 h",
+        "Robot des DCE : 1 plateforme(s) sans réponse en 24 h",
+    }  # an expected refusal (a closed consultation) is not shown

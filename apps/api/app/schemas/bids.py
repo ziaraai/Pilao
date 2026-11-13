@@ -83,6 +83,10 @@ class DceVersionOut(BaseModel):
     diff: dict[str, Any] | None
     diff_summary: str | None
     created_at: datetime
+    # deposited, retrieved by the robot, or an update found by its watch (« Récupération des DCE »)
+    origin: Literal["deposit", "retrieval", "update"] = "deposit"
+    source_url: str | None = None
+    uploaded_by_name: str | None = None
     files: list[DceFileOut] = Field(default_factory=list)
 
 

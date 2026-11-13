@@ -1,5 +1,6 @@
 """Administration, lot 5: the settings screen — AI models and the OpenRouter key (spec §3)."""
 
+import uuid
 from collections.abc import Callable
 from datetime import UTC, datetime, timedelta
 from typing import Any
@@ -419,3 +420,64 @@ def test_replacing_the_key_asks_for_the_code(
     assert len(journal(db, "step_up_failed")) == 1
     assert client.put(url, json={"key": GOOD_KEY, "code": codes[0]}).status_code == 200
     assert runtime.api_key() == GOOD_KEY
+
+
+def test_dce_robot_switch(
+    make_client: Factory, outbox: Outbox, db: Session, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    from app.db.models import Bid, DceFetch
+    from tests.api.test_dce_retrieval_service import PLACE
+
+    monkeypatch.setattr(get_settings(), "dce_robot_enabled", True)
+    customer = signed_in_client(make_client, outbox)
+    bid_id = customer.post("/bids", json={"title": "Nettoyage"}).json()["id"]
+    customer.put(f"/bids/{bid_id}/dce/source", json={"url": PLACE})
+    bid = db.get_one(Bid, uuid.UUID(bid_id))
+    now = datetime.now(UTC)
+    for status, outcome in (("done", "ok"), ("done", "ok"), ("error", "unreadable")):
+        db.add(
+            DceFetch(
+                org_id=bid.org_id,
+                bid_id=bid.id,
+                kind="check",
+                status=status,
+                outcome=outcome,
+                site="PLACE",
+                created_at=now - timedelta(hours=1),
+            )
+        )
+    db.add(  # older than a day: not counted
+        DceFetch(
+            org_id=bid.org_id,
+            bid_id=bid.id,
+            kind="check",
+            status="error",
+            outcome="unavailable",
+            site="PLACE",
+            created_at=now - timedelta(days=2),
+        )
+    )
+    db.commit()
+    client, _, _ = admin(make_client, db)
+    robot = client.get("/admin/settings").json()["dce_robot"]
+    assert robot == {
+        "enabled": True,
+        "origin": "server",
+        "server_value": True,
+        "succeeded_24h": 2,
+        "failed_24h": 1,
+    }
+    res = client.put("/admin/settings/dce-robot", json={"enabled": False})
+    assert res.status_code == 200, res.text
+    assert (res.json()["enabled"], res.json()["origin"]) == (False, "admin")
+    [line] = journal(db, "setting_changed")
+    assert line.meta == {
+        "setting": "dce_robot.enabled",
+        "label": "Robot de récupération des DCE",
+        "from": True,
+        "to": False,
+    }
+    assert customer.get(f"/bids/{bid_id}/dce/source").json()["robot_enabled"] is False
+    assert client.delete("/admin/settings/dce-robot").status_code == 204
+    assert client.get("/admin/settings").json()["dce_robot"]["origin"] == "server"
+    assert customer.get(f"/bids/{bid_id}/dce/source").json()["robot_enabled"] is True

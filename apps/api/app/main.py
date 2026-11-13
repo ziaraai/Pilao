@@ -21,6 +21,7 @@ from app.routers import (
     companies,
     credits,
     dashboard,
+    dce_retrieval,
     documents,
     feedback,
     files,
@@ -62,6 +63,7 @@ app.include_router(profile.router)
 app.include_router(files.router)
 app.include_router(knowledge.router)
 app.include_router(vault.router)
+app.include_router(dce_retrieval.router)  # before bids: /bids/{id}/dce/{version}
 app.include_router(bids.router)
 app.include_router(memoir.router)
 app.include_router(documents.router)

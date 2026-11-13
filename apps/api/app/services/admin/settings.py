@@ -18,14 +18,15 @@ from app.core import crypto, runtime
 from app.core.admin_deps import AdminContext
 from app.core.config import get_settings
 from app.core.errors import ApiError
-from app.db.models import AiCall, PlatformAdmin, PlatformSetting, TenderImport
+from app.db.models import AiCall, DceFetch, PlatformAdmin, PlatformSetting, TenderImport
 from app.domain.admin_watch import WatchItem
 from app.domain.ai_catalogue import NEEDS_IMAGES, eur_per_million, usable
-from app.platform_settings import BY_NAME, GENERAL, IMPORTS, MODEL_LABELS
+from app.platform_settings import BY_NAME, DCE_ROBOT, GENERAL, IMPORTS, MODEL_LABELS
 from app.schemas.admin import (
     ApiKeyOut,
     CatalogueModelOut,
     CreditOut,
+    DceRobotSettingOut,
     GeneralSettingOut,
     ImportSettingOut,
     LastPassOut,
@@ -214,6 +215,39 @@ def imports_out(db: Session) -> list[ImportSettingOut]:
     return out
 
 
+def dce_robot_out(db: Session) -> DceRobotSettingOut:
+    """The robot's switch, and its retrievals and checks over 24 hours (every company)."""
+    since = datetime.now(UTC) - timedelta(days=1)
+    done, failed = db.execute(
+        select(
+            func.count().filter(DceFetch.status == "done"),
+            func.count().filter(DceFetch.status == "error"),
+        ).where(DceFetch.created_at >= since)
+    ).one()
+    return DceRobotSettingOut(
+        enabled=bool(runtime.effective(DCE_ROBOT)),
+        origin=runtime.source(DCE_ROBOT),
+        server_value=bool(BY_NAME[DCE_ROBOT].server(get_settings())),
+        succeeded_24h=int(done),
+        failed_24h=int(failed),
+    )
+
+
+def set_dce_robot(
+    db: Session, admin: PlatformAdmin, enabled: bool, ip: str | None
+) -> DceRobotSettingOut:
+    before = bool(runtime.effective(DCE_ROBOT))
+    _store(db, DCE_ROBOT, admin, value=enabled)
+    meta = {"setting": DCE_ROBOT, "label": BY_NAME[DCE_ROBOT].label, "from": before, "to": enabled}
+    audit.record(db, "setting_changed", admin=admin, ip=ip, meta=meta)
+    _done(db)
+    return dce_robot_out(db)
+
+
+def reset_dce_robot(db: Session, admin: PlatformAdmin, ip: str | None) -> None:
+    reset(db, admin, DCE_ROBOT, ip)
+
+
 def general_out(name: str) -> GeneralSettingOut:
     d = BY_NAME[name]
     return GeneralSettingOut(
@@ -238,6 +272,7 @@ def state(db: Session, client: OpenRouter) -> SettingsOut:
         api_key=api_key_out(client),
         imports=imports_out(db),
         general=[general_out(name) for name in GENERAL],
+        dce_robot=dce_robot_out(db),
     )
 
 
