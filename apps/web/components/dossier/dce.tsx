@@ -2,6 +2,11 @@
 
 import { useRef } from "react";
 
+import {
+  DceSourcePanel,
+  retrievalRunning,
+} from "@/components/dossier/dce-source";
+import { PaidButton } from "@/components/paid-button";
 import { UploadButton } from "@/components/upload";
 import {
   Alert,
@@ -13,10 +18,10 @@ import {
   tableRow,
 } from "@/components/ui";
 import { api } from "@/lib/api";
-import { formatDateTime } from "@/lib/format";
+import { originLabel, updateBanner } from "@/lib/dce-source";
 import { useAction, useApi } from "@/lib/hooks";
 import { DCE_KINDS, JOB_STATUS } from "@/lib/labels";
-import type { DceVersion } from "@/lib/types";
+import type { Analysis, DceSource, DceVersion } from "@/lib/types";
 
 const running = (versions: DceVersion[]) =>
   versions.some((v) => v.status === "pending" || v.status === "processing");
@@ -35,8 +40,20 @@ export function DceSection({
     wasBusy.current = busy;
     return busy;
   });
+  const wasFetching = useRef(false);
+  const source = useApi<DceSource>(`/bids/${bidId}/dce/source`, (s) => {
+    const busy = retrievalRunning(s);
+    if (wasFetching.current && !busy) {
+      wasBusy.current = true; // the robot brought a version: it is being read
+      versions.reload();
+    }
+    wasFetching.current = busy;
+    return busy;
+  });
+  const analysis = useApi<Analysis>(`/bids/${bidId}/analysis`);
   const deposit = useAction();
   const kind = useAction();
+  const analyse = useAction();
 
   async function onFiles(files: File[]) {
     const form = new FormData();
@@ -48,8 +65,60 @@ export function DceSection({
   }
 
   const busy = versions.data ? running(versions.data) : false;
+  const hasVersions = (versions.data?.length ?? 0) > 0;
+  const update = versions.data
+    ? updateBanner(versions.data, analysis.data?.dce_version ?? null)
+    : null;
   return (
     <Card title="DCE (dossier de consultation)" color="blue" icon="bids">
+      {source.data && (
+        <DceSourcePanel
+          bidId={bidId}
+          source={source.data}
+          hasVersions={hasVersions}
+          onChanged={() => {
+            wasFetching.current = true;
+            source.reload();
+          }}
+        />
+      )}
+      {update && (
+        <div className="mb-4 space-y-2">
+          <Alert tone="warning">
+            Le DCE a changé le{" "}
+            {new Date(update.created_at).toLocaleDateString("fr-FR", {
+              day: "2-digit",
+              month: "2-digit",
+              timeZone: "Europe/Paris",
+            })}{" "}
+            : {update.diff_summary ?? "des pièces ont changé."}
+          </Alert>
+          <div className="flex flex-wrap gap-2">
+            <a
+              href={`#dce-version-${update.id}`}
+              className="inline-flex items-center rounded-md px-3.5 py-2 text-sm font-semibold text-brand-navy ring-1 ring-inset ring-slate-400 hover:bg-slate-50"
+            >
+              Voir les différences
+            </a>
+            <PaidButton
+              action="dce_analysis"
+              label="Analyser la nouvelle version"
+              busy={analyse.busy}
+              onClick={async () => {
+                if (
+                  await analyse.run(() =>
+                    api(`/bids/${bidId}/analysis`, { method: "POST" }),
+                  )
+                ) {
+                  analysis.reload();
+                  onProcessed(); // the analysis card follows its progress
+                }
+              }}
+            />
+          </div>
+          {analyse.error && <Alert tone="danger">{analyse.error}</Alert>}
+        </div>
+      )}
       <UploadButton
         id="dce-upload"
         label={
@@ -61,7 +130,9 @@ export function DceSection({
         multiple
         busy={deposit.busy || busy}
         onFiles={onFiles}
-        title="Glissez le DCE ici"
+        title={
+          hasVersions ? "Glissez le DCE ici" : "Glissez ici le ZIP téléchargé"
+        }
         hint="Le ZIP téléchargé sur le profil acheteur, ou les pièces une par une"
       />
       <p className="mt-2 text-xs text-slate-500">
@@ -86,6 +157,7 @@ export function DceSection({
         {versions.data?.map((v, i) => (
           <details
             key={v.id}
+            id={`dce-version-${v.id}`}
             open={i === 0}
             className="overflow-hidden rounded-md border border-slate-300"
           >
@@ -97,7 +169,7 @@ export function DceSection({
                 {JOB_STATUS[v.status]?.label ?? v.status}
               </Badge>
               <span className="text-xs text-slate-500">
-                déposée le {formatDateTime(v.created_at)} · {v.files.length}{" "}
+                {originLabel(v, source.data?.site ?? null)} · {v.files.length}{" "}
                 pièce(s)
               </span>
             </summary>

@@ -4,6 +4,7 @@ import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { Suspense, useRef, useState } from "react";
 
 import { CompanyIdentity } from "@/components/profile/company-identity";
+import { DceRetrievalSettings } from "@/components/profile/dce-retrieval";
 import { DataRights } from "@/components/profile/data-rights";
 import { PlanCredits } from "@/components/profile/plan-credits";
 import { ProfilePrefill } from "@/components/profile/prefill";
@@ -194,6 +195,7 @@ function ProfileTabs() {
         className="space-y-6"
       >
         {current === "identite" && <CompanyIdentity />}
+        {current === "identite" && answers && <DceRetrievalSettings />}
         {(current === "veille" || current === "chiffre-affaires") && (
           <WatchSettings
             key={current} // a fresh form from the saved profile on each tab

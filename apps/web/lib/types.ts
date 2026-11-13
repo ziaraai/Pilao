@@ -200,6 +200,54 @@ export type DceVersion = {
   diff_summary: string | null;
   created_at: string;
   files: DceFile[];
+  /** Deposited, retrieved by Pilao's robot, or an update found by its daily watch. */
+  origin: "deposit" | "retrieval" | "update";
+  source_url: string | null;
+  uploaded_by_name: string | null;
+};
+
+export type RetrievalMode = "identified" | "anonymous";
+export type BuyerContact = {
+  first_name: string | null;
+  last_name: string | null;
+  email: string | null;
+};
+export type DceFetch = {
+  id: string;
+  kind: "retrieval" | "update" | "check";
+  mode: RetrievalMode | null;
+  status: "pending" | "running" | "done" | "error";
+  outcome: string | null;
+  message: string | null;
+  site: string;
+  created_at: string;
+  finished_at: string | null;
+};
+export type DceWatch = {
+  checked_at: string | null;
+  size_label: string | null;
+  deadline_at: string | null;
+  failures: number;
+  stopped: boolean;
+};
+/** Where the dossier's DCE is, and what Pilao can do there (GET /bids/{id}/dce/source). */
+export type DceSource = {
+  url: string | null;
+  platform: string | null;
+  site: string | null;
+  automatic: boolean;
+  home_only: boolean;
+  guide: string[];
+  terms_url: string | null;
+  robot_enabled: boolean;
+  mode: RetrievalMode | null;
+  contact: BuyerContact;
+  last_fetch: DceFetch | null;
+  watch: DceWatch | null;
+};
+export type RetrievalSettings = {
+  mode: RetrievalMode | null;
+  contact: BuyerContact;
 };
 export type DcePage = { page: number; text: string; ocr_used: boolean };
 
