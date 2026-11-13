@@ -29,6 +29,7 @@ dependencies = [
   "pyotp>=2.10.0",
   "cryptography>=50.0.2",
   "segno>=1.6.6",
+  "playwright==1.63.0",
 ]
 
 [dependency-groups]

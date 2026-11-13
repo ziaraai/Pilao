@@ -18,3 +18,10 @@ def test_runtime_files_are_copied_into_the_image() -> None:
 
 def test_no_download_at_start() -> None:
     assert "LITELLM_LOCAL_MODEL_COST_MAP=True" in DOCKERFILE
+
+
+def test_browser_in_the_image() -> None:
+    """The DCE robot's Chromium is installed for every user, before switching to ``pilao``."""
+    assert "PLAYWRIGHT_BROWSERS_PATH=/opt/pw-browsers" in DOCKERFILE
+    install = DOCKERFILE.index("playwright install --with-deps --only-shell chromium")
+    assert install < DOCKERFILE.index("USER pilao")

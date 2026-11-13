@@ -47,6 +47,16 @@ jobs:
         if: steps.tools.outcome != 'success'
         run: echo "::warning::Tesseract/LibreOffice could not be installed (package mirror). Their tests are skipped here; the images job checks OCR and every LibreOffice conversion in the production image."
       - run: uv sync
+      - name: Browser of the DCE robot (Chromium's headless shell)
+        # Same rule as the tools above: if the download fails, the robot's tests say they are
+        # skipped and the images job still checks the browser in the production image.
+        id: browser
+        continue-on-error: true
+        timeout-minutes: 8
+        run: uv run playwright install --with-deps --only-shell chromium
+      - name: Browser missing?
+        if: steps.browser.outcome != 'success'
+        run: echo "::warning::Chromium for Playwright could not be installed. The DCE robot's tests are skipped here; the images job checks the browser in the production image."
       - run: uv run ruff check .
       - run: uv run black --check .
       - run: uv run mypy
@@ -97,6 +107,8 @@ jobs:
           docker run --rm -e ENVIRONMENT=local pilao-api:ci python -c "from app.ai.prompts import load_prompt; from app.services.dce_analysis import SCHEMA_PATH; assert SCHEMA_PATH.exists(); [load_prompt(p) for p in ('extraction_dce', 'scoring_annonce', 'generation_memoire_chapitre')]"
           docker run --rm pilao-api:ci tesseract --list-langs | grep -qx fra
           docker run --rm pilao-api:ci soffice --version
+          # the DCE robot's browser starts as the pilao user
+          docker run --rm pilao-api:ci python -c "from playwright.sync_api import sync_playwright; p = sync_playwright().start(); b = p.chromium.launch(); print(b.version); b.close(); p.stop()"
           # spreadsheets (BPU, DPGF in .xls / .ods) need Calc in the image, not only Writer
           docker run --rm pilao-api:ci python -c "import io; from openpyxl import Workbook; wb = Workbook(); wb.active.append(['BPU', 1]); b = io.BytesIO(); wb.save(b); from app.documents.convert import soffice_convert; assert soffice_convert(b.getvalue(), 'xlsx', 'pdf').startswith(b'%PDF')"
           # text documents: the memoir's PDF export, and an ODT (LibreOffice) read as a DOCX

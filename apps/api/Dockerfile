@@ -44,6 +44,19 @@ RUN --mount=type=secret,id=extra_ca \
     if [ -f /run/secrets/extra_ca ]; then export SSL_CERT_FILE=/run/secrets/extra_ca; fi; \
     uv sync --frozen --no-dev --no-install-project
 
+# The DCE robot's browser (spec « Récupération des DCE »): Chromium's headless shell and its
+# system libraries, readable by every user. With an extra certificate authority, apt and the
+# browser download trust it for this step only.
+ENV PLAYWRIGHT_BROWSERS_PATH=/opt/pw-browsers
+RUN --mount=type=secret,id=extra_ca \
+    if [ -f /run/secrets/extra_ca ]; then \
+        echo 'Acquire::https::CaInfo "/run/secrets/extra_ca";' > /etc/apt/apt.conf.d/99extra-ca; \
+        export NODE_EXTRA_CA_CERTS=/run/secrets/extra_ca; \
+    fi; \
+    /app/.venv/bin/playwright install --with-deps --only-shell chromium \
+    && chmod -R a+rX /opt/pw-browsers \
+    && rm -rf /var/lib/apt/lists/* /etc/apt/apt.conf.d/99extra-ca
+
 COPY apps/api/alembic.ini ./
 COPY apps/api/alembic ./alembic
 COPY apps/api/app ./app
