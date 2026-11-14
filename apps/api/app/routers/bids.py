@@ -16,6 +16,7 @@ from app.db.models import (
     Requirement,
     User,
 )
+from app.domain import framework_amounts
 from app.routers.files import Storage, _scanner
 from app.schemas.bids import (
     AnalysisOut,
@@ -29,6 +30,7 @@ from app.schemas.bids import (
     DceVersionOut,
     DocumentCheckOut,
     FactorOut,
+    FrameworkAmountsOut,
     GoNoGoOut,
     RequirementOut,
     SourceOut,
@@ -189,6 +191,16 @@ def get_analysis(bid_id: uuid.UUID, db: ScopedDb) -> AnalysisOut:
     return _analysis_out(db, analysis)
 
 
+def _source_out(source: object) -> SourceOut | None:
+    """A source stored in the analysis JSON, when it still names its DCE file."""
+    if not isinstance(source, dict):
+        return None
+    try:
+        return SourceOut.model_validate(source)
+    except ValueError:
+        return None
+
+
 def _analysis_out(db: ScopedDb, analysis: DceAnalysis) -> AnalysisOut:
     version = db.get_one(DceVersion, analysis.dce_version_id)
     files = {
@@ -216,7 +228,17 @@ def _analysis_out(db: ScopedDb, analysis: DceAnalysis) -> AnalysisOut:
     ]
     documents: list[DocumentCheckOut] = []
     go_no_go: GoNoGoOut | None = None
+    framework: FrameworkAmountsOut | None = None
     if analysis.status == "ready" and analysis.data is not None:
+        fa = framework_amounts.from_analysis(analysis.data)
+        if fa is not None:
+            framework = FrameworkAmountsOut(
+                minimum_eur_ht=fa.minimum_cents / 100 if fa.minimum_cents is not None else None,
+                maximum_eur_ht=fa.maximum_cents / 100 if fa.maximum_cents is not None else None,
+                per_year=fa.per_year,
+                label=framework_amounts.describe(fa, standalone=True),
+                source=_source_out(fa.source),
+            )
         bid = db.get_one(Bid, analysis.bid_id)
         org = db.get_one(Organization, analysis.org_id)
         checks, opinion = analysis_svc.review(db, org, bid, analysis.data)
@@ -230,6 +252,7 @@ def _analysis_out(db: ScopedDb, analysis: DceAnalysis) -> AnalysisOut:
     return AnalysisOut(
         documents=documents,
         go_no_go=go_no_go,
+        framework_amounts=framework,
         id=analysis.id,
         status=analysis.status,
         error=analysis.error,

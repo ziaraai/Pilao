@@ -47,6 +47,17 @@
         "title": { "$ref": "#/$defs/sourcedText" },
         "procedure": { "$ref": "#/$defs/sourcedText" },
         "estimated_amount_eur_ht": { "$ref": "#/$defs/sourcedNumber" },
+        "framework_amounts": {
+          "type": ["object", "null"],
+          "description": "Accord-cadre : montants minimum et maximum (null si non indiqués)",
+          "properties": {
+            "minimum_eur_ht": { "type": ["number", "null"] },
+            "maximum_eur_ht": { "type": ["number", "null"] },
+            "period": { "enum": ["year", "contract", null] },
+            "source": { "$ref": "#/$defs/source" }
+          },
+          "required": ["minimum_eur_ht", "maximum_eur_ht", "period", "source"]
+        },
         "duration": { "$ref": "#/$defs/sourcedText" },
         "submission_deadline": { "$ref": "#/$defs/sourcedDate" },
         "submission_platform": { "$ref": "#/$defs/sourcedText" },

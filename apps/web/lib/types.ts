@@ -327,6 +327,14 @@ export type Analysis = {
     factors: { label: string; status: string; detail: string }[];
     disclaimer: string;
   } | null;
+  /** An accord-cadre's minimum and maximum, « De 80 000 € à 170 000 € HT par an ». */
+  framework_amounts?: {
+    minimum_eur_ht: number | null;
+    maximum_eur_ht: number | null;
+    per_year: boolean | null;
+    label: string;
+    source: Source | null;
+  } | null;
 };
 
 export type ChapterFlag = {

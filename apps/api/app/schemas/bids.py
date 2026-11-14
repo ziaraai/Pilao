@@ -130,6 +130,16 @@ class GoNoGoOut(BaseModel):
     disclaimer: str
 
 
+class FrameworkAmountsOut(BaseModel):
+    """An accord-cadre's minimum and maximum (« De 80 000 € à 170 000 € HT par an »)."""
+
+    minimum_eur_ht: float | None
+    maximum_eur_ht: float | None
+    per_year: bool | None
+    label: str
+    source: SourceOut | None
+
+
 class AnalysisOut(BaseModel):
     id: uuid.UUID
     status: Literal["pending", "processing", "ready", "error", "waiting_credits"]
@@ -143,3 +153,4 @@ class AnalysisOut(BaseModel):
     created_at: datetime
     documents: list[DocumentCheckOut] = Field(default_factory=list)
     go_no_go: GoNoGoOut | None = None
+    framework_amounts: FrameworkAmountsOut | None = None

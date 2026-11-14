@@ -388,3 +388,47 @@ def test_bid_is_prefilled_but_user_values_win(
     assert kept["buyer_name"] == "Métropole"  # never overwritten
     assert datetime.fromisoformat(kept["deadline_at"]) == DEADLINE + timedelta(days=2)
     assert any("diffère" in w for w in c.get(f"/bids/{mine}/analysis").json()["warnings"])
+
+
+def test_an_accord_cadre_range_is_shown_and_judged(
+    make_client: Factory, outbox: Outbox, queue: FakeQueue, model: FakeModel, db: Session
+) -> None:
+    from app.db.models import DceAnalysis
+
+    c = signed_in_client(make_client, outbox)
+    c.put("/profile", json={"trades": ["nettoyage_locaux"], "max_amount_cents": 5_000_000})
+    ki = full_answer()["key_info"]
+    model.extra = {
+        "key_info": {
+            **ki,
+            "framework_amounts": {
+                "minimum_eur_ht": 80000,
+                "maximum_eur_ht": 170000,
+                "period": "year",
+                "source": {"file": SRC_RC, "page": 1},
+            },
+        }
+    }
+    bid, a = analyzed(c, queue, DCE)
+    assert a["framework_amounts"]["label"] == "De 80 000 € à 170 000 € HT par an"
+    assert a["framework_amounts"]["source"]["file"] == "DCE/RC.pdf"
+    [amount] = [f for f in a["go_no_go"]["factors"] if f["label"] == "Montant"]
+    assert amount == {
+        "label": "Montant",
+        "status": "warning",
+        "detail": "Accord-cadre de 80 000 € à 170 000 € HT par an : au-dessus de votre maximum.",
+    }
+    # An analysis made before the field existed: read from the duration it already holds.
+    row = db.scalars(select(DceAnalysis)).one()
+    data = json.loads(json.dumps(row.data))
+    data["key_info"]["framework_amounts"] = None
+    data["key_info"]["duration"] = {
+        "value": "1 an. Montant maximum annuel 30 000 € HT.",
+        "source": {"file": "DCE/RC.pdf", "page": 1, "dce_file_id": None},
+    }
+    row.data = data
+    db.commit()
+    again = c.get(f"/bids/{bid}/analysis").json()
+    assert again["framework_amounts"]["label"] == "Jusqu'à 30 000 € HT par an"
+    [amount] = [f for f in again["go_no_go"]["factors"] if f["label"] == "Montant"]
+    assert amount["status"] == "ok"

@@ -28,6 +28,7 @@ from app.db.models import (
     Organization,
     Requirement,
 )
+from app.domain import framework_amounts
 from app.domain import go_no_go as gng
 from app.domain import vault as vault_rules
 from app.domain.trades import TRADES
@@ -276,6 +277,14 @@ def verify(
     ):
         sourced_field(key_info, key, label, getattr(data.key_info, key))
     sourced_field(out, "questions_deadline", "Date limite des questions", data.questions_deadline)
+    fa = data.key_info.framework_amounts
+    if fa is None or (fa.minimum_eur_ht is None and fa.maximum_eur_ht is None):
+        key_info["framework_amounts"] = None
+    elif (verified_fa := src.resolve(fa.source)) is None:
+        key_info["framework_amounts"] = None
+        warnings.append("Montants de l'accord-cadre : écartés faute de source vérifiable.")
+    else:
+        key_info["framework_amounts"]["source"] = verified_fa
 
     def sourced_list(
         key: str, items: list[Any], label: str, container: dict[str, Any] | None = None
@@ -626,6 +635,7 @@ def review(
             ],
             visit_mandatory=_value(data, "site_visit", "mandatory"),
             visit_dates=visit_dates,
+            framework=framework_amounts.from_analysis(data),
         )
     )
     return documents, opinion

@@ -9,6 +9,7 @@ from dataclasses import dataclass, field
 from datetime import date, datetime
 
 from app.domain.dce import normalize as _norm
+from app.domain.framework_amounts import FrameworkAmounts, describe
 from app.domain.vault import KINDS as VAULT_KINDS
 
 DISCLAIMER = (
@@ -158,6 +159,22 @@ class Inputs:
     blocking_watch_points: list[str]
     visit_mandatory: bool | None
     visit_dates: list[datetime]
+    framework: FrameworkAmounts | None = None  # accord-cadre minimum / maximum
+
+
+def _framework_factor(i: Inputs, fa: FrameworkAmounts, factors: list[Factor]) -> int:
+    """No estimate but an accord-cadre range: judged on the overlap with the company's range
+    (the guaranteed minimum above its maximum, or the whole range under its minimum)."""
+    what = f"Accord-cadre {describe(fa)}"
+    low, high = fa.minimum_cents, fa.maximum_cents
+    if i.min_amount_cents is not None and high is not None and high < i.min_amount_cents:
+        factors.append(Factor("Montant", "warning", f"{what} : sous votre minimum."))
+        return -15
+    if i.max_amount_cents is not None and low is not None and low > i.max_amount_cents:
+        factors.append(Factor("Montant", "warning", f"{what} : au-dessus de votre maximum."))
+        return -20
+    factors.append(Factor("Montant", "ok", f"{what} : dans votre fourchette."))
+    return 0
 
 
 def opinion(i: Inputs) -> Opinion:
@@ -193,7 +210,9 @@ def opinion(i: Inputs) -> Opinion:
         )
 
     amount = i.estimated_amount_cents
-    if amount is None:
+    if amount is None and i.framework is not None:
+        score += _framework_factor(i, i.framework, factors)
+    elif amount is None:
         factors.append(Factor("Montant", "unknown", "Montant estimé non indiqué dans le DCE."))
     elif i.min_amount_cents is not None and amount < i.min_amount_cents:
         score -= 15

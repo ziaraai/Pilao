@@ -100,11 +100,31 @@ class Lot(BaseModel):
         return _number(v)
 
 
+class FrameworkAmounts(BaseModel):
+    """Minimum and maximum of an accord-cadre, per year or for the whole contract."""
+
+    minimum_eur_ht: float | None = None
+    maximum_eur_ht: float | None = None
+    period: Literal["year", "contract"] | None = None
+    source: Source | None = None
+
+    @field_validator("minimum_eur_ht", "maximum_eur_ht", mode="before")
+    @classmethod
+    def _amount(cls, v: object) -> float | None:
+        return _number(v)
+
+    @field_validator("period", mode="before")
+    @classmethod
+    def _period(cls, v: object) -> str | None:
+        return v if v in ("year", "contract") else None
+
+
 class KeyInfo(BaseModel):
     buyer_name: SourcedText | None = None
     title: SourcedText | None = None
     procedure: SourcedText | None = None
     estimated_amount_eur_ht: SourcedNumber | None = None
+    framework_amounts: FrameworkAmounts | None = None
     duration: SourcedText | None = None
     submission_deadline: SourcedText | None = None  # ISO 8601 text, parsed when used
     submission_platform: SourcedText | None = None

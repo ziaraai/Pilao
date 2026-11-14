@@ -126,3 +126,42 @@ def test_parse_datetime() -> None:
 def test_a_keyword_from_profile_and_trade_is_listed_once() -> None:
     o = opinion(inputs(profile_keywords=["nettoyage", "Nettoyage", "vitrerie"]))
     assert o.factors[0].detail == "Correspond à votre activité (nettoyage)."
+
+
+# ---------- accord-cadre bounded by a minimum and a maximum ---------------------------------
+
+
+def test_a_framework_range_stands_in_for_a_missing_estimate() -> None:
+    from app.domain.framework_amounts import FrameworkAmounts
+
+    fa = FrameworkAmounts(8_000_000, 17_000_000, True, None)
+
+    def amount(**kw: object) -> tuple[int, str, str]:
+        o = opinion(inputs(estimated_amount_cents=None, framework=fa, **kw))
+        [f] = [f for f in o.factors if f.label == "Montant"]
+        return o.score, f.status, f.detail
+
+    assert amount() == (
+        100,
+        "ok",
+        "Accord-cadre de 80 000 € à 170 000 € HT par an : dans votre fourchette.",
+    )
+    assert amount(min_amount_cents=20_000_000) == (
+        85,
+        "warning",
+        "Accord-cadre de 80 000 € à 170 000 € HT par an : sous votre minimum.",
+    )
+    assert amount(max_amount_cents=5_000_000) == (
+        80,
+        "warning",
+        "Accord-cadre de 80 000 € à 170 000 € HT par an : au-dessus de votre maximum.",
+    )
+    # only a maximum: never « above your maximum », the orders may stay small
+    only_max = FrameworkAmounts(None, 17_000_000, None, None)
+    o = opinion(inputs(estimated_amount_cents=None, framework=only_max, max_amount_cents=1))
+    assert [f.status for f in o.factors if f.label == "Montant"] == ["ok"]
+    # an estimated amount still wins
+    o = opinion(inputs(framework=fa, min_amount_cents=20_000_000))
+    assert [f.detail for f in o.factors if f.label == "Montant"] == [
+        "80 000 € HT : sous votre minimum."
+    ]

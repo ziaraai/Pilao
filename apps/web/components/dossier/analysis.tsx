@@ -25,7 +25,7 @@ import {
   VERDICT,
 } from "@/lib/labels";
 import type { Tone } from "@/lib/labels";
-import type { Analysis, Sourced } from "@/lib/types";
+import type { Analysis, Source, Sourced } from "@/lib/types";
 
 /** The Go / No-Go block takes the colour of its verdict. */
 const VERDICT_COLOR: Partial<Record<Tone, Color>> = {
@@ -43,7 +43,7 @@ function Row({
   render,
 }: {
   label: string;
-  item: Sourced<string | number>;
+  item: Sourced<string | number> | { value: string; source: Source | null };
   render?: (v: string | number) => string;
 }) {
   return (
@@ -139,6 +139,7 @@ export function AnalysisSection({
   const d = a.data;
   const ki = d.key_info;
   const g = a.go_no_go;
+  const fa = a.framework_amounts;
   return (
     <SourceViewer>
       <div className="space-y-6">
@@ -173,11 +174,19 @@ export function AnalysisSection({
             <Row label="Acheteur" item={ki.buyer_name} />
             <Row label="Objet" item={ki.title} />
             <Row label="Procédure" item={ki.procedure} />
-            <Row
-              label="Montant estimé"
-              item={ki.estimated_amount_eur_ht}
-              render={(v) => formatCents(Math.round(Number(v) * 100)) + " HT"}
-            />
+            {(ki.estimated_amount_eur_ht || !fa) && (
+              <Row
+                label="Montant estimé"
+                item={ki.estimated_amount_eur_ht}
+                render={(v) => formatCents(Math.round(Number(v) * 100)) + " HT"}
+              />
+            )}
+            {fa && (
+              <Row
+                label="Accord-cadre"
+                item={{ value: fa.label, source: fa.source }}
+              />
+            )}
             <Row label="Durée" item={ki.duration} />
             <Row
               label="Date limite"

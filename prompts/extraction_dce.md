@@ -1,6 +1,6 @@
 ---
 id: extraction_dce
-version: 0.2.0
+version: 0.3.0
 task: dce_analysis
 output_schema: schemas/dce_analysis.schema.json
 ---
@@ -34,6 +34,7 @@ Périmètre de cette analyse : {{scope}}
 
 Produis la fiche d'analyse :
 - `key_info` : acheteur, objet, lots, procédure, montant estimé, durée, date et heure limite de remise, adresse de dépôt (plateforme).
+  Pour un accord-cadre, `framework_amounts` : montant minimum et montant maximum s'ils sont indiqués (`null` pour celui qui ne l'est pas), avec `period` = `year` s'ils sont annuels, `contract` s'ils valent pour toute la durée, `null` si le DCE ne le dit pas.
 - `site_visit` : obligatoire ou non, date(s), modalités.
 - `questions_deadline` : date limite pour poser des questions.
 - `award_criteria` : critères et sous-critères avec pondérations (en %).

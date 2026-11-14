@@ -527,3 +527,24 @@ def test_requires_authentication(make_client: Factory) -> None:
     assert anon.post(f"/memoirs/{some}/generate").status_code == 401
     assert anon.post(f"/memoir-sections/{some}/regenerate", json={}).status_code == 401
     assert anon.get(f"/memoirs/{some}/conformity").status_code == 401
+
+
+def test_the_chapter_prompt_gives_the_accord_cadre_range(
+    make_client: Factory, outbox: Outbox, queue: FakeQueue, model: WriterModel
+) -> None:
+    from tests.api.test_analysis import SRC_RC, full_answer
+
+    key_info = full_answer()["key_info"]
+    key_info["framework_amounts"] = {
+        "minimum_eur_ht": 80000,
+        "maximum_eur_ht": 170000,
+        "period": "year",
+        "source": {"file": SRC_RC, "page": 1},
+    }
+    model.extra = {"key_info": key_info}
+    c = signed_in_client(make_client, outbox)
+    drafted(c, queue)
+    assert (
+        "Montant estimé : non précisé (accord-cadre de 80 000 € à 170 000 € HT par an)"
+        in model.chapter_prompts[0]
+    )

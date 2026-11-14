@@ -33,6 +33,7 @@ from app.db.models import (
     Requirement,
     User,
 )
+from app.domain import framework_amounts
 from app.domain.memoir_checks import check_chapter, force_title
 from app.domain.trades import TRADES
 from app.schemas.drafting import ChapterOut, MatrixOut
@@ -160,11 +161,14 @@ def _site_facts(db: Session, memoir: Memoir, own_refs: list[str]) -> str:
     return "\n".join(f"- {_cited(r, path)}" for r, path in rows) or "(aucune donnée de site)"
 
 
-def _amount(value: Any) -> str:
+def _amount(value: Any, data: dict[str, Any] | None = None) -> str:
     try:
         return f"{float(value):,.0f} € HT".replace(",", "\u202f")
     except (TypeError, ValueError):
-        return "non précisé"
+        fa = framework_amounts.from_analysis(data or {})
+        return (
+            f"non précisé (accord-cadre {framework_amounts.describe(fa)})" if fa else "non précisé"
+        )
 
 
 # ---------- starting -------------------------------------------------------------------------
@@ -338,7 +342,7 @@ def run_draft_section(
         tender_title=_tag_safe(str(title_value)),
         buyer_name=_tag_safe(bid.buyer_name or "non précisé"),
         duration=_tag_safe(str((key_info.get("duration") or {}).get("value") or "non précisée")),
-        amount=_amount((key_info.get("estimated_amount_eur_ht") or {}).get("value")),
+        amount=_amount((key_info.get("estimated_amount_eur_ht") or {}).get("value"), data),
         site_facts=_site_facts(db, memoir, section.requirement_refs),
         criterion=section.criterion_ref or "non précisé",
         weight=str(section.criterion_weight) if section.criterion_weight is not None else "?",

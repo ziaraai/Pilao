@@ -25,7 +25,7 @@ CCAP = doc("DCE/CCAP.docx", "ccap", ["Pénalités : 100 € par jour"], paginate
 
 def test_prompt_renders_with_guards_and_versions() -> None:
     prompt = load_prompt("extraction_dce")
-    assert prompt.version == "0.2.0"
+    assert prompt.version == "0.3.0"
     system, user = prompt.render(
         company_summary="ACME", documents=render(RC), scope=SCOPE_FULL, json_schema="{}"
     )
@@ -33,6 +33,7 @@ def test_prompt_renders_with_guards_and_versions() -> None:
     assert "source vérifiable" in system
     assert '<document name="DCE/RC.pdf" kind="rc">' in user and "[[PAGE 2]]" in user
     assert "{{" not in user  # every variable substituted
+    assert "`framework_amounts`" in user  # accord-cadre minimum and maximum
 
 
 def test_a_document_cannot_close_its_own_tag() -> None:
@@ -209,3 +210,29 @@ def test_sources_must_point_to_pages_actually_sent() -> None:
     )
     kept, warnings = verify(data, [CCTP], sent={("DCE/CCTP.pdf", 1)})
     assert [r["text"] for r in kept["requirements"]] == ["lue"] and "non transmise" in warnings[0]
+
+
+def test_framework_amounts_are_kept_only_with_a_source() -> None:
+    def ki(fa: dict[str, object]) -> dict[str, object]:
+        base = analysis().model_dump(mode="json")["key_info"]
+        return {**base, "framework_amounts": fa}
+
+    sourced = {
+        "minimum_eur_ht": "80 000 € HT",
+        "maximum_eur_ht": 170000,
+        "period": "year",
+        "source": {"file": "DCE/RC.pdf", "page": 2},
+    }
+    data, _ = verify(analysis(key_info=ki(sourced)), [RC, CCTP, CCAP])
+    assert data["key_info"]["framework_amounts"] == {
+        "minimum_eur_ht": 80000.0,
+        "maximum_eur_ht": 170000.0,
+        "period": "year",
+        "source": {"file": "DCE/RC.pdf", "page": 2, "dce_file_id": str(RC.dce_file_id)},
+    }
+    unsourced = {**sourced, "period": "chaque mois", "source": {"file": "DCE/RC.pdf", "page": 9}}
+    data, warnings = verify(analysis(key_info=ki(unsourced)), [RC, CCTP, CCAP])
+    assert data["key_info"]["framework_amounts"] is None
+    assert any("Montants de l'accord-cadre" in w for w in warnings)
+    data, _ = verify(analysis(), [RC, CCTP, CCAP])
+    assert data["key_info"]["framework_amounts"] is None
