@@ -96,6 +96,11 @@ function inDays(days: number): string {
   return `dans ${days} jours`;
 }
 
+/** « dans 18 jours », « demain », « aujourd'hui », « date dépassée » (calendar days, Paris). */
+export function daysLeftText(iso: string, now: Date): string {
+  return inDays(daysLeft(iso, now));
+}
+
 function euros(value: number): string {
   return `${Math.round(value).toLocaleString("fr-FR").replace(/\s/g, " ")} € HT`;
 }

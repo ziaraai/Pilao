@@ -181,3 +181,31 @@ export function ExportCard({ memoir }: { memoir: Memoir }) {
     </Card>
   );
 }
+
+/** The « Export » tab: the latest memoir's exports, once it is drafted. */
+export function ExportTab({
+  bidId,
+  onOpen,
+}: {
+  bidId: string;
+  onOpen: (tab: "memoire") => void;
+}) {
+  const memoir = useApi<Memoir>(`/bids/${bidId}/memoir`);
+  if (memoir.loading && !memoir.data) return null;
+  if (!memoir.data || memoir.data.status === "draft") {
+    return (
+      <Card title="Export" color="violet">
+        <div className="flex flex-col items-start gap-3">
+          <p className="text-sm text-slate-700">
+            Rédigez d&apos;abord le mémoire technique : l&apos;export réunit le
+            mémoire, les documents pré-remplis et vos attestations.
+          </p>
+          <Button onClick={() => onOpen("memoire")}>
+            Ouvrir l&apos;onglet Mémoire
+          </Button>
+        </div>
+      </Card>
+    );
+  }
+  return <ExportCard memoir={memoir.data} />;
+}

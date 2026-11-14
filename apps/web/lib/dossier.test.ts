@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 
 import {
   blockSummaries,
+  daysLeftText,
   defaultTab,
   overviewTiles,
   shortTitle,
@@ -374,5 +375,14 @@ describe("block summaries", () => {
     expect(s.watch.text).toBe("Aucun point de vigilance");
     expect(s.memoir.text).toBe("Pas de consigne trouvée");
     expect(s.checks.text).toBe("1 point à vérifier");
+  });
+});
+
+describe("days left", () => {
+  it("counts calendar days in Paris", () => {
+    expect(daysLeftText("2026-12-02T11:00:00Z", NOW)).toBe("dans 18 jours");
+    expect(daysLeftText("2026-11-15T08:00:00Z", NOW)).toBe("demain");
+    expect(daysLeftText("2026-11-14T20:00:00Z", NOW)).toBe("aujourd'hui");
+    expect(daysLeftText("2026-11-10T08:00:00Z", NOW)).toBe("date dépassée");
   });
 });
