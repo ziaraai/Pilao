@@ -180,6 +180,9 @@ function OutlineEditor({
   const save = useAction();
   const refs = useAction();
   const [refsOpen, setRefsOpen] = useState(false);
+  // kept here: the conformity block is re-mounted when the matrix is re-run
+  const [matrixOpen, setMatrixOpen] = useState(false);
+  const [matrixAutoOpened, setMatrixAutoOpened] = useState(false);
   const generate = useAction();
   const editable = memoir.status === "draft";
   const assigned = new Set(sections.flatMap((s) => s.requirement_refs));
@@ -531,6 +534,10 @@ function OutlineEditor({
             memoir={memoir}
             onChange={onChange}
             onRefresh={onRefresh}
+            open={matrixOpen}
+            setOpen={setMatrixOpen}
+            autoOpened={matrixAutoOpened}
+            setAutoOpened={setMatrixAutoOpened}
           />
         </SourceViewer>
       )}
@@ -585,15 +592,21 @@ function ConformityCard({
   memoir,
   onChange,
   onRefresh,
+  open,
+  setOpen,
+  autoOpened,
+  setAutoOpened,
 }: {
   memoir: Memoir;
   onChange: (m: Memoir) => void;
   onRefresh: () => void;
+  open: boolean;
+  setOpen: (update: (open: boolean) => boolean) => void;
+  autoOpened: boolean;
+  setAutoOpened: (value: boolean) => void;
 }) {
   const matrix = useApi<Conformity>(`/memoirs/${memoir.id}/conformity`);
   const rerun = useAction();
-  const [open, setOpen] = useState(false);
-  const [autoOpened, setAutoOpened] = useState(false);
   const c = matrix.data;
   const canRun =
     memoir.status === "ready" || memoir.status === "exported"
@@ -603,7 +616,7 @@ function ConformityCard({
   if (absent > 0 && !autoOpened) {
     // an absent requirement must not stay hidden: open once, then the user decides
     setAutoOpened(true);
-    setOpen(true);
+    setOpen(() => true);
   }
   const counts = c
     ? (["missing", "partial", "covered"] as const).map((k) => ({

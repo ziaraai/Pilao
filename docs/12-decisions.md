@@ -490,3 +490,16 @@ Format : numéro, date, décision, raison, statut. Ajouter une entrée pour chaq
 - **Alternatives écartées** : relancer l'analyse des dossiers existants (payant pour le client) ; demander la police à l'IA (déjà dans le texte extrait) ; garder le filtre sur ordinateur seulement (deux comportements à maintenir pour un gain faible).
 - **Statut** : validé. Reste à concevoir avec Faycal : remplir directement le cadre de réponse fourni par l'acheteur (Q19).
 
+## ADR-047 — Page du dossier en onglets, résumé en haut, blocs à déplier
+
+- **Date** : 2026-11-14
+- **Contexte** : sur le premier vrai DCE (Rillieux-la-Pape), la page du dossier « fait peur » : une douzaine de blocs ouverts, chaque élément en phrase complète. Deux maquettes montrées (A : résumé + titres à déplier ; B : onglets + tableaux) ; choix de Faycal : mélanger. Spécification : `docs/superpowers/specs/2026-11-14-dossier-onglets-design.md`.
+- **Décision** :
+  - Six onglets (Aperçu, DCE, Analyse, Mémoire, Documents, Export) ; l'onglet ouvert dans l'adresse (`?onglet=`) ; sans paramètre, l'onglet par défaut (DCE tant qu'aucun DCE n'est prêt, sinon Aperçu) est choisi **une fois, au chargement**.
+  - Les onglets DCE, Analyse, Mémoire et Documents restent montés et cachés (le suivi en arrière-plan continue) ; l'Aperçu et l'Export se montent quand on les ouvre (données fraîches).
+  - `GET/PATCH /bids/{id}` renvoient l'avancement (`progress`, calculé à la lecture) ; l'analyse renvoie la police imposée lue dans les contraintes de forme.
+  - L'analyse écrit un **titre court** par point de vigilance (prompt `extraction_dce` 0.4.0) ; pour une analyse antérieure, le début de la phrase.
+  - Briques réutilisables dans `apps/web/components/blocks.tsx` (onglets, bloc à déplier, case, pastille de niveau, tableau) ; règles sans écran dans `apps/web/lib/dossier.ts`, testées.
+- **Alternatives écartées** : A seule (la page reste longue) ; B seule (pas de résumé avant d'ouvrir l'analyse) ; garder tous les blocs ouverts.
+- **Statut** : validé (livré). Suite : les mêmes briques sur les autres pages (P4-10).
+

@@ -1,6 +1,6 @@
 # Page du dossier : onglets, résumé en haut, titres à déplier — conception
 
-> Statut : à valider par Faycal. Maquette vue et choisie : https://claude.ai/artifact/GZJtaS4HM1p5N36seyiSbZ (« mélanger » A et B, 2026-11-14).
+> Statut : validée le 2026-11-14, livrée (plan `docs/superpowers/plans/2026-11-14-dossier-onglets.md`, ADR-047). Maquette vue et choisie : https://claude.ai/artifact/GZJtaS4HM1p5N36seyiSbZ (« mélanger » A et B, 2026-11-14).
 
 ## 1. Intention
 

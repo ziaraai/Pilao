@@ -121,6 +121,8 @@ Le système produit une fiche d'analyse structurée (`schemas/dce_analysis.schem
 - CA7 : **chaque élément porte sa source** (fichier + page), cliquable.
 - CA8 : temps de traitement cible : moins de 5 minutes pour un DCE de 300 pages.
 
+**Page du dossier** (ADR-047) : six onglets — Aperçu, DCE, Analyse, Mémoire, Documents, Export — avec une coche par étape faite et une pastille rouge sur Analyse s'il y a un point bloquant ; l'onglet ouvert est dans l'adresse (`?onglet=`). L'Aperçu montre quatre cases (avis, montant, date limite, visite) et « À faire avant de répondre » (6 lignes au plus : bloquants, visite obligatoire, pièces manquantes ou qui expirent, cadre de l'acheteur, date des questions), chaque ligne menant au bon bloc. L'Analyse se lit en blocs fermés avec une ligne de résumé ; les listes sont des tableaux ; chaque point de vigilance a un titre court et « Lire » pour la phrase complète.
+
 **US-3.3 Avis Go / No-Go**
 Score + explication (adéquation métier, distance, taille, délai restant, pièces manquantes). Indicatif uniquement.
 - Sans montant estimé, un accord-cadre est jugé sur son minimum et son maximum (annuels ou pour toute la durée), comparés à la fourchette du profil ; la fiche les montre (« Accord-cadre : de 80 000 € à 170 000 € HT par an ») avec leur source. Une analyse faite avant les lit dans le texte de la durée (ADR-046).

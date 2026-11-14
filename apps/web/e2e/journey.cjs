@@ -364,7 +364,14 @@ let current; // the page, for a screenshot when a step fails
     "2. Méthodologie"
   )
     throw new Error("imposed outline not kept");
-  await page.getByText("CCTP-1", { exact: true }).first().waitFor();
+  await page
+    .getByRole("tabpanel", { name: "Mémoire" })
+    .locator("text=CCTP-1 >> visible=true") // the chip, not the hidden <option>
+    .first()
+    .waitFor();
+  await page
+    .getByRole("button", { name: /^Références citées dans le mémoire/ })
+    .click();
   const refBox = page.getByRole("checkbox", { name: /Nettoyage des écoles/ });
   if (!(await refBox.isChecked()))
     throw new Error("closest reference not selected");
@@ -402,8 +409,12 @@ let current; // the page, for a screenshot when a step fails
     })
     .first()
     .waitFor();
-  await page.getByText("Engagement à valider").first().waitFor();
-  await page.getByRole("cell", { name: "quotidienne" }).first().waitFor();
+  const memoirPanel = page.getByRole("tabpanel", { name: "Mémoire" });
+  await memoirPanel.getByText("Engagement à valider").first().waitFor();
+  await memoirPanel
+    .getByRole("cell", { name: "quotidienne" })
+    .first()
+    .waitFor();
   const matrixCard = page.locator("section", {
     has: page.getByRole("heading", { name: "Matrice de conformité" }),
   });
@@ -683,7 +694,8 @@ let current; // the page, for a screenshot when a step fails
     "notices pre-filtered (area, CPV) and scored; one dismissed with a reason, one followed",
   );
 
-  // 10. Result of a bid (US-5.4) and dashboard (US-5.3)
+  // 10. Result of a bid (US-5.4) and dashboard (US-5.3): the result is in the overview tab
+  await page.getByRole("tab", { name: "Aperçu" }).click();
   await page
     .getByLabel("Statut", { exact: true })
     .filter({ visible: true })

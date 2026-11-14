@@ -92,6 +92,8 @@ Reste à faire :
   - [x] Lot 5 — réglages de la plateforme : modèle d'IA par tâche (catalogue OpenRouter, essai), clé OpenRouter chiffrée en base, imports TED/BOAMP (actif, « Importer maintenant »), budget d'IA et adresses (ADR-044)
 - [x] P4-07 Récupération des DCE (US-3.4, US-3.5, US-6.19, ADR-045) : robot sur PLACE et les plateformes Atexo (au nom de l'entreprise ou anonymement), récupération guidée ailleurs, surveillance quotidienne, interrupteur dans l'admin — reste le premier vrai usage avec Abdraouf (Q18)
 - [ ] P4-08 DCE des sites à captcha récupéré par l'équipe Pilao (lot suivant, Q17)
+- [x] P4-09 Page du dossier en onglets (Aperçu, DCE, Analyse, Mémoire, Documents, Export), résumé et « À faire avant de répondre », blocs à déplier et tableaux (ADR-047)
+- [ ] P4-10 Les mêmes briques (onglets, blocs à déplier, cases, tableaux) sur les autres pages : annonces, profil, coffre-fort, administration
 
 ## V2 (après validation)
 

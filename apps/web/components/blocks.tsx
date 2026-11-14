@@ -44,7 +44,7 @@ export function Tabs({
       role="tablist"
       aria-label={label}
       onKeyDown={onKey}
-      className="-mx-4 flex gap-1 overflow-x-auto border-b-2 border-slate-200 px-4 sm:mx-0 sm:px-0"
+      className="relative -mx-4 flex [contain:inline-size] gap-1 overflow-x-auto border-b-2 border-slate-200 px-4 sm:mx-0 sm:px-0"
     >
       {tabs.map((t) => {
         const selected = t.id === active;
@@ -272,7 +272,7 @@ export function DataTable({
   minWidth?: number;
 }) {
   return (
-    <div className="overflow-x-auto">
+    <div className="overflow-x-auto [contain:inline-size]">
       <table
         className="w-full text-left text-sm"
         style={{ minWidth: `${minWidth}px` }}
