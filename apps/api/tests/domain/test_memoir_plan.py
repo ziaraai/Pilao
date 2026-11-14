@@ -1,6 +1,8 @@
 from app.domain.memoir_plan import (
     SECTOR_DEFAULT_OUTLINE,
+    WORDS_PER_PAGE,
     Criterion,
+    PlannedSection,
     assign_requirements,
     assign_word_budgets,
     build_outline,
@@ -162,3 +164,12 @@ def test_a_short_moyens_chapter_receives_staff_equipment_and_products() -> None:
     assert sections[0].requirement_refs == ["CCTP-2", "CCTP-3"] and sections[
         1
     ].requirement_refs == ["CCTP-1"]
+
+
+def test_a_bigger_imposed_font_fits_fewer_words_per_page() -> None:
+    from app.domain.memoir_plan import words_per_page
+
+    assert words_per_page(None) == WORDS_PER_PAGE == words_per_page(10.5)
+    assert words_per_page(11) == 456 and words_per_page(12) == 383 and words_per_page(9) > 600
+    sections = [PlannedSection(title="A", weight=50), PlannedSection(title="B", weight=50)]
+    assert assign_word_budgets(sections, max_pages=10, font_size=12) == int(10 * 383 * 0.9)

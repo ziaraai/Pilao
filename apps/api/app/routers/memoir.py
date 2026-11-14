@@ -1,4 +1,3 @@
-import math
 import uuid
 from typing import Annotated
 
@@ -20,7 +19,6 @@ from app.db.models import (
     User,
 )
 from app.domain.memoir_checks import count_words
-from app.domain.memoir_plan import WORDS_PER_PAGE
 from app.schemas.memoir import (
     ConformityItemOut,
     ConformityOut,
@@ -37,6 +35,7 @@ from app.schemas.memoir import (
     SourceRef,
 )
 from app.services import credits
+from app.services import exports as exports_svc
 from app.services import memoir as svc
 from app.services import memoir_drafting as drafting
 from app.services import memoir_editing as editing
@@ -96,7 +95,7 @@ def memoir_out(db: ScopedDb, memoir: Memoir) -> MemoirOut:
     )
     assigned = {ref for s in sections for ref in s.requirement_refs}
     words = sum(count_words(s.content_md or "") for s in sections)
-    pages = math.ceil(words / WORDS_PER_PAGE) if words else None
+    pages = exports_svc.estimated_pages(db, memoir, words)
     warning = None
     if pages and memoir.max_pages and pages > memoir.max_pages:
         warning = (

@@ -306,3 +306,69 @@ def test_chapter_titles_keep_the_bold_of_their_style() -> None:
         ("gras", True),
         (" et normal.", None),
     ]
+
+
+def test_the_font_imposed_by_the_rc_is_applied() -> None:
+    from datetime import datetime
+
+    from docx.shared import Pt
+
+    from app.exports.memoir_docx import Chapter, MemoirExportData, build_memoir
+
+    data = MemoirExportData(
+        company="ACME",
+        tender_title="Nettoyage",
+        buyer=None,
+        reference=None,
+        lot=None,
+        version=1,
+        exported_at=datetime(2026, 11, 5),
+        chapters=[Chapter("1. Moyens", "## 1. Moyens\n\n| A | B |\n|---|---|\n| x | y |")],
+        font="Times New Roman",
+        font_size=11,
+    )
+    word = Document(io.BytesIO(build_memoir(data).to_bytes()))
+    normal = word.styles["Normal"].font
+    assert (normal.name, normal.size) == ("Times New Roman", Pt(11))
+    assert word.styles["Heading 1"].font.name == "Times New Roman"
+    assert word.styles["Heading 3"].font.size >= Pt(11)  # never smaller than the body
+    xml = word.styles.element.xml
+    assert 'w:ascii="Times New Roman"' in xml and "Arial" not in xml
+    default = build_memoir(MemoirExportData(**{**vars(data), "font": None, "font_size": None}))
+    assert default.doc.styles["Normal"].font.name == "Arial"
+    assert default.doc.styles["Normal"].font.size == Pt(10.5)
+
+
+def test_the_rc_font_drives_the_export_and_the_page_estimate(
+    make_client: Factory,
+    outbox: Outbox,
+    queue: FakeQueue,
+    model: WriterModel,  # noqa: F811
+    converter: FakeConverter,
+    storage: MemoryStorage,
+    db: Session,
+) -> None:
+    from docx.shared import Pt
+
+    from tests.api.test_analysis import SRC_RC
+
+    model.extra = {
+        "memoir_requirements": {
+            "imposed_outline": ["1. Moyens", "2. Méthodologie"],
+            "max_pages": 1,
+            "format_constraints": "1 page maximum. Police Times New Roman, taille 12.",
+            "source": {"file": SRC_RC, "page": 2},
+        }
+    }
+    model.words = 170  # about 420 words: 1 page in the default 10.5 pt, 2 pages in 12 pt
+    c = signed_in_client(make_client, outbox)
+    m = drafted(c, queue)
+    assert (m["estimated_pages"], m["max_pages"]) == (2, 1)
+    assert m["word_budget"] == int(1 * 383 * 0.9)  # the plan already counts 12 pt pages
+    assert m["page_warning"].startswith("Environ 2 pages pour 1 autorisées")
+    check = c.get(f"/memoirs/{m['id']}/export-check").json()
+    assert "Environ 2 pages pour 1 autorisées." in check["warnings"]
+    doc = exported(c, queue, converter, m["id"], "docx")
+    word = Document(io.BytesIO(content(storage, db, doc["file_id"])))
+    normal = word.styles["Normal"].font
+    assert (normal.name, normal.size) == ("Times New Roman", Pt(12))

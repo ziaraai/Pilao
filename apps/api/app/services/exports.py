@@ -25,6 +25,7 @@ from app.db.models import (
     Bid,
     ComplianceDocument,
     ConformityItem,
+    DceAnalysis,
     File,
     GeneratedDocument,
     Job,
@@ -34,9 +35,11 @@ from app.db.models import (
     Requirement,
     User,
 )
+from app.domain.imposed_font import ImposedFont
+from app.domain.imposed_font import from_analysis as font_from_analysis
 from app.domain.markdown import TODO
 from app.domain.memoir_checks import count_words
-from app.domain.memoir_plan import WORDS_PER_PAGE
+from app.domain.memoir_plan import words_per_page
 from app.exports.bundle import build_zip, safe_name
 from app.exports.dc_forms import FORMS, PROOF_LABELS, french_date
 from app.exports.memoir_docx import Chapter, MemoirExportData, RequirementRow, build_memoir
@@ -100,6 +103,17 @@ class ExportCheck:
         return out
 
 
+def imposed_font(db: Session, memoir: Memoir) -> ImposedFont | None:
+    """The font the RC of the memoir's DCE imposes, read from its format constraints."""
+    analysis = db.get(DceAnalysis, memoir.dce_analysis_id)
+    return font_from_analysis(analysis.data or {}) if analysis is not None else None
+
+
+def estimated_pages(db: Session, memoir: Memoir, words: int) -> int | None:
+    font = imposed_font(db, memoir)
+    return math.ceil(words / words_per_page(font.size if font else None)) if words else None
+
+
 def _sections(db: Session, memoir: Memoir) -> list[MemoirSection]:
     return list(
         db.scalars(
@@ -129,7 +143,7 @@ def export_check(db: Session, memoir: Memoir) -> ExportCheck:
         )
     )
     words = sum(count_words(s.content_md or "") for s in sections)
-    check.pages = math.ceil(words / WORDS_PER_PAGE) if words else None
+    check.pages = estimated_pages(db, memoir, words)
     return check
 
 
@@ -225,6 +239,8 @@ def memoir_data(
         ],
         brand_color=org.brand_color,
         logo=load_logo(db, org, storage),
+        font=font.name if (font := imposed_font(db, memoir)) else None,
+        font_size=font.size if font else None,
     )
 
 

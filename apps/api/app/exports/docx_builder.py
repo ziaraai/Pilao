@@ -24,6 +24,7 @@ from app.domain import markdown as md
 
 DEFAULT_BRAND = "011844"  # Pilao navy, when the company has not chosen a colour
 FONT = "Arial"
+BODY_SIZE = 10.5  # points (memoir_plan.BODY_SIZE counts words per page with it)
 GREY = RGBColor(0x64, 0x74, 0x8B)
 _HEX = re.compile(r"^#?([0-9a-fA-F]{6})$")
 
@@ -37,15 +38,15 @@ def _brand(color: str | None) -> RGBColor:
     return RGBColor.from_string((m.group(1) if m else DEFAULT_BRAND).upper())
 
 
-def _set_font(style_font: object, size: float | None = None) -> None:
+def _set_font(style_font: object, size: float | None = None, name: str = FONT) -> None:
     font = style_font  # docx.text.font.Font
-    font.name = FONT  # type: ignore[attr-defined]
+    font.name = name  # type: ignore[attr-defined]
     if size:
         font.size = Pt(size)  # type: ignore[attr-defined]
     r_pr = font._element.get_or_add_rPr()  # type: ignore[attr-defined]
     fonts = r_pr.get_or_add_rFonts()
     for attr in ("w:ascii", "w:hAnsi", "w:eastAsia", "w:cs"):
-        fonts.set(qn(attr), FONT)
+        fonts.set(qn(attr), name)
     for attr in ("w:asciiTheme", "w:hAnsiTheme", "w:eastAsiaTheme", "w:cstheme"):
         fonts.attrib.pop(qn(attr), None)  # a theme font would win over ours
 
@@ -72,8 +73,21 @@ def _shade(cell: _Cell, hex_color: str) -> None:
 
 
 class DocBuilder:
-    def __init__(self, *, brand_color: str | None, logo: bytes | None, company: str) -> None:
+    def __init__(
+        self,
+        *,
+        brand_color: str | None,
+        logo: bytes | None,
+        company: str,
+        font: str | None = None,
+        font_size: float | None = None,
+    ) -> None:
+        """``font`` / ``font_size``: what the RC imposes on the memoir; the body text, the
+        headings and the small notes follow it (only the page header and footer stay small)."""
         self.doc = Document()
+        self.font = font or FONT
+        self.body_size = font_size or BODY_SIZE
+        self.min_size = font_size or 0.0
         self.brand = _brand(brand_color)
         self.logo = logo
         self.company = company
@@ -90,7 +104,7 @@ class DocBuilder:
     def _styles(self) -> None:
         styles = self.doc.styles
         normal = styles["Normal"]
-        _set_font(normal.font, 10.5)
+        _set_font(normal.font, self.body_size, self.font)
         normal.paragraph_format.space_after = Pt(6)
         normal.paragraph_format.line_spacing = 1.15
         for name, size in (
@@ -100,7 +114,7 @@ class DocBuilder:
             ("Heading 3", 11),
         ):
             style = styles[name]
-            _set_font(style.font, size)
+            _set_font(style.font, size + self.body_size - BODY_SIZE, self.font)
             style.font.bold = True
             style.font.color.rgb = self.brand
             style.paragraph_format.space_before = Pt(12 if name != "Title" else 0)
@@ -147,7 +161,7 @@ class DocBuilder:
         """Small grey italic text: how to use the document, where a value comes from."""
         p = self.doc.add_paragraph()
         run = p.add_run(text)
-        run.italic, run.font.size, run.font.color.rgb = True, Pt(9), GREY
+        run.italic, run.font.size, run.font.color.rgb = True, Pt(max(9, self.min_size)), GREY
 
     def field(self, label: str, value: str | None, missing: str, source: str | None = None) -> None:
         """``Label : value`` — or ``Label : [À COMPLÉTER : missing]``; never a guess."""
@@ -157,7 +171,7 @@ class DocBuilder:
         self.runs(p, value if value else todo(missing))
         if value and source:
             run = p.add_run(f"  (source : {source})")
-            run.font.size, run.font.color.rgb = Pt(8.5), GREY
+            run.font.size, run.font.color.rgb = Pt(max(8.5, self.min_size)), GREY
 
     def checkboxes(self, *options: str) -> None:
         self.paragraph("     ".join(f"☐ {o}" for o in options))

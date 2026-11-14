@@ -21,6 +21,7 @@ from app.db.models import (
     Requirement,
     User,
 )
+from app.domain import imposed_font
 from app.domain import memoir_plan as plan
 from app.schemas.memoir import OutlineIn
 from app.services.references_selection import auto_selection, select_references
@@ -72,7 +73,10 @@ def create_memoir(db: Session, user: User, bid: Bid, embedder: Embedder) -> Memo
         .order_by(Requirement.position)
     ).all()
     plan.assign_requirements(sections, [(r.ref, r.category, r.text) for r in requirements])
-    total = plan.assign_word_budgets(sections, memoir_req.get("max_pages"))
+    font = imposed_font.from_analysis(data)
+    total = plan.assign_word_budgets(
+        sections, memoir_req.get("max_pages"), font.size if font else None
+    )
 
     title = ((data.get("key_info") or {}).get("title") or {}) or {}
     tender_text = " ".join([str(title.get("value") or bid.title), *(r.text for r in requirements)])

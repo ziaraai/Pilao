@@ -11,6 +11,7 @@ from dataclasses import dataclass, field
 from app.domain.dce import normalize
 
 WORDS_PER_PAGE = 500
+BODY_SIZE = 10.5  # points: the Word export's body text (app/exports/docx_builder.py)
 DEFAULT_PAGES = 12  # when the RC sets no limit
 MIN_SECTION_WORDS = 150
 
@@ -202,9 +203,20 @@ def _fit(section: PlannedSection, hints: tuple[str, ...], req_words: set[str]) -
     return (sum(h in title for h in hints), len(_words(section.title) & req_words))
 
 
-def assign_word_budgets(sections: list[PlannedSection], max_pages: int | None) -> int:
+def words_per_page(font_size: float | None = None) -> int:
+    """About 500 words a page in the export's 10.5 pt body; fewer when the RC imposes a bigger
+    font (the text area grows with the square of the size)."""
+    if not font_size:
+        return WORDS_PER_PAGE
+    return round(WORDS_PER_PAGE * (BODY_SIZE / font_size) ** 2)
+
+
+def assign_word_budgets(
+    sections: list[PlannedSection], max_pages: int | None, font_size: float | None = None
+) -> int:
     """Split the page budget by criterion weight; returns the total word budget."""
-    total = int((max_pages or DEFAULT_PAGES) * WORDS_PER_PAGE * 0.9)  # keep a margin for tables
+    per_page = words_per_page(font_size)
+    total = int((max_pages or DEFAULT_PAGES) * per_page * 0.9)  # keep a margin for tables
     weights = [s.weight for s in sections if s.weight]
     default = (sum(weights) / len(weights)) if weights else 1.0
     # A chapter without criterion weighs half an average weighted one; none weighted: equal.

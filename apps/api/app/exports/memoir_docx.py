@@ -50,6 +50,8 @@ class MemoirExportData:
     requirements: list[RequirementRow] = field(default_factory=list)
     brand_color: str | None = None
     logo: bytes | None = None
+    font: str | None = None  # imposed by the RC (« Times New Roman, taille 11 »)
+    font_size: float | None = None
 
 
 def _complex_field(paragraph: Paragraph, instruction: str, cached: str) -> None:
@@ -143,7 +145,13 @@ def _toc(b: DocBuilder, titles: list[str]) -> None:
 
 
 def build_memoir(data: MemoirExportData) -> DocBuilder:
-    b = DocBuilder(brand_color=data.brand_color, logo=data.logo, company=data.company)
+    b = DocBuilder(
+        brand_color=data.brand_color,
+        logo=data.logo,
+        company=data.company,
+        font=data.font,
+        font_size=data.font_size,
+    )
     b.doc.core_properties.title = f"Mémoire technique — {data.tender_title}"[:250]
     _cover(b, data)
     titles = [c.title for c in data.chapters]
