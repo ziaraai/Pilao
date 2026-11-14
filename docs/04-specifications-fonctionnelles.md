@@ -123,6 +123,7 @@ Le système produit une fiche d'analyse structurée (`schemas/dce_analysis.schem
 
 **US-3.3 Avis Go / No-Go**
 Score + explication (adéquation métier, distance, taille, délai restant, pièces manquantes). Indicatif uniquement.
+- Sans montant estimé, un accord-cadre est jugé sur son minimum et son maximum (annuels ou pour toute la durée), comparés à la fourchette du profil ; la fiche les montre (« Accord-cadre : de 80 000 € à 170 000 € HT par an ») avec leur source. Une analyse faite avant les lit dans le texte de la durée (ADR-046).
 
 ---
 
@@ -159,6 +160,7 @@ DC1, DC2 (ou données DUME), liste des moyens humains et matériels, liste des r
 - CA2 : PDF.
 - CA3 : export ZIP du dossier complet (mémoire + documents + attestations valides).
 - CA4 : avertissement avant export si des `[À COMPLÉTER]` ou des exigences `missing` restent.
+- CA5 : la police et la taille imposées par le RC (« Times New Roman, taille 11 ») s'appliquent au Word et au PDF du mémoire ; le nombre de pages estimé et le nombre de mots par chapitre en tiennent compte (ADR-046).
 
 ---
 

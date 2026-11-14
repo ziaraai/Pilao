@@ -164,7 +164,7 @@ def test_deposit_triggers_an_analysis_with_clickable_sources(
 ) -> None:
     c = signed_in_client(make_client, outbox)
     bid, a = analyzed(c, queue, DCE)
-    assert a["status"] == "ready" and a["dce_version"] == 1 and a["prompt_version"] == "0.2.0"
+    assert a["status"] == "ready" and a["dce_version"] == 1 and a["prompt_version"] == "0.3.0"
     buyer = a["data"]["key_info"]["buyer_name"]
     assert buyer["value"] == "Ville de Lyon" and buyer["source"]["page"] == 1
     # The source is clickable: it opens the cited page of the cited file.
@@ -181,7 +181,7 @@ def test_deposit_triggers_an_analysis_with_clickable_sources(
     assert any("BPU" in w for w in a["warnings"])  # pricing piece not sent to the model
     assert "BPU" not in model.prompts[0]
     call = db.scalars(select(AiCall).where(AiCall.task == "dce_extraction")).one()
-    assert call.success and str(call.bid_id) == bid and call.prompt_version == "0.2.0"
+    assert call.success and str(call.bid_id) == bid and call.prompt_version == "0.3.0"
 
 
 def test_large_dce_is_analyzed_in_several_calls(

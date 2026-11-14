@@ -1,8 +1,9 @@
 /** Rules of the file drop zone (components/upload.tsx). */
 
 /**
- * Whether a file matches an ``accept`` list (".pdf,.png", "image/png", "image/*"), as the
- * browser's file picker would filter it: a dropped file is not filtered by the browser.
+ * Whether a file matches an ``accept`` list (".pdf,.png", "image/png", "image/*"). The zone
+ * checks every file itself, picked or dropped: its picker has no ``accept`` (a phone greys out a
+ * PDF that a site sent as « unknown »), and an extension that matches is enough.
  */
 export function acceptsFile(
   name: string,

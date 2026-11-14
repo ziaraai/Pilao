@@ -64,11 +64,13 @@ export function UploadButton({
     (multiple ? "Glissez vos fichiers ici" : "Glissez votre fichier ici");
   return (
     <div className="space-y-3">
+      {/* No ``accept`` on the input: a phone greys out a file a site sent with a wrong type
+          (a PDF from AWS saved as « unknown »). Every file can be picked; ``choose`` refuses an
+          unsupported name and the server checks the real content. */}
       <input
         id={id}
         ref={input}
         type="file"
-        accept={accept}
         multiple={multiple}
         className="peer sr-only"
         onChange={(e) => choose(Array.from(e.target.files ?? []))}

@@ -13,7 +13,10 @@ from typing import Any
 _KEYWORD = r"\b(minimum|maximum|minimal|maximal|mini|maxi)\b"
 _NUMBER = r"(\d{1,3}(?:[ \u00a0\u202f.]\d{3})+(?:,\d{1,2})?|\d+(?:,\d{1,2})?)"
 _AMOUNT = re.compile(
-    _KEYWORD + r"(?:(?!\b(?:mini|maxi))[^0-9€;\n]){0,40}?" + _NUMBER + r"\s*(k€|m€|€|euros?)",
+    _KEYWORD
+    + r"(?:(?!\b(?:mini|maxi|bon de commande|par commande))[^0-9€;\n]){0,40}?"
+    + _NUMBER
+    + r"\s*(k€|m€|€|euros?)",
     re.IGNORECASE,
 )
 _PER_YEAR = re.compile(r"\bannuel(?:le)?s?\b|\bpar an\b|/\s*an\b|\bannuellement\b", re.IGNORECASE)

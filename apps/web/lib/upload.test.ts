@@ -3,6 +3,19 @@ import { describe, expect, it } from "vitest";
 import { acceptsFile, readyText } from "./upload";
 
 describe("file drop", () => {
+  it("keeps a file a site sent with a wrong type when its name is right (AWS)", () => {
+    expect(
+      acceptsFile(
+        "Correspondance_MPI_1897224.pdf",
+        "application/octet-stream",
+        ".zip,.pdf,.docx",
+      ),
+    ).toBe(true);
+    expect(acceptsFile("video.mp4", "video/mp4", ".zip,.pdf,.docx")).toBe(
+      false,
+    );
+  });
+
   it("takes a dropped file only if its type is accepted, as the picker would", () => {
     expect(acceptsFile("Kbis.PDF", "application/pdf", ".pdf,.png,.jpg")).toBe(
       true,

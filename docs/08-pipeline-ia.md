@@ -37,7 +37,7 @@
   2. **CCTP** → exigences numérotées (`requirements`), avec catégorie et page.
   3. **CCAP** → points de vigilance (pénalités, durée, révision des prix, reprise du personnel…).
   4. **Croisement** avec le coffre-fort → statut des pièces.
-  5. **Go / No-Go** : règle déterministe (métier, distance, montant, délai, pièces) + phrase d'explication du modèle.
+  5. **Go / No-Go** : règle déterministe (métier, distance, montant, délai, pièces) + phrase d'explication du modèle. Sans montant estimé, les minimum et maximum d'un accord-cadre (`key_info.framework_amounts`, ou relus dans la durée pour une analyse antérieure) en tiennent lieu (ADR-046).
 - Validation : schéma JSON ; toute valeur sans source est rejetée.
 
 ## 3. Génération du mémoire
@@ -47,7 +47,7 @@ plan (RC imposé > modèle org > plan secteur)
   └─► pour chaque chapitre (en parallèle, max N simultanés) :
         1. exigences du CCTP liées au chapitre (par catégorie + similarité)
         2. sous-critère de notation lié
-        2b. contexte commun à tous les chapitres : durée, montant estimé, données du site
+        2b. contexte commun à tous les chapitres : durée, montant estimé (à défaut, la fourchette de l'accord-cadre), données du site
             (exigences « surface », « horaires », « fréquence » des autres chapitres, avec source)
         3. recherche RAG dans la base de l'entreprise (top-k chunks, filtre org_id)
         4. données structurées utiles (moyens, certifications, références choisies)

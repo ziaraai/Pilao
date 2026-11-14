@@ -266,6 +266,10 @@ let current; // the page, for a screenshot when a step fails
   await page.getByRole("button", { name: "Créer", exact: true }).click();
   await page.waitForURL(/\/dossiers\/[0-9a-f-]+$/);
   const bidUrl = page.url(); // lot 4: the paid relaunch of its analysis
+  // A phone greys out a file a site sent with a wrong type (AWS): the picker must show every
+  // file; the zone refuses an unsupported name itself and the server checks the content.
+  if ((await page.getAttribute("#dce-upload", "accept")) !== null)
+    throw new Error("the DCE file picker filters files by type");
   await page.setInputFiles("#dce-upload", `${S}/DCE_mairie.zip`);
   await page
     .getByRole("button", { name: "Déposer le DCE", exact: true })

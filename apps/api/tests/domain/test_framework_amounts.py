@@ -30,6 +30,10 @@ SOURCE = {"file": "RC.pdf", "page": 2, "dce_file_id": "f1"}
         ("Maximum : 80\u202f000,50\u00a0€ HT", (None, 8_000_050, None)),
         ("Montant maximum annuel de 170 k€ HT", (None, 17_000_000, True)),
         ("Durée de 4 ans, reconductible.", None),
+        (  # the minimum of one order is not the accord-cadre's minimum
+            "Montant minimum par bon de commande : 500 € HT ; montant maximum annuel 90 000 € HT",
+            (None, 9_000_000, True),
+        ),
         ("Délai minimum de 10 jours avant la visite.", None),
         ("Minimum 900 000 € HT, maximum 100 000 € HT", None),  # inconsistent: not trusted
         (None, None),

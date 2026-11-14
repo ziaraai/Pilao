@@ -477,3 +477,16 @@ Format : numéro, date, décision, raison, statut. Ajouter une entrée pour chaq
   - **Après la revue** : le robot ne visite que les plateformes Atexo connues (`ATEXO_SITES` ; un autre site au bon chemin est reconnu mais reste guidé), vérifie chaque étape des redirections, lit robots.txt sans redirection ; les liens `http://` de PLACE passent en HTTPS ; le worker tourne avec `--with-scheduler` (sans lui, ni les nouvelles tentatives ni les reports d'un site occupé ne partent).
 - **Alternatives écartées** : appels HTTP sans navigateur (le formulaire PRADO d'Atexo dépend de son script ; fragile) ; extension de navigateur (publication sur trois magasins, installation chez chaque utilisateur ; à revoir si le dépôt à la main gêne) ; résoudre les captchas (contraire à la volonté des sites, risque juridique).
 - **Statut** : validé ; à vérifier au premier vrai usage avec l'entreprise d'Abdraouf (champ SIRET d'Atexo, mode identifié). Lot suivant : le DCE récupéré par l'équipe Pilao pour les sites à captcha.
+
+## ADR-046 — Montants d'accord-cadre, police du RC, fichiers grisés : relire ce qui est déjà extrait
+
+- **Date** : 2026-11-14
+- **Contexte** : premier vrai DCE déposé (nettoyage des gymnases de Rillieux-la-Pape, sur AWS). L'avis Go/No-Go disait « Montant estimé non indiqué » alors que le RC donne un minimum et un maximum annuels ; le RC impose « Times New Roman, taille 11 » et l'export était toujours en Arial ; sur la tablette, un PDF envoyé par AWS sans type était grisé dans « Téléchargements ».
+- **Décision** :
+  - L'analyse demande `key_info.framework_amounts` (minimum, maximum, `period` = année ou durée totale, source vérifiée comme les autres) ; prompt `extraction_dce` 0.3.0. **Une analyse faite avant est relue** dans le texte de la durée ou de la procédure (`app/domain/framework_amounts.py`) : pas de nouvelle analyse payante.
+  - Go/No-Go sans montant estimé : sous le minimum du profil si le maximum de l'accord-cadre y est inférieur, au-dessus du maximum du profil si le minimum garanti le dépasse, sinon dans la fourchette ; montants comparés tels qu'écrits (annuels ou totaux).
+  - **La police du RC** est lue dans les contraintes de forme déjà extraites (`app/domain/imposed_font.py`, liste de polices connues, taille de 8 à 16) : corps du texte, titres (jamais plus petits que le corps) et notes la suivent ; l'en-tête et le pied de page restent petits. Le PDF de LibreOffice prend la police métriquement identique (Liberation Serif pour Times New Roman). Les mots par page suivent la taille (500 à 10,5 pt, au carré de la taille).
+  - **Les zones de dépôt ne filtrent plus par type** dans le sélecteur de fichiers : la zone refuse elle-même un nom de fichier non pris en charge, le serveur vérifie le contenu réel (`app/domain/filetypes.py`).
+- **Alternatives écartées** : relancer l'analyse des dossiers existants (payant pour le client) ; demander la police à l'IA (déjà dans le texte extrait) ; garder le filtre sur ordinateur seulement (deux comportements à maintenir pour un gain faible).
+- **Statut** : validé. Reste à concevoir avec Faycal : remplir directement le cadre de réponse fourni par l'acheteur (Q19).
+
