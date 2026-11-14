@@ -448,7 +448,7 @@ def notify_update(db: Session, version: DceVersion, mailer: Mailer) -> None:
         return
     src = recognize(version.source_url)
     site = f" sur {src.site}" if src else ""
-    link = f"{get_settings().app_base_url}/dossiers/{bid.id}"
+    link = f"{get_settings().app_base_url}/dossiers/{bid.id}?onglet=dce"
     body = (
         f"Bonjour,\n\nLe dossier de consultation de « {bid.title} » a changé{site}.\n\n"
         f"{version.diff_summary or 'Des pièces ont changé.'}\n\n"
@@ -523,7 +523,7 @@ def _deadline_mail(
     recipient = _recipient(db, bid, requester)
     if recipient is None:
         return
-    link = f"{get_settings().app_base_url}/dossiers/{bid.id}"
+    link = f"{get_settings().app_base_url}/dossiers/{bid.id}?onglet=dce"
     body = (
         f"Bonjour,\n\nLa date limite de « {bid.title} » a changé sur {site} : "
         f"{_paris(old)} → {_paris(new)} (heure de Paris).\n\n"

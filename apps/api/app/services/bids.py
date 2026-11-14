@@ -1,11 +1,21 @@
 import uuid
 from typing import Any
 
-from sqlalchemy import select
+from sqlalchemy import literal, select
 from sqlalchemy.orm import Session
 
-from app.db.models import AuditLog, Bid, DceFile, DceVersion, File, User
-from app.schemas.bids import BidIn, BidPatch
+from app.db.models import (
+    AuditLog,
+    Bid,
+    DceAnalysis,
+    DceFile,
+    DceVersion,
+    File,
+    GeneratedDocument,
+    Memoir,
+    User,
+)
+from app.schemas.bids import BidIn, BidPatch, BidProgressOut
 from app.services import files as files_svc
 from app.services.tenders import release_matches
 from app.storage.objects import ObjectStorage
@@ -56,3 +66,39 @@ def delete_bid(db: Session, user: User, bid: Bid, storage: ObjectStorage) -> Non
         record = db.get(File, file_id)
         if record is not None:
             files_svc.delete_file(db, user, record, storage)
+
+
+FORMS = ("dc1", "dc2", "staff_list", "equipment_list", "references_list", "planning")
+EXPORTS = ("memoir_docx", "memoir_pdf", "bundle_zip")
+
+
+def progress(db: Session, bid: Bid) -> BidProgressOut:
+    """Each step of the dossier, done or not: read from what exists, nothing stored."""
+
+    def exists(*where: Any) -> bool:
+        return db.scalar(select(literal(True)).where(*where).limit(1)) is not None
+
+    analysis = db.scalars(
+        select(DceAnalysis)
+        .where(DceAnalysis.bid_id == bid.id, DceAnalysis.status == "ready")
+        .order_by(DceAnalysis.created_at.desc())
+    ).first()
+    watch_points = ((analysis.data or {}).get("watch_points") or []) if analysis else []
+    return BidProgressOut(
+        dce_ready=exists(DceVersion.bid_id == bid.id, DceVersion.status == "ready"),
+        analysis_ready=analysis is not None,
+        memoir_ready=exists(Memoir.bid_id == bid.id, Memoir.status.in_(("ready", "exported"))),
+        documents_ready=exists(
+            GeneratedDocument.bid_id == bid.id,
+            GeneratedDocument.status == "ready",
+            GeneratedDocument.kind.in_(FORMS),
+        ),
+        exported=exists(
+            GeneratedDocument.bid_id == bid.id,
+            GeneratedDocument.status == "ready",
+            GeneratedDocument.kind.in_(EXPORTS),
+        ),
+        blocking_points=sum(
+            1 for w in watch_points if isinstance(w, dict) and w.get("severity") == "blocking"
+        ),
+    )

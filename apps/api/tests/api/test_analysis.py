@@ -164,7 +164,7 @@ def test_deposit_triggers_an_analysis_with_clickable_sources(
 ) -> None:
     c = signed_in_client(make_client, outbox)
     bid, a = analyzed(c, queue, DCE)
-    assert a["status"] == "ready" and a["dce_version"] == 1 and a["prompt_version"] == "0.3.0"
+    assert a["status"] == "ready" and a["dce_version"] == 1 and a["prompt_version"] == "0.4.0"
     buyer = a["data"]["key_info"]["buyer_name"]
     assert buyer["value"] == "Ville de Lyon" and buyer["source"]["page"] == 1
     # The source is clickable: it opens the cited page of the cited file.
@@ -181,7 +181,7 @@ def test_deposit_triggers_an_analysis_with_clickable_sources(
     assert any("BPU" in w for w in a["warnings"])  # pricing piece not sent to the model
     assert "BPU" not in model.prompts[0]
     call = db.scalars(select(AiCall).where(AiCall.task == "dce_extraction")).one()
-    assert call.success and str(call.bid_id) == bid and call.prompt_version == "0.3.0"
+    assert call.success and str(call.bid_id) == bid and call.prompt_version == "0.4.0"
 
 
 def test_large_dce_is_analyzed_in_several_calls(
@@ -432,3 +432,36 @@ def test_an_accord_cadre_range_is_shown_and_judged(
     assert again["framework_amounts"]["label"] == "Jusqu'à 30 000 € HT par an"
     [amount] = [f for f in again["go_no_go"]["factors"] if f["label"] == "Montant"]
     assert amount["status"] == "ok"
+
+
+def test_bid_progress_follows_the_dossier(
+    make_client: Factory, outbox: Outbox, queue: FakeQueue, model: FakeModel
+) -> None:
+    c = signed_in_client(make_client, outbox)
+    fresh = c.get(f"/bids/{new_bid(c)}").json()
+    assert fresh["progress"] == {
+        "dce_ready": False,
+        "analysis_ready": False,
+        "memoir_ready": False,
+        "documents_ready": False,
+        "exported": False,
+        "blocking_points": 0,
+    }
+    model.extra = {
+        "watch_points": [
+            {
+                "text": "Visite obligatoire : l'offre sans attestation est irrégulière.",
+                "title": "Visite obligatoire",
+                "severity": "blocking",
+                "source": {"file": SRC_RC, "page": 1},
+            }
+        ]
+    }
+    bid, a = analyzed(c, queue, DCE)
+    assert a["data"]["watch_points"][0]["title"] == "Visite obligatoire"
+    progress = c.get(f"/bids/{bid}").json()["progress"]
+    assert progress["dce_ready"] and progress["analysis_ready"]
+    assert progress["blocking_points"] == 1 and not progress["memoir_ready"]
+    patched = c.patch(f"/bids/{bid}", json={"status": "in_progress"}).json()
+    assert patched["progress"] == progress  # the tab marks survive a status change
+    assert c.get("/bids").json()[0]["progress"] is None  # not computed for the list

@@ -1,6 +1,6 @@
 ---
 id: extraction_dce
-version: 0.3.0
+version: 0.4.0
 task: dce_analysis
 output_schema: schemas/dce_analysis.schema.json
 ---
@@ -41,7 +41,7 @@ Produis la fiche d'analyse :
 - `memoir_requirements` : plan imposé (titres dans l'ordre, tels qu'écrits), nombre de pages maximum, format, cadre de réponse fourni ou non.
 - `required_documents` : pièces de candidature et d'offre demandées.
 - `requirements` : exigences techniques du CCTP, une par ligne, numérotées `CCTP-1`, `CCTP-2`… avec catégorie (`frequency`, `surface`, `product`, `schedule`, `staff`, `equipment`, `quality`, `safety`, `environment`, `reporting`, `other`) et importance (`mandatory`, `expected`, `nice_to_have`).
-- `watch_points` : pénalités, clauses inhabituelles, reprise du personnel, clause sociale ou environnementale, variantes, groupement interdit, etc.
+- `watch_points` : pénalités, clauses inhabituelles, reprise du personnel, clause sociale ou environnementale, variantes, groupement interdit, etc. Chacun avec un `title` : titre court de 8 mots au plus (ex. « Visite obligatoire »).
 
 Schéma JSON attendu :
 {{json_schema}}

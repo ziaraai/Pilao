@@ -78,6 +78,7 @@ def test_size_changed_fetches_an_update(
     assert latest is not None and latest.origin == "update"
     assert latest.uploaded_by == world.user.id  # the requester of the first retrieval
     assert [m.subject for m in outbox.sent] == ["Le DCE de « Nettoyage des écoles » a changé"]
+    assert f"/dossiers/{world.bid_id}?onglet=dce" in outbox.sent[0].body  # opens the DCE tab
     from app.db.models import DceAnalysis
 
     assert (
@@ -107,6 +108,7 @@ def test_deadline_changed(world: World, queue: FakeQueue, db: Session, outbox: O
     [mail] = outbox.sent
     assert mail.subject == "La date limite de « Nettoyage des écoles » a changé"
     assert "30/11 12:00 → 05/12 12:00" in mail.body
+    assert f"/dossiers/{world.bid_id}?onglet=dce" in mail.body
     assert world.bid.dce_watch is not None
     assert world.bid.dce_watch["deadline_at"] == later.isoformat()
 

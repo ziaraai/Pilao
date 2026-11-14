@@ -216,8 +216,15 @@ class Requirement(BaseModel):
 
 class WatchPoint(BaseModel):
     text: str
+    title: str | None = None  # a short title, 8 words at most (« Visite obligatoire »)
     severity: Severity = "info"
     source: Source | None = None
+
+    @field_validator("title", mode="before")
+    @classmethod
+    def _title(cls, v: object) -> str | None:
+        text = str(v).strip() if isinstance(v, str) else ""
+        return text[:80] or None
 
     @field_validator("severity", mode="before")
     @classmethod

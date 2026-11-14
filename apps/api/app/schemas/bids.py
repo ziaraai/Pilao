@@ -34,6 +34,17 @@ class BidPatch(BaseModel):
     minutes_usual: Annotated[int, Field(ge=0, le=100_000)] | None = None
 
 
+class BidProgressOut(BaseModel):
+    """Where the dossier stands, computed when read (the marks on the dossier's tabs)."""
+
+    dce_ready: bool
+    analysis_ready: bool
+    memoir_ready: bool
+    documents_ready: bool
+    exported: bool
+    blocking_points: int
+
+
 class BidOut(BaseModel):
     model_config = ConfigDict(from_attributes=True)
     id: uuid.UUID
@@ -49,6 +60,7 @@ class BidOut(BaseModel):
     minutes_with_pilao: int | None = None
     minutes_usual: int | None = None
     created_at: datetime
+    progress: BidProgressOut | None = None  # the dossier page only, not the list
 
 
 class DceFileOut(BaseModel):

@@ -25,7 +25,7 @@ CCAP = doc("DCE/CCAP.docx", "ccap", ["Pénalités : 100 € par jour"], paginate
 
 def test_prompt_renders_with_guards_and_versions() -> None:
     prompt = load_prompt("extraction_dce")
-    assert prompt.version == "0.3.0"
+    assert prompt.version == "0.4.0"
     system, user = prompt.render(
         company_summary="ACME", documents=render(RC), scope=SCOPE_FULL, json_schema="{}"
     )
@@ -34,6 +34,7 @@ def test_prompt_renders_with_guards_and_versions() -> None:
     assert '<document name="DCE/RC.pdf" kind="rc">' in user and "[[PAGE 2]]" in user
     assert "{{" not in user  # every variable substituted
     assert "`framework_amounts`" in user  # accord-cadre minimum and maximum
+    assert "titre court" in user  # a short title per watch point
 
 
 def test_a_document_cannot_close_its_own_tag() -> None:
@@ -236,3 +237,19 @@ def test_framework_amounts_are_kept_only_with_a_source() -> None:
     assert any("Montants de l'accord-cadre" in w for w in warnings)
     data, _ = verify(analysis(), [RC, CCTP, CCAP])
     assert data["key_info"]["framework_amounts"] is None
+
+
+def test_watch_points_keep_a_short_title() -> None:
+    def point(title: object) -> dict[str, object]:
+        return {
+            "text": "Visite obligatoire : sans attestation, offre irrégulière.",
+            "title": title,
+            "severity": "blocking",
+            "source": {"file": "DCE/RC.pdf", "page": 1},
+        }
+
+    data, _ = verify(
+        analysis(watch_points=[point("Visite obligatoire"), point("  "), point("x" * 120)]),
+        [RC, CCTP, CCAP],
+    )
+    assert [w["title"] for w in data["watch_points"]] == ["Visite obligatoire", None, "x" * 80]

@@ -155,6 +155,7 @@
         "type": "object",
         "properties": {
           "text": { "type": "string" },
+          "title": { "type": ["string", "null"], "description": "Titre court, 8 mots au plus" },
           "severity": { "enum": ["info", "warning", "blocking"] },
           "source": { "$ref": "#/$defs/source" }
         },

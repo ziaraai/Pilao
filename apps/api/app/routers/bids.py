@@ -79,14 +79,19 @@ def list_bids(db: ScopedDb, status: Annotated[BidStatus | None, Query()] = None)
     return [BidOut.model_validate(b) for b in db.scalars(stmt)]
 
 
+def _bid_out(db: ScopedDb, bid: Bid) -> BidOut:
+    """The dossier with its progress: the marks of its tabs."""
+    return BidOut.model_validate(bid).model_copy(update={"progress": svc.progress(db, bid)})
+
+
 @router.get("/bids/{bid_id}")
 def get_bid(bid_id: uuid.UUID, db: ScopedDb) -> BidOut:
-    return BidOut.model_validate(_bid(db, bid_id))
+    return _bid_out(db, _bid(db, bid_id))
 
 
 @router.patch("/bids/{bid_id}")
 def patch_bid(bid_id: uuid.UUID, data: BidPatch, ctx: CurrentAuth, db: ScopedDb) -> BidOut:
-    return BidOut.model_validate(svc.update_bid(db, ctx.user, _bid(db, bid_id), data))
+    return _bid_out(db, svc.update_bid(db, ctx.user, _bid(db, bid_id), data))
 
 
 @router.delete("/bids/{bid_id}", status_code=204)
