@@ -26,6 +26,7 @@ import {
   TABS,
   type TabId,
   daysLeftText,
+  defaultTab,
   tabDone,
   tabFromQuery,
 } from "@/lib/dossier";
@@ -51,12 +52,19 @@ function Dossier() {
   const [analysisKey, setAnalysisKey] = useState(0);
   const [memoirKey, setMemoirKey] = useState(0);
   const [anchor, setAnchor] = useState<{ id: string; n: number }>();
+  // The default tab is chosen once, at the first load: the page must not jump to the overview
+  // by itself when the DCE becomes ready while the user is on the DCE tab.
+  const [firstTab, setFirstTab] = useState<TabId | null>(null);
   const action = useAction();
+  if (bid.data && firstTab === null) setFirstTab(defaultTab(bid.data.progress));
 
   if (bid.error && !bid.data) return <Alert tone="danger">{bid.error}</Alert>;
   if (!bid.data) return <Loading />;
   const b = bid.data;
-  const tab = tabFromQuery(params.get("onglet"), b.progress);
+  const query = params.get("onglet");
+  const tab = query
+    ? tabFromQuery(query, b.progress)
+    : (firstTab ?? defaultTab(b.progress));
 
   function select(next: string) {
     router.replace(`/dossiers/${id}?onglet=${next}`, { scroll: false });

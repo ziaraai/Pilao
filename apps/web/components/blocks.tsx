@@ -170,7 +170,7 @@ export function Disclosure({
               </span>
             )}
           </span>
-          {badges.length > 0 && (
+          {badges.length > 0 && !open && (
             <span className="hidden flex-wrap justify-end gap-1.5 sm:flex">
               {badges.map((b) => (
                 <Badge key={b.label} tone={BADGE_TONE[b.tone] ?? "neutral"}>

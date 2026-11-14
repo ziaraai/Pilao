@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 
+import { Disclosure } from "@/components/blocks";
 import { PaidButton } from "@/components/paid-button";
 import { ChapterView } from "@/components/dossier/chapter";
 import { SourceLink, SourceViewer } from "@/components/dossier/source";
@@ -178,6 +179,7 @@ function OutlineEditor({
   const [dirty, setDirty] = useState(false);
   const save = useAction();
   const refs = useAction();
+  const [refsOpen, setRefsOpen] = useState(false);
   const generate = useAction();
   const editable = memoir.status === "draft";
   const assigned = new Set(sections.flatMap((s) => s.requirement_refs));
@@ -419,7 +421,17 @@ function OutlineEditor({
           </div>
         )}
       </Card>
-      <Card title="Références citées dans le mémoire" color="brand">
+      <Disclosure
+        id="bloc-references"
+        title="Références citées dans le mémoire"
+        summary={
+          memoir.references.length === 0
+            ? "Aucune référence dans votre profil"
+            : `${memoir.references.filter((r) => r.selected).length} citée(s) sur ${memoir.references.length} proposée(s)`
+        }
+        open={refsOpen}
+        onToggle={() => setRefsOpen((o) => !o)}
+      >
         {memoir.references.length === 0 ? (
           <Empty>
             Aucune référence dans votre profil : ajoutez vos chantiers dans
@@ -479,7 +491,7 @@ function OutlineEditor({
           Seules vos propres références sont proposées : aucune n&apos;est
           inventée.
         </p>
-      </Card>
+      </Disclosure>
       {editable ? (
         <Card title="Rédaction" color="brand">
           <div className="space-y-3">
@@ -580,17 +592,42 @@ function ConformityCard({
 }) {
   const matrix = useApi<Conformity>(`/memoirs/${memoir.id}/conformity`);
   const rerun = useAction();
+  const [open, setOpen] = useState(false);
+  const [autoOpened, setAutoOpened] = useState(false);
   const c = matrix.data;
   const canRun =
     memoir.status === "ready" || memoir.status === "exported"
       ? memoir.conformity_status !== "pending"
       : false;
+  const absent = c?.counts.missing ?? 0;
+  if (absent > 0 && !autoOpened) {
+    // an absent requirement must not stay hidden: open once, then the user decides
+    setAutoOpened(true);
+    setOpen(true);
+  }
+  const counts = c
+    ? (["missing", "partial", "covered"] as const).map((k) => ({
+        label: `${c.counts[k]} ${CONFORMITY_STATUS[k].label.toLowerCase()}${c.counts[k] > 1 ? "s" : ""}`,
+        tone: CONFORMITY_STATUS[k].tone,
+      }))
+    : [];
   return (
-    <Card
+    <Disclosure
+      id="bloc-conformite"
       title="Matrice de conformité"
-      color="brand"
-      actions={
-        canRun && (
+      summary={
+        memoir.conformity_status === "pending"
+          ? "Vérification en cours…"
+          : c && c.items.length > 0
+            ? "Chaque exigence du CCTP cherchée dans le mémoire"
+            : "Pas encore vérifiée"
+      }
+      badges={counts}
+      open={open}
+      onToggle={() => setOpen((o) => !o)}
+    >
+      <div className="mb-3 flex justify-end">
+        {canRun && (
           <Button
             variant="secondary"
             busy={rerun.busy}
@@ -607,9 +644,8 @@ function ConformityCard({
               ? "Lancer la vérification"
               : "Relancer la vérification"}
           </Button>
-        )
-      }
-    >
+        )}
+      </div>
       <div className="space-y-3">
         <p className="text-sm text-slate-600">
           Chaque exigence du CCTP est cherchée dans le mémoire. « Couverte »
@@ -677,7 +713,7 @@ function ConformityCard({
           </>
         )}
       </div>
-    </Card>
+    </Disclosure>
   );
 }
 

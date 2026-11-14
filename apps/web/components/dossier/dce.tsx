@@ -1,6 +1,6 @@
 "use client";
 
-import { useRef } from "react";
+import { useRef, useState } from "react";
 
 import {
   DceSourcePanel,
@@ -10,6 +10,7 @@ import { PaidButton } from "@/components/paid-button";
 import { UploadButton } from "@/components/upload";
 import {
   Alert,
+  Button,
   Badge,
   Card,
   Empty,
@@ -34,6 +35,7 @@ export function DceSection({
   onProcessed: () => void;
 }) {
   const wasBusy = useRef(false);
+  const [showOlder, setShowOlder] = useState(false);
   const versions = useApi<DceVersion[]>(`/bids/${bidId}/dce`, (v) => {
     const busy = running(v);
     if (wasBusy.current && !busy) onProcessed(); // processing just ended: the analysis started
@@ -158,7 +160,7 @@ export function DceSection({
         </div>
       )}
       <div className="mt-4 space-y-4">
-        {versions.data?.map((v, i) => (
+        {versions.data?.slice(0, showOlder ? undefined : 1).map((v, i) => (
           <details
             key={v.id}
             id={`dce-version-${v.id}`}
@@ -263,6 +265,17 @@ export function DceSection({
             </div>
           </details>
         ))}
+        {(versions.data?.length ?? 0) > 1 && (
+          <Button
+            variant="ghost"
+            aria-expanded={showOlder}
+            onClick={() => setShowOlder((o) => !o)}
+          >
+            {showOlder
+              ? "Masquer les versions précédentes"
+              : `Versions précédentes (${(versions.data?.length ?? 1) - 1})`}
+          </Button>
+        )}
       </div>
       {kind.error && (
         <div className="mt-3">

@@ -266,6 +266,16 @@ let current; // the page, for a screenshot when a step fails
   await page.getByRole("button", { name: "Créer", exact: true }).click();
   await page.waitForURL(/\/dossiers\/[0-9a-f-]+$/);
   const bidUrl = page.url(); // lot 4: the paid relaunch of its analysis
+  // Dossier in tabs: a new dossier opens on its DCE tab; the overview asks for the DCE first
+  if (
+    (await page
+      .getByRole("tab", { name: "DCE" })
+      .getAttribute("aria-selected")) !== "true"
+  )
+    throw new Error("a new dossier must open on its DCE tab");
+  await page.getByRole("tab", { name: "Aperçu" }).click();
+  await page.getByText("Commencez par déposer le DCE").waitFor();
+  await page.getByRole("tab", { name: "DCE" }).click();
   // A phone greys out a file a site sent with a wrong type (AWS): the picker must show every
   // file; the zone refuses an unsupported name itself and the server checks the content.
   if ((await page.getAttribute("#dce-upload", "accept")) !== null)
@@ -279,16 +289,50 @@ let current; // the page, for a screenshot when a step fails
     .getByRole("cell", { name: "DCE/CCTP.pdf", exact: true })
     .waitFor({ timeout: 60000 });
   step("DCE processed in the background, pieces listed");
-  await page.getByText("Avis Go / No-Go").waitFor({ timeout: 90000 });
+  // The overview: four tiles and the to-do list, once the analysis is ready
+  await page.getByRole("tab", { name: "Aperçu" }).click();
+  await page.getByText("À faire avant de répondre").waitFor({ timeout: 90000 });
+  for (const tile of [
+    "Avis Go / No-Go",
+    "Montant",
+    "Date limite",
+    "Visite du site",
+  ])
+    await page
+      .getByRole("tabpanel", { name: "Aperçu" })
+      .getByText(tile, { exact: true })
+      .waitFor();
+  await page.screenshot({ path: `${S}/02a-apercu.png`, fullPage: true });
+  // The open tab is kept in the address
+  await page.goto(`${bidUrl}?onglet=analyse`);
+  if (
+    (await page
+      .getByRole("tab", { name: "Analyse" })
+      .getAttribute("aria-selected")) !== "true"
+  )
+    throw new Error("?onglet=analyse must open the analysis tab");
+  step(
+    "dossier in tabs: DCE first, overview tiles and to-do, tab kept in the address",
+  );
+  const analysisPanel = page.getByRole("tabpanel", { name: "Analyse" });
+  await analysisPanel
+    .getByRole("button", { name: /^Avis Go \/ No-Go/ })
+    .waitFor({ timeout: 90000 });
+  await analysisPanel
+    .getByRole("button", { name: /^Exigences du CCTP/ })
+    .click();
   await page.getByText("Nettoyage quotidien des bureaux avant 8h").waitFor();
+  await analysisPanel
+    .getByRole("button", { name: /^Pièces à fournir/ })
+    .click();
   const pieces = page.locator("section", {
     has: page.getByRole("heading", { name: "Pièces à fournir" }),
   });
   const kbis = await pieces
-    .locator("li", { hasText: "Extrait Kbis" })
+    .locator("tr", { hasText: "Extrait Kbis" })
     .textContent();
   const urssaf = await pieces
-    .locator("li", { hasText: "Attestation de vigilance URSSAF" })
+    .locator("tr", { hasText: "Attestation de vigilance URSSAF" })
     .textContent();
   if (!kbis.includes("Manquant") || !urssaf.includes("Disponible"))
     throw new Error(`vault check wrong: ${kbis} / ${urssaf}`);
@@ -306,6 +350,7 @@ let current; // the page, for a screenshot when a step fails
   step("clickable source opens the cited page");
 
   // 6b. Memoir outline (P2-01) and references (P2-02)
+  await page.getByRole("tab", { name: "Mémoire" }).click();
   await page
     .getByRole("button", { name: "Préparer le plan du mémoire" })
     .click();
@@ -413,6 +458,7 @@ let current; // the page, for a screenshot when a step fails
   );
 
   // 6e. Pre-filled DC1 (P2-06)
+  await page.getByRole("tab", { name: "Documents" }).click();
   const docsCard = page.locator("section", {
     has: page.getByRole("heading", { name: "Documents pré-remplis" }),
   });
@@ -435,6 +481,7 @@ let current; // the page, for a screenshot when a step fails
   step("DC1 generated and downloaded, pre-filled from profile and DCE");
 
   // 6f. Export of the complete folder, warnings first (P2-07)
+  await page.getByRole("tab", { name: "Export" }).click();
   const exportCard = page.locator("section", {
     has: page.getByRole("heading", { name: "Export", exact: true }),
   });
@@ -1206,7 +1253,7 @@ let current; // the page, for a screenshot when a step fails
   };
   await changePlan(planName);
   await admin.getByText("Crédits du mois : 0 sur 3").waitFor(); // this month's use counts
-  await page.goto(bidUrl);
+  await page.goto(`${bidUrl}?onglet=analyse`); // the paid relaunch is in the analysis tab
   await page
     .getByText("Vous n'avez plus de crédits", { exact: false })
     .first()

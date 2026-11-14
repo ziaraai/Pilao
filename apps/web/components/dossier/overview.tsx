@@ -19,6 +19,7 @@ export function Overview({
 }) {
   const analysis = useApi<Analysis>(
     bid.progress?.dce_ready ? `/bids/${bid.id}/analysis` : null,
+    (a) => a.status === "pending" || a.status === "processing", // until it is ready
   );
   const now = new Date();
 
