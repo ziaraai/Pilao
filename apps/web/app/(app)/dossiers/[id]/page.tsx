@@ -50,6 +50,7 @@ function Dossier() {
   const bid = useApi<Bid>(`/bids/${id}`);
   const [analysisKey, setAnalysisKey] = useState(0);
   const [memoirKey, setMemoirKey] = useState(0);
+  const [anchor, setAnchor] = useState<{ id: string; n: number }>();
   const action = useAction();
 
   if (bid.error && !bid.data) return <Alert tone="danger">{bid.error}</Alert>;
@@ -62,6 +63,7 @@ function Dossier() {
   }
 
   function open(next: TabId, target?: string) {
+    if (target) setAnchor((prev) => ({ id: target, n: (prev?.n ?? 0) + 1 }));
     select(next);
     if (target) {
       // after the tab is shown: bring the block into view
@@ -169,6 +171,7 @@ function Dossier() {
         <AnalysisSection
           key={analysisKey}
           bidId={id}
+          openAnchor={anchor}
           onReady={() => {
             bid.reload(); // the analysis pre-fills buyer and deadline
             setMemoirKey((k) => k + 1); // and unlocks the memoir outline

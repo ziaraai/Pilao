@@ -1,20 +1,21 @@
 "use client";
 
-import { useRef } from "react";
+import { useRef, useState } from "react";
 
+import { DataTable, Disclosure, LevelBadge } from "@/components/blocks";
 import { SourceLink, SourceViewer } from "@/components/dossier/source";
 import { PaidButton } from "@/components/paid-button";
 import {
   Alert,
   Badge,
+  Button,
   Card,
-  type Color,
   Empty,
   Loading,
-  tableHead,
   tableRow,
 } from "@/components/ui";
 import { api } from "@/lib/api";
+import { type BlockId, blockSummaries, shortTitle } from "@/lib/dossier";
 import { formatCents, formatDateTime } from "@/lib/format";
 import { useAction, useApi } from "@/lib/hooks";
 import {
@@ -22,17 +23,8 @@ import {
   FACTOR_TONE,
   IMPORTANCE,
   REQUIREMENT_CATEGORY,
-  VERDICT,
 } from "@/lib/labels";
-import type { Tone } from "@/lib/labels";
 import type { Analysis, Source, Sourced } from "@/lib/types";
-
-/** The Go / No-Go block takes the colour of its verdict. */
-const VERDICT_COLOR: Partial<Record<Tone, Color>> = {
-  ok: "green",
-  warning: "amber",
-  danger: "red",
-};
 
 const working = (a: Analysis) =>
   a.status === "pending" || a.status === "processing";
@@ -63,13 +55,46 @@ function Row({
   );
 }
 
+const BLOCKS: BlockId[] = [
+  "gonogo",
+  "key",
+  "criteria",
+  "memoir",
+  "documents",
+  "watch",
+  "requirements",
+  "checks",
+];
+const REQUIREMENTS_SHOWN = 10;
+const BAR_COLORS = [
+  "bg-indigo-500",
+  "bg-amber-500",
+  "bg-emerald-500",
+  "bg-sky-500",
+  "bg-rose-500",
+];
+
 export function AnalysisSection({
   bidId,
   onReady,
+  openAnchor,
 }: {
   bidId: string;
   onReady?: () => void;
+  /** Opens one block (« bloc-watch »…): a line of the overview's to-do list was clicked. */
+  openAnchor?: { id: string; n: number };
 }) {
+  const [open, setOpen] = useState<Set<BlockId>>(new Set());
+  const [read, setRead] = useState<Set<number>>(new Set());
+  const [filter, setFilter] = useState("all");
+  const [showAll, setShowAll] = useState(false);
+  const [anchorSeen, setAnchorSeen] = useState(openAnchor?.n);
+  if (openAnchor && openAnchor.n !== anchorSeen) {
+    // a new request to open a block: adjust the state while rendering (no effect needed)
+    setAnchorSeen(openAnchor.n);
+    const id = openAnchor.id.replace(/^bloc-/, "") as BlockId;
+    if (BLOCKS.includes(id)) setOpen((prev) => new Set(prev).add(id));
+  }
   const wasWorking = useRef(false);
   const analysis = useApi<Analysis>(`/bids/${bidId}/analysis`, (a) => {
     const busy = working(a);
@@ -140,36 +165,81 @@ export function AnalysisSection({
   const ki = d.key_info;
   const g = a.go_no_go;
   const fa = a.framework_amounts;
+  const sum = blockSummaries(a);
+  const isOpen = (id: BlockId) => open.has(id);
+  const toggle = (id: BlockId) =>
+    setOpen((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  const block = (id: BlockId, title: string) => ({
+    id: `bloc-${id}`,
+    title,
+    summary: sum[id].text,
+    badges: sum[id].badges,
+    open: isOpen(id),
+    onToggle: () => toggle(id),
+  });
+  const categories = Array.from(new Set(a.requirements.map((r) => r.category)));
+  const shown = a.requirements.filter(
+    (r) =>
+      filter === "all" ||
+      (filter === "mandatory"
+        ? r.importance === "mandatory"
+        : r.category === filter),
+  );
+  const visible = showAll ? shown : shown.slice(0, REQUIREMENTS_SHOWN);
+  const weights = d.award_criteria.map((c) => c.weight_pct ?? 0);
+  const total = weights.reduce((x, y) => x + y, 0);
+
   return (
     <SourceViewer>
-      <div className="space-y-6">
-        <Alert tone="info">
-          Fiche produite automatiquement à partir de la version {a.dce_version}{" "}
-          du DCE : chaque information renvoie à sa source — vérifiez avant de
-          vous engager.
-        </Alert>
-        {g && (
-          <Card
-            title="Avis Go / No-Go"
-            color={VERDICT_COLOR[VERDICT[g.verdict]?.tone] ?? "slate"}
-            actions={
-              <Badge tone={VERDICT[g.verdict]?.tone}>
-                {VERDICT[g.verdict]?.label} · {g.score}/100
-              </Badge>
-            }
-          >
-            <ul className="space-y-1.5 text-sm">
-              {g.factors.map((f) => (
-                <li key={f.label} className="flex flex-wrap items-center gap-2">
-                  <Badge tone={FACTOR_TONE[f.status]}>{f.label}</Badge>
-                  {f.detail}
-                </li>
-              ))}
-            </ul>
-            <p className="mt-3 text-xs text-slate-500">{g.disclaimer}</p>
-          </Card>
-        )}
-        <Card title="Informations clés" color="blue" actions={actions}>
+      <div className="space-y-3">
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <p className="text-sm text-slate-600">
+            Fiche produite à partir de la version {a.dce_version} du DCE —
+            vérifiez avant de vous engager.
+          </p>
+          <div className="flex flex-wrap items-center gap-2">
+            <Button
+              variant="ghost"
+              onClick={() =>
+                setOpen(
+                  open.size === BLOCKS.length ? new Set() : new Set(BLOCKS),
+                )
+              }
+            >
+              {open.size === BLOCKS.length ? "Tout fermer" : "Tout ouvrir"}
+            </Button>
+            {actions}
+          </div>
+        </div>
+        {rerun.error && <Alert tone="danger">{rerun.error}</Alert>}
+
+        <Disclosure {...block("gonogo", "Avis Go / No-Go")}>
+          {g ? (
+            <>
+              <ul className="space-y-2 text-sm">
+                {g.factors.map((f) => (
+                  <li
+                    key={f.label}
+                    className="flex flex-wrap items-center gap-2"
+                  >
+                    <Badge tone={FACTOR_TONE[f.status]}>{f.label}</Badge>
+                    {f.detail}
+                  </li>
+                ))}
+              </ul>
+              <p className="mt-3 text-xs text-slate-500">{g.disclaimer}</p>
+            </>
+          ) : (
+            <Empty>Avis non calculé.</Empty>
+          )}
+        </Disclosure>
+
+        <Disclosure {...block("key", "Informations clés")}>
           <dl className="divide-y divide-slate-200">
             <Row label="Acheteur" item={ki.buyer_name} />
             <Row label="Objet" item={ki.title} />
@@ -232,173 +302,249 @@ export function AnalysisSection({
               </ul>
             </div>
           )}
-        </Card>
-        <div className="grid gap-6 lg:grid-cols-2">
-          <Card title="Critères de notation" color="violet">
-            {d.award_criteria.length === 0 ? (
-              <Empty>Non trouvés : vérifiez le RC.</Empty>
-            ) : (
-              <ul className="space-y-2 text-sm">
-                {d.award_criteria.map((c, i) => (
-                  <li key={i}>
-                    <span className="font-medium">{c.name}</span>
-                    {c.weight_pct != null && ` — ${c.weight_pct} %`}
+        </Disclosure>
+
+        <Disclosure
+          {...block("criteria", "Critères de notation")}
+          summary={
+            <span className="flex flex-col gap-1.5">
+              {total > 0 && (
+                <span
+                  className="flex h-2.5 max-w-md overflow-hidden rounded-full bg-slate-100"
+                  aria-hidden="true"
+                >
+                  {weights.map((w, i) => (
+                    <span
+                      key={i}
+                      className={BAR_COLORS[i % BAR_COLORS.length]}
+                      style={{ width: `${(w / total) * 100}%` }}
+                    />
+                  ))}
+                </span>
+              )}
+              <span>{sum.criteria.text}</span>
+            </span>
+          }
+        >
+          {d.award_criteria.length === 0 ? (
+            <Empty>Non trouvés : vérifiez le RC.</Empty>
+          ) : (
+            <DataTable head={["Critère", "Poids", "Sous-critères"]}>
+              {d.award_criteria.map((c, i) => (
+                <tr key={i} className={tableRow}>
+                  <td className="px-3 py-2 font-medium">
+                    {c.name}
                     <SourceLink source={c.source} />
-                    {c.subcriteria.length > 0 && (
-                      <ul className="ml-4 list-inside list-disc text-slate-600">
-                        {c.subcriteria.map((s, j) => (
-                          <li key={j}>
-                            {s.name}
-                            {s.weight_pct != null && ` — ${s.weight_pct} %`}
-                          </li>
-                        ))}
-                      </ul>
-                    )}
-                  </li>
-                ))}
-              </ul>
-            )}
-          </Card>
-          <Card title="Mémoire technique attendu" color="violet">
-            {d.memoir_requirements.imposed_outline.length > 0 ? (
-              <>
-                <p className="mb-2 text-sm font-medium text-slate-700">
-                  Plan imposé par le RC{" "}
-                  <SourceLink source={d.memoir_requirements.source} />
-                </p>
-                <ol className="space-y-0.5 text-sm">
+                  </td>
+                  <td className="px-3 py-2 whitespace-nowrap">
+                    {c.weight_pct != null ? `${c.weight_pct} %` : "—"}
+                  </td>
+                  <td className="px-3 py-2 text-slate-700">
+                    {c.subcriteria.length === 0
+                      ? "—"
+                      : c.subcriteria
+                          .map(
+                            (s) =>
+                              `${s.name}${s.weight_pct != null ? ` (${s.weight_pct} %)` : ""}`,
+                          )
+                          .join(" ; ")}
+                  </td>
+                </tr>
+              ))}
+            </DataTable>
+          )}
+        </Disclosure>
+
+        <Disclosure {...block("memoir", "Mémoire attendu")}>
+          <div className="grid gap-4 text-sm md:grid-cols-2">
+            <div>
+              <p className="mb-1 font-semibold text-slate-700">
+                Plan imposé par le RC{" "}
+                <SourceLink source={d.memoir_requirements.source} />
+              </p>
+              {d.memoir_requirements.imposed_outline.length > 0 ? (
+                <ol className="list-inside list-decimal space-y-0.5">
                   {d.memoir_requirements.imposed_outline.map((t, i) => (
                     <li key={i}>{t}</li>
                   ))}
                 </ol>
-              </>
-            ) : (
-              <p className="text-sm text-slate-600">
-                Pas de plan imposé trouvé : votre plan modèle sera utilisé.
-              </p>
-            )}
-            {d.memoir_requirements.max_pages && (
-              <p className="mt-2 text-sm">
-                {d.memoir_requirements.max_pages} pages maximum.
-              </p>
-            )}
-            {d.memoir_requirements.format_constraints && (
-              <p className="mt-1 text-sm text-slate-600">
-                {d.memoir_requirements.format_constraints}
-              </p>
-            )}
-          </Card>
-        </div>
-        <Card title="Pièces à fournir" color="amber">
+              ) : (
+                <p className="text-slate-600">
+                  Pas de plan imposé trouvé : votre plan modèle sera utilisé.
+                </p>
+              )}
+            </div>
+            <div className="space-y-1">
+              <p className="font-semibold text-slate-700">Forme</p>
+              {d.memoir_requirements.max_pages && (
+                <p>{d.memoir_requirements.max_pages} pages maximum.</p>
+              )}
+              {d.memoir_requirements.response_template_provided && (
+                <p>
+                  <Badge tone="danger">
+                    Cadre de l&apos;acheteur à compléter
+                  </Badge>
+                </p>
+              )}
+              {d.memoir_requirements.format_constraints && (
+                <p className="text-slate-600">
+                  {d.memoir_requirements.format_constraints}
+                </p>
+              )}
+            </div>
+          </div>
+        </Disclosure>
+
+        <Disclosure {...block("documents", "Pièces à fournir")}>
           {a.documents.length === 0 ? (
             <Empty>Aucune pièce listée dans l&apos;analyse.</Empty>
           ) : (
-            <ul className="divide-y divide-slate-100 text-sm">
+            <DataTable head={["Pièce", "Phase", "État"]} minWidth={520}>
               {a.documents.map((doc, i) => (
-                <li
-                  key={i}
-                  className="flex flex-wrap items-center justify-between gap-2 py-2"
-                >
-                  <span>
-                    {doc.name}{" "}
-                    <span className="text-xs text-slate-500">
-                      ({doc.phase})
-                    </span>
+                <tr key={i} className={tableRow}>
+                  <td className="px-3 py-2">
+                    {doc.name}
                     <SourceLink
                       source={
                         d.required_documents.find((r) => r.name === doc.name)
                           ?.source
                       }
                     />
-                  </span>
-                  <span className="flex items-center gap-2 text-xs text-slate-600">
-                    {doc.detail}
+                    {doc.detail && (
+                      <span className="block text-xs text-slate-500">
+                        {doc.detail}
+                      </span>
+                    )}
+                  </td>
+                  <td className="px-3 py-2 text-slate-600">{doc.phase}</td>
+                  <td className="px-3 py-2">
                     <Badge tone={DOC_CHECK[doc.status]?.tone}>
                       {DOC_CHECK[doc.status]?.label ?? doc.status}
                     </Badge>
-                  </span>
-                </li>
+                  </td>
+                </tr>
               ))}
+            </DataTable>
+          )}
+        </Disclosure>
+
+        <Disclosure {...block("watch", "Points de vigilance")}>
+          {d.watch_points.length === 0 ? (
+            <Empty>Aucun point de vigilance.</Empty>
+          ) : (
+            <ul className="divide-y divide-slate-200">
+              {d.watch_points.map((w, i) => {
+                const reading = read.has(i);
+                return (
+                  <li key={i} className="py-1">
+                    <button
+                      type="button"
+                      aria-expanded={reading}
+                      onClick={() =>
+                        setRead((prev) => {
+                          const next = new Set(prev);
+                          if (next.has(i)) next.delete(i);
+                          else next.add(i);
+                          return next;
+                        })
+                      }
+                      className="flex min-h-11 w-full items-center gap-3 text-left focus-visible:outline-2 focus-visible:outline-brand-navy"
+                    >
+                      <span className="w-24 shrink-0">
+                        <LevelBadge level={w.severity} />
+                      </span>
+                      <span className="min-w-0 flex-1 text-sm font-semibold text-brand-navy">
+                        {w.title || shortTitle(w.text)}
+                      </span>
+                      <span className="shrink-0 text-sm text-sky-800 underline">
+                        {reading ? "Replier" : "Lire"}
+                      </span>
+                    </button>
+                    {reading && (
+                      <p className="mb-2 text-sm leading-relaxed text-slate-700 sm:ml-27">
+                        {w.text}
+                        <SourceLink source={w.source} />
+                      </p>
+                    )}
+                  </li>
+                );
+              })}
             </ul>
           )}
-        </Card>
-        {d.watch_points.length > 0 && (
-          <Card title="Points de vigilance" color="red">
-            <ul className="space-y-2 text-sm">
-              {d.watch_points.map((w, i) => (
-                <li key={i} className="flex items-start gap-2">
-                  <Badge
-                    tone={
-                      w.severity === "blocking"
-                        ? "danger"
-                        : w.severity === "warning"
-                          ? "warning"
-                          : "info"
-                    }
-                  >
-                    {w.severity === "blocking"
-                      ? "Bloquant"
-                      : w.severity === "warning"
-                        ? "Attention"
-                        : "Info"}
-                  </Badge>
-                  <span>
-                    {w.text}
-                    <SourceLink source={w.source} />
-                  </span>
-                </li>
-              ))}
-            </ul>
-          </Card>
-        )}
-        <Card
-          title={`Exigences du CCTP (${a.requirements.length})`}
-          color="blue"
-        >
+        </Disclosure>
+
+        <Disclosure {...block("requirements", "Exigences du CCTP")}>
           {a.requirements.length === 0 ? (
             <Empty>Aucune exigence extraite.</Empty>
           ) : (
-            <div className="overflow-x-auto">
-              <table className="w-full text-left text-sm">
-                <thead className={tableHead}>
-                  <tr>
-                    <th className="px-3 py-2">Réf.</th>
-                    <th className="px-3 py-2">Exigence</th>
-                    <th className="px-3 py-2">Catégorie</th>
-                    <th className="px-3 py-2">Importance</th>
+            <div className="space-y-3">
+              <div
+                className="flex flex-wrap gap-2"
+                role="group"
+                aria-label="Filtrer les exigences"
+              >
+                {[
+                  { id: "all", label: `Toutes (${a.requirements.length})` },
+                  { id: "mandatory", label: "Obligatoires" },
+                  ...categories.map((c) => ({
+                    id: c,
+                    label: REQUIREMENT_CATEGORY[c] ?? c,
+                  })),
+                ].map((f) => (
+                  <button
+                    key={f.id}
+                    type="button"
+                    aria-pressed={filter === f.id}
+                    onClick={() => {
+                      setFilter(f.id);
+                      setShowAll(false);
+                    }}
+                    className={`min-h-9 rounded-full px-3 text-sm font-medium ring-1 ring-inset ${
+                      filter === f.id
+                        ? "bg-brand-navy text-white ring-brand-navy"
+                        : "bg-white text-slate-700 ring-slate-300 hover:bg-slate-50"
+                    }`}
+                  >
+                    {f.label}
+                  </button>
+                ))}
+              </div>
+              <DataTable head={["Réf.", "Exigence", "Thème", "Importance"]}>
+                {visible.map((r) => (
+                  <tr key={r.id} className={tableRow}>
+                    <td className="px-3 py-2 font-mono text-xs">{r.ref}</td>
+                    <td className="px-3 py-2">
+                      {r.text}
+                      <SourceLink source={r.source} />
+                    </td>
+                    <td className="px-3 py-2">
+                      {REQUIREMENT_CATEGORY[r.category] ?? r.category}
+                    </td>
+                    <td className="px-3 py-2">
+                      {IMPORTANCE[r.importance] ?? r.importance}
+                    </td>
                   </tr>
-                </thead>
-                <tbody>
-                  {a.requirements.map((r) => (
-                    <tr key={r.id} className={tableRow}>
-                      <td className="px-3 py-2 font-mono text-xs">{r.ref}</td>
-                      <td className="px-3 py-2">
-                        {r.text}
-                        <SourceLink source={r.source} />
-                      </td>
-                      <td className="px-3 py-2">
-                        {REQUIREMENT_CATEGORY[r.category] ?? r.category}
-                      </td>
-                      <td className="px-3 py-2">
-                        {IMPORTANCE[r.importance] ?? r.importance}
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
+                ))}
+              </DataTable>
+              {!showAll && shown.length > REQUIREMENTS_SHOWN && (
+                <Button variant="ghost" onClick={() => setShowAll(true)}>
+                  Voir les {shown.length - REQUIREMENTS_SHOWN} autres
+                </Button>
+              )}
             </div>
           )}
-        </Card>
+        </Disclosure>
+
         {a.warnings.length > 0 && (
-          <Card title="Points à vérifier" color="amber">
+          <Disclosure {...block("checks", "Points à vérifier")}>
             <ul className="list-inside list-disc space-y-1 text-sm text-slate-700">
               {a.warnings.map((w, i) => (
                 <li key={i}>{w}</li>
               ))}
             </ul>
-          </Card>
+          </Disclosure>
         )}
-        <p className="text-xs text-slate-400">
+        <p className="text-xs text-slate-500">
           Modèle : {a.model ?? "—"} · prompt {a.prompt_version ?? "—"} ·{" "}
           {formatDateTime(a.created_at)}
         </p>
