@@ -171,6 +171,16 @@ export type Bid = {
   minutes_with_pilao: number | null;
   minutes_usual: number | null;
   created_at: string;
+  /** The dossier page only (the marks of its tabs); null in the list. */
+  progress?: DossierProgress | null;
+};
+export type DossierProgress = {
+  dce_ready: boolean;
+  analysis_ready: boolean;
+  memoir_ready: boolean;
+  documents_ready: boolean;
+  exported: boolean;
+  blocking_points: number;
 };
 export type DceFile = {
   id: string;
@@ -292,6 +302,8 @@ export type AnalysisData = {
   required_documents: { name: string; phase: string; source: Source }[];
   watch_points: {
     text: string;
+    /** Short title written by the analysis (prompt 0.4.0); older ones: none. */
+    title?: string | null;
     severity: "info" | "warning" | "blocking";
     source: Source;
   }[];
@@ -335,6 +347,8 @@ export type Analysis = {
     label: string;
     source: Source | null;
   } | null;
+  /** The font the RC imposes on the memoir, read from its format constraints. */
+  imposed_font?: { name: string | null; size: number | null } | null;
 };
 
 export type ChapterFlag = {

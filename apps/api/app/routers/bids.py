@@ -16,7 +16,7 @@ from app.db.models import (
     Requirement,
     User,
 )
-from app.domain import framework_amounts
+from app.domain import framework_amounts, imposed_font
 from app.routers.files import Storage, _scanner
 from app.schemas.bids import (
     AnalysisOut,
@@ -32,6 +32,7 @@ from app.schemas.bids import (
     FactorOut,
     FrameworkAmountsOut,
     GoNoGoOut,
+    ImposedFontOut,
     RequirementOut,
     SourceOut,
 )
@@ -234,7 +235,10 @@ def _analysis_out(db: ScopedDb, analysis: DceAnalysis) -> AnalysisOut:
     documents: list[DocumentCheckOut] = []
     go_no_go: GoNoGoOut | None = None
     framework: FrameworkAmountsOut | None = None
+    font: ImposedFontOut | None = None
     if analysis.status == "ready" and analysis.data is not None:
+        if (imposed := imposed_font.from_analysis(analysis.data)) is not None:
+            font = ImposedFontOut(name=imposed.name, size=imposed.size)
         fa = framework_amounts.from_analysis(analysis.data)
         if fa is not None:
             framework = FrameworkAmountsOut(
@@ -258,6 +262,7 @@ def _analysis_out(db: ScopedDb, analysis: DceAnalysis) -> AnalysisOut:
         documents=documents,
         go_no_go=go_no_go,
         framework_amounts=framework,
+        imposed_font=font,
         id=analysis.id,
         status=analysis.status,
         error=analysis.error,

@@ -152,6 +152,11 @@ class FrameworkAmountsOut(BaseModel):
     source: SourceOut | None
 
 
+class ImposedFontOut(BaseModel):
+    name: str | None
+    size: float | None
+
+
 class AnalysisOut(BaseModel):
     id: uuid.UUID
     status: Literal["pending", "processing", "ready", "error", "waiting_credits"]
@@ -166,3 +171,4 @@ class AnalysisOut(BaseModel):
     documents: list[DocumentCheckOut] = Field(default_factory=list)
     go_no_go: GoNoGoOut | None = None
     framework_amounts: FrameworkAmountsOut | None = None
+    imposed_font: ImposedFontOut | None = None  # read from the memoir format constraints

@@ -465,3 +465,19 @@ def test_bid_progress_follows_the_dossier(
     patched = c.patch(f"/bids/{bid}", json={"status": "in_progress"}).json()
     assert patched["progress"] == progress  # the tab marks survive a status change
     assert c.get("/bids").json()[0]["progress"] is None  # not computed for the list
+
+
+def test_the_imposed_font_is_given_with_the_analysis(
+    make_client: Factory, outbox: Outbox, queue: FakeQueue, model: FakeModel
+) -> None:
+    c = signed_in_client(make_client, outbox)
+    model.extra = {
+        "memoir_requirements": {
+            "imposed_outline": [],
+            "max_pages": 10,
+            "format_constraints": "10 pages maximum. Police Times New Roman, taille 11.",
+            "source": {"file": SRC_RC, "page": 2},
+        }
+    }
+    _, a = analyzed(c, queue, DCE)
+    assert a["imposed_font"] == {"name": "Times New Roman", "size": 11.0}
