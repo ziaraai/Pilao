@@ -274,7 +274,7 @@ let current; // the page, for a screenshot when a step fails
   )
     throw new Error("a new dossier must open on its DCE tab");
   await page.getByRole("tab", { name: "Aperçu" }).click();
-  await page.getByText("Commencez par déposer le DCE").waitFor();
+  await page.getByText("Le DCE n'est pas encore prêt").waitFor();
   await page.getByRole("tab", { name: "DCE" }).click();
   // A phone greys out a file a site sent with a wrong type (AWS): the picker must show every
   // file; the zone refuses an unsupported name itself and the server checks the content.
@@ -303,6 +303,18 @@ let current; // the page, for a screenshot when a step fails
       .getByText(tile, { exact: true })
       .waitFor();
   await page.screenshot({ path: `${S}/02a-apercu.png`, fullPage: true });
+  // A to-do line opens its block in the analysis tab, in view
+  await page.getByRole("button", { name: /Ajouter : Extrait Kbis/ }).click();
+  const piecesBlock = page
+    .getByRole("tabpanel", { name: "Analyse" })
+    .getByRole("button", { name: /^Pièces à fournir/ });
+  await piecesBlock.and(page.locator('[aria-expanded="true"]')).waitFor();
+  await page.waitForFunction(() => {
+    const r = document
+      .getElementById("bloc-documents")
+      ?.getBoundingClientRect();
+    return !!r && r.top >= 0 && r.top < window.innerHeight;
+  });
   // The open tab is kept in the address
   await page.goto(`${bidUrl}?onglet=analyse`);
   if (
@@ -512,6 +524,9 @@ let current; // the page, for a screenshot when a step fails
     zipButton.click(),
   ]);
   await zipDownload.saveAs(`${S}/dossier.zip`);
+  // The overview follows the work done in the other tabs
+  await page.getByRole("tab", { name: "Aperçu" }).click();
+  await page.getByText("Déjà exporté").waitFor();
   const names = zipNames(`${S}/dossier.zip`);
   for (const expected of [
     "01 - Mémoire technique.docx",

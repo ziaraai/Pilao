@@ -4,7 +4,12 @@
  * analysis block. Pure functions: the components only lay them out.
  */
 import { VERDICT } from "@/lib/labels";
-import type { Analysis, Bid, DossierProgress } from "@/lib/types";
+import type {
+  Analysis,
+  Bid,
+  DossierProgress,
+  MemoirVersion,
+} from "@/lib/types";
 
 export type TabId =
   "apercu" | "dce" | "analyse" | "memoire" | "documents" | "export";
@@ -80,13 +85,17 @@ function daysLeft(iso: string, now: Date): number {
   return parisDay(new Date(iso)) - parisDay(now);
 }
 
+/** « 20/11 » — or the text as written when the analysis gave something that is not a date
+ * (« sur rendez-vous », « 20/11/2026 »): never a crash. */
 function dayMonth(iso: string): string {
   const plain = /^\d{4}-\d{2}-\d{2}$/.test(iso);
+  const date = new Date(plain ? `${iso}T00:00:00Z` : iso);
+  if (Number.isNaN(date.getTime())) return iso;
   return new Intl.DateTimeFormat("fr-FR", {
     day: "2-digit",
     month: "2-digit",
     timeZone: plain ? "UTC" : PARIS,
-  }).format(new Date(plain ? `${iso}T00:00:00Z` : iso));
+  }).format(date);
 }
 
 function inDays(days: number): string {
@@ -126,7 +135,12 @@ export function overviewTiles(
   now: Date,
 ): Tile[] {
   const ready = analysis?.status === "ready" ? analysis : null;
-  const waiting = "Analyse en cours";
+  const waiting =
+    analysis?.status === "error"
+      ? "Analyse en échec"
+      : analysis?.status === "waiting_credits"
+        ? "En attente de crédits"
+        : "Analyse en cours";
   const g = ready?.go_no_go;
   const verdict = g ? VERDICT[g.verdict] : undefined;
   const opinion: Tile = g
@@ -410,4 +424,16 @@ export function blockSummaries(
       badges: [],
     },
   };
+}
+
+/** The memoir the export tab offers: the latest one already drafted (a new draft started with
+ * « Nouvelle version » must not hide the previous, exportable one). */
+export function exportableMemoir(
+  versions: MemoirVersion[],
+): MemoirVersion | null {
+  return (
+    [...versions]
+      .sort((a, b) => b.version - a.version)
+      .find((v) => v.status !== "draft") ?? null
+  );
 }

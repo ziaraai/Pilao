@@ -25,11 +25,12 @@ export function Overview({
 
   if (!bid.progress?.dce_ready) {
     return (
-      <Card title="Commencez par déposer le DCE" color="blue">
+      <Card title="Le DCE n'est pas encore prêt" color="blue">
         <div className="flex flex-col items-start gap-3">
           <p className="text-sm text-slate-700">
-            Récupérez ou déposez le dossier de consultation : Pilao
-            l&apos;analyse et vous résume ici ce qu&apos;il faut retenir.
+            Récupérez ou déposez le dossier de consultation dans l&apos;onglet
+            DCE : une fois lu et analysé, Pilao vous résume ici ce qu&apos;il
+            faut retenir.
           </p>
           <Button onClick={() => onOpen("dce")}>
             Ouvrir l&apos;onglet DCE
@@ -70,6 +71,28 @@ export function Overview({
           <StatTile key={t.label} {...t} />
         ))}
       </div>
+
+      {(data?.status === "error" || data?.status === "waiting_credits") && (
+        <Card
+          title={
+            data.status === "error"
+              ? "L'analyse n'a pas abouti"
+              : "L'analyse attend des crédits"
+          }
+          color="amber"
+        >
+          <div className="flex flex-col items-start gap-3">
+            <p className="text-sm text-slate-700">
+              {data.status === "error"
+                ? "Relancez-la depuis l'onglet Analyse."
+                : "Lancez-la depuis l'onglet Analyse quand vous avez des crédits."}
+            </p>
+            <Button onClick={() => onOpen("analyse")}>
+              Ouvrir l&apos;onglet Analyse
+            </Button>
+          </div>
+        </Card>
+      )}
 
       {data?.status === "ready" && (
         <Card title="À faire avant de répondre" color="amber">

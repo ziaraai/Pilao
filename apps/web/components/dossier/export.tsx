@@ -7,7 +7,13 @@ import { api } from "@/lib/api";
 import { downloadFile } from "@/lib/files";
 import { formatDateTime } from "@/lib/format";
 import { useAction, useApi } from "@/lib/hooks";
-import type { ExportCheck, GeneratedDocument, Memoir } from "@/lib/types";
+import { exportableMemoir } from "@/lib/dossier";
+import type {
+  ExportCheck,
+  GeneratedDocument,
+  Memoir,
+  MemoirVersion,
+} from "@/lib/types";
 
 type Format = "docx" | "pdf" | "zip";
 
@@ -23,7 +29,14 @@ const KIND_LABEL: Record<string, string> = {
 };
 
 /** US-4.6: Word, PDF, ZIP — after showing what remains to be done (CA4). */
-export function ExportCard({ memoir }: { memoir: Memoir }) {
+export function ExportCard({
+  memoir,
+  onOpenChapter,
+}: {
+  memoir: Memoir;
+  /** The chapter lives in the Mémoire tab: open it there. */
+  onOpenChapter?: (sectionId: string) => void;
+}) {
   const list = useApi<GeneratedDocument[]>(
     `/memoirs/${memoir.id}/exports`,
     (docs) => docs.some((d) => d.status === "pending"),
@@ -110,13 +123,14 @@ export function ExportCard({ memoir }: { memoir: Memoir }) {
               <p className="flex flex-wrap gap-2 text-xs">
                 Aller au chapitre :
                 {pending.check.to_complete.map((c) => (
-                  <a
+                  <button
                     key={c.section_id}
-                    href={`#chapter-${c.section_id}`}
-                    className="text-brand-navy underline"
+                    type="button"
+                    onClick={() => onOpenChapter?.(c.section_id)}
+                    className="min-h-6 text-brand-navy underline"
                   >
                     {c.title}
-                  </a>
+                  </button>
                 ))}
               </p>
             )}
@@ -182,17 +196,24 @@ export function ExportCard({ memoir }: { memoir: Memoir }) {
   );
 }
 
-/** The « Export » tab: the latest memoir's exports, once it is drafted. */
+/** The « Export » tab: the latest drafted memoir's exports (a new draft started with
+ * « Nouvelle version » does not hide the previous one), followed while it is being drafted. */
 export function ExportTab({
   bidId,
   onOpen,
 }: {
   bidId: string;
-  onOpen: (tab: "memoire") => void;
+  onOpen: (tab: "memoire", anchor?: string) => void;
 }) {
-  const memoir = useApi<Memoir>(`/bids/${bidId}/memoir`);
-  if (memoir.loading && !memoir.data) return null;
-  if (!memoir.data || memoir.data.status === "draft") {
+  const versions = useApi<MemoirVersion[]>(`/bids/${bidId}/memoirs`);
+  const pick = versions.data ? exportableMemoir(versions.data) : null;
+  const memoir = useApi<Memoir>(
+    pick ? `/memoirs/${pick.id}` : null,
+    (m) => m.status === "generating",
+  );
+  if (versions.loading && !versions.data) return null;
+  if (!pick || !memoir.data) {
+    if (pick && memoir.loading) return null;
     return (
       <Card title="Export" color="violet">
         <div className="flex flex-col items-start gap-3">
@@ -207,5 +228,19 @@ export function ExportTab({
       </Card>
     );
   }
-  return <ExportCard memoir={memoir.data} />;
+  const latest = Math.max(...(versions.data ?? []).map((v) => v.version));
+  return (
+    <div className="space-y-3">
+      {pick.version < latest && (
+        <p className="text-sm text-slate-600">
+          Version {pick.version} du mémoire, la dernière rédigée (la version{" "}
+          {latest} est en préparation).
+        </p>
+      )}
+      <ExportCard
+        memoir={memoir.data}
+        onOpenChapter={(id) => onOpen("memoire", `chapter-${id}`)}
+      />
+    </div>
+  );
 }

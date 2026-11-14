@@ -4,6 +4,7 @@ import {
   blockSummaries,
   daysLeftText,
   defaultTab,
+  exportableMemoir,
   overviewTiles,
   shortTitle,
   tabDone,
@@ -384,5 +385,49 @@ describe("days left", () => {
     expect(daysLeftText("2026-11-15T08:00:00Z", NOW)).toBe("demain");
     expect(daysLeftText("2026-11-14T20:00:00Z", NOW)).toBe("aujourd'hui");
     expect(daysLeftText("2026-11-10T08:00:00Z", NOW)).toBe("date dépassée");
+  });
+});
+
+describe("final review fixes", () => {
+  it("keeps a visit date that is not a calendar date as written (never crashes)", () => {
+    const a = analysis({
+      visit: { mandatory: true, dates: ["20/11/2026", "sur rendez-vous"] },
+    });
+    const visit = todoItems(a, bid(), NOW).items.find(
+      (i) => i.title === "Planifier la visite obligatoire",
+    );
+    expect(visit?.detail).toBe("20/11/2026 ou sur rendez-vous");
+    expect(overviewTiles(a, bid(), NOW)[3].sub).toBe(
+      "20/11/2026 ou sur rendez-vous",
+    );
+    const q = analysis({ questions: "avant le 22 novembre" });
+    expect(() => todoItems(q, bid(), NOW)).not.toThrow();
+  });
+  it("says when the analysis failed or waits for credits", () => {
+    const failed = { ...analysis({}), status: "error" };
+    const waiting = { ...analysis({}), status: "waiting_credits" };
+    expect(overviewTiles(failed, bid(), NOW)[0].value).toBe("Analyse en échec");
+    expect(overviewTiles(waiting, bid(), NOW)[0].value).toBe(
+      "En attente de crédits",
+    );
+    expect(overviewTiles(failed, bid(), NOW)[3].value).toBe("Analyse en échec");
+  });
+  it("exports the latest drafted memoir when a new draft was started", () => {
+    const v = (version: number, status: string) => ({
+      id: `m${version}`,
+      version,
+      status,
+      created_at: "2026-11-14T09:00:00Z",
+      chapters: 2,
+      drafted: 2,
+    });
+    expect(exportableMemoir([v(2, "draft"), v(1, "ready")])).toEqual(
+      v(1, "ready"),
+    );
+    expect(exportableMemoir([v(3, "exported"), v(2, "ready")])).toEqual(
+      v(3, "exported"),
+    );
+    expect(exportableMemoir([v(1, "draft")])).toBeNull();
+    expect(exportableMemoir([])).toBeNull();
   });
 });

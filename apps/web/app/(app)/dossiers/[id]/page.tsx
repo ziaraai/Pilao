@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useParams, useRouter, useSearchParams } from "next/navigation";
-import { Suspense, useState } from "react";
+import { Suspense, useEffect, useRef, useState } from "react";
 
 import { TabPanel, Tabs } from "@/components/blocks";
 import { AnalysisSection } from "@/components/dossier/analysis";
@@ -56,31 +56,38 @@ function Dossier() {
   // by itself when the DCE becomes ready while the user is on the DCE tab.
   const [firstTab, setFirstTab] = useState<TabId | null>(null);
   const action = useAction();
+  const scrolled = useRef(0);
   if (bid.data && firstTab === null) setFirstTab(defaultTab(bid.data.progress));
+  const query = params.get("onglet");
+  const tab: TabId | null = bid.data
+    ? query
+      ? tabFromQuery(query, bid.data.progress)
+      : (firstTab ?? defaultTab(bid.data.progress))
+    : null;
+
+  // A to-do line was clicked: once its tab is shown, bring the block into view and focus it.
+  useEffect(() => {
+    if (!anchor || anchor.n === scrolled.current) return;
+    const el = document.getElementById(anchor.id);
+    if (!el || el.offsetParent === null) return; // its panel is still hidden
+    scrolled.current = anchor.n;
+    el.scrollIntoView({ block: "start" });
+    el.querySelector<HTMLElement>("button")?.focus({ preventScroll: true });
+  }, [anchor, tab]);
 
   if (bid.error && !bid.data) return <Alert tone="danger">{bid.error}</Alert>;
-  if (!bid.data) return <Loading />;
+  if (!bid.data || !tab) return <Loading />;
   const b = bid.data;
-  const query = params.get("onglet");
-  const tab = query
-    ? tabFromQuery(query, b.progress)
-    : (firstTab ?? defaultTab(b.progress));
 
   function select(next: string) {
-    router.replace(`/dossiers/${id}?onglet=${next}`, { scroll: false });
+    // The native history API keeps useSearchParams in sync without a navigation round trip
+    window.history.replaceState(null, "", `/dossiers/${id}?onglet=${next}`);
+    bid.reload(); // the marks of the tabs follow the work done in the other tabs
   }
 
   function open(next: TabId, target?: string) {
     if (target) setAnchor((prev) => ({ id: target, n: (prev?.n ?? 0) + 1 }));
     select(next);
-    if (target) {
-      // after the tab is shown: bring the block into view
-      window.setTimeout(
-        () =>
-          document.getElementById(target)?.scrollIntoView({ block: "start" }),
-        50,
-      );
-    }
   }
 
   return (
