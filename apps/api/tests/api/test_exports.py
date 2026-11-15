@@ -100,8 +100,11 @@ def test_word_export_has_cover_contents_chapters_and_correspondence(
     data = content(storage, db, doc["file_id"])
     word = Document(io.BytesIO(data))
     texts = [p.text for p in word.paragraphs]
-    assert "Mémoire technique" in texts and "Nettoyage des bureaux" in texts
-    assert "Acheteur : Ville de Lyon" in texts and "Entreprise 1" in texts
+    assert "Nettoyage des bureaux" in texts and "Entreprise 1" in texts
+    banner, facts = word.tables[0], word.tables[1]  # the cover: a banner, then a light box
+    assert banner.rows[0].cells[0].paragraphs[0].text == "MÉMOIRE TECHNIQUE"
+    assert [c.text for c in facts.rows[0].cells] == ["Acheteur", "Ville de Lyon"]
+    assert "Présenté par" in texts and any(t.startswith("SIRET ") for t in texts)
     assert "Sommaire" in texts and "1. Moyens\t1" in texts  # page computed on layout
     headings = [p.text for p in word.paragraphs if p.style.name == "Heading 1"]
     assert headings == [
@@ -372,3 +375,25 @@ def test_the_rc_font_drives_the_export_and_the_page_estimate(
     word = Document(io.BytesIO(content(storage, db, doc["file_id"])))
     normal = word.styles["Normal"].font
     assert (normal.name, normal.size) == ("Times New Roman", Pt(12))
+
+
+def test_cover_lines_hold_only_what_the_profile_has() -> None:
+    from app.db.models import Organization
+    from app.services.exports import cover_lines
+
+    bare = Organization(name="X", siren="123456789", siret="12345678900011")
+    assert cover_lines(bare) == ["SIRET 12345678900011"]
+    full = Organization(
+        name="X",
+        siren="123456789",
+        siret="12345678900011",
+        address_line="20 boulevard Martin-Bernard",
+        postal_code="42000",
+        city="Saint-Étienne",
+        phone="04 77 00 00 00",
+    )
+    assert cover_lines(full) == [
+        "20 boulevard Martin-Bernard, 42000 Saint-Étienne",
+        "04 77 00 00 00",
+        "SIRET 12345678900011",
+    ]

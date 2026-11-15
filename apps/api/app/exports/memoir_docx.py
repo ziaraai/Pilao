@@ -13,15 +13,24 @@ import io
 from dataclasses import dataclass, field
 from datetime import datetime
 
+from docx.enum.table import WD_TABLE_ALIGNMENT
 from docx.enum.text import WD_PARAGRAPH_ALIGNMENT, WD_TAB_ALIGNMENT, WD_TAB_LEADER
 from docx.oxml import OxmlElement
 from docx.oxml.ns import qn
 from docx.oxml.xmlchemy import BaseOxmlElement
-from docx.shared import Cm, Pt
+from docx.shared import Cm, Pt, RGBColor
+from docx.table import Table, _Cell
 from docx.text.paragraph import Paragraph
 
 from app.exports.dc_forms import french_date
-from app.exports.docx_builder import GREY, DocBuilder
+from app.exports.docx_builder import (
+    GREY,
+    DocBuilder,
+    _paragraph_borders,
+    _shade,
+    set_widths,
+    tint,
+)
 
 
 @dataclass(frozen=True)
@@ -52,6 +61,9 @@ class MemoirExportData:
     logo: bytes | None = None
     font: str | None = None  # imposed by the RC (« Times New Roman, taille 11 »)
     font_size: float | None = None
+    # the company's own coordinates for the cover (only what its profile holds)
+    company_lines: list[str] = field(default_factory=list)
+    signatory: str | None = None
 
 
 def _complex_field(paragraph: Paragraph, instruction: str, cached: str) -> None:
@@ -93,53 +105,112 @@ def _refresh_fields_on_open(b: DocBuilder) -> None:
     settings.append(update)
 
 
+def _cell_text(
+    cell: _Cell, text: str, *, size: float, bold: bool = False, color: RGBColor | None = None
+) -> Paragraph:
+    p: Paragraph = cell.paragraphs[0]
+    run = p.add_run(text)
+    run.bold, run.font.size = bold, Pt(size)
+    if color is not None:
+        run.font.color.rgb = color
+    return p
+
+
+def _no_borders(table: Table) -> None:
+    borders = OxmlElement("w:tblBorders")
+    for side in ("top", "left", "bottom", "right", "insideH", "insideV"):
+        border = OxmlElement(f"w:{side}")
+        border.set(qn("w:val"), "nil")
+        borders.append(border)
+    table._tbl.tblPr.append(borders)
+
+
 def _cover(b: DocBuilder, data: MemoirExportData) -> None:
+    """A banner of the brand colour, the market, the buyer in a light box, the company and
+    its coordinates at the bottom: what the buyer sees first."""
     doc = b.doc
-    for _ in range(3):
+    white = RGBColor(0xFF, 0xFF, 0xFF)
+    banner = doc.add_table(rows=1, cols=1)
+    _no_borders(banner)
+    cell = banner.rows[0].cells[0]
+    _shade(cell, str(b.brand))
+    p = _cell_text(cell, "MÉMOIRE TECHNIQUE", size=26, bold=True, color=white)
+    p.paragraph_format.space_before, p.paragraph_format.space_after = Pt(28), Pt(4)
+    p.alignment = WD_PARAGRAPH_ALIGNMENT.CENTER
+    p = cell.add_paragraph()
+    p.alignment = WD_PARAGRAPH_ALIGNMENT.CENTER
+    p.paragraph_format.space_after = Pt(28)
+    run = p.add_run("Réponse à la consultation")
+    run.font.size, run.font.color.rgb = Pt(12), RGBColor.from_string(tint(b.brand, 0.25))
+
+    for _ in range(2):
         doc.add_paragraph()
     if data.logo:
         p = doc.add_paragraph()
         p.alignment = WD_PARAGRAPH_ALIGNMENT.CENTER
         p.add_run().add_picture(io.BytesIO(data.logo), height=Cm(3))
-    p = doc.add_paragraph(style="Title")
-    p.alignment = WD_PARAGRAPH_ALIGNMENT.CENTER
-    p.add_run("Mémoire technique")
     p = doc.add_paragraph()
     p.alignment = WD_PARAGRAPH_ALIGNMENT.CENTER
+    p.paragraph_format.space_before, p.paragraph_format.space_after = Pt(18), Pt(18)
     run = p.add_run(data.tender_title)
-    run.bold, run.font.size = True, Pt(15)
-    for line in (
-        f"Acheteur : {data.buyer}" if data.buyer else None,
-        f"Référence : {data.reference}" if data.reference else None,
-        f"Lot : {data.lot}" if data.lot else None,
-    ):
-        if line:
-            p = doc.add_paragraph()
-            p.alignment = WD_PARAGRAPH_ALIGNMENT.CENTER
-            p.add_run(line).font.size = Pt(12)
-    for _ in range(4):
+    run.bold, run.font.size, run.font.color.rgb = True, Pt(18), b.brand
+
+    facts = [
+        (label, value)
+        for label, value in (
+            ("Acheteur", data.buyer),
+            ("Référence", data.reference),
+            ("Lot", data.lot),
+            ("Version", f"{data.version} — {french_date(data.exported_at.date())}"),
+        )
+        if value
+    ]
+    box = doc.add_table(rows=len(facts), cols=2)
+    _no_borders(box)
+    box.alignment = WD_TABLE_ALIGNMENT.CENTER
+    for i, (label, value) in enumerate(facts):
+        left, right = box.rows[i].cells
+        for c in (left, right):
+            _shade(c, tint(b.brand, 0.08))
+        _cell_text(left, label, size=10.5, bold=True, color=GREY)
+        _cell_text(right, value, size=11.5, bold=True)
+    set_widths(box, (3.2, 11.3))
+
+    for _ in range(3):
         doc.add_paragraph()
     p = doc.add_paragraph()
     p.alignment = WD_PARAGRAPH_ALIGNMENT.CENTER
-    run = p.add_run(data.company)
-    run.bold, run.font.size, run.font.color.rgb = True, Pt(14), b.brand
+    run = p.add_run("Présenté par")
+    run.font.size, run.font.color.rgb = Pt(10), GREY
     p = doc.add_paragraph()
     p.alignment = WD_PARAGRAPH_ALIGNMENT.CENTER
-    run = p.add_run(f"Version {data.version} — {french_date(data.exported_at.date())}")
-    run.font.size, run.font.color.rgb = Pt(10), GREY
+    p.paragraph_format.space_after = Pt(2)
+    run = p.add_run(data.company)
+    run.bold, run.font.size, run.font.color.rgb = True, Pt(16), b.brand
+    for line in [*data.company_lines, data.signatory]:
+        if line:
+            p = doc.add_paragraph()
+            p.alignment = WD_PARAGRAPH_ALIGNMENT.CENTER
+            p.paragraph_format.space_after = Pt(0)
+            run = p.add_run(line)
+            run.font.size, run.font.color.rgb = Pt(10), GREY
     b.page_break()
 
 
 def _toc(b: DocBuilder, titles: list[str]) -> None:
     p = b.doc.add_paragraph(style="Title")
-    p.add_run("Sommaire").font.size = Pt(18)
+    p.add_run("Sommaire").font.size = Pt(20)
+    _paragraph_borders(p._p.get_or_add_pPr(), {"bottom": (12, 4, str(b.brand))})
+    p.paragraph_format.space_after = Pt(18)
     width = Cm(21.0 - 2 * 2.2)  # A4 minus the margins set by DocBuilder
     for i, title in enumerate(titles):
         entry = b.doc.add_paragraph()
+        entry.paragraph_format.space_after = Pt(8)
         entry.paragraph_format.tab_stops.add_tab_stop(
             width, WD_TAB_ALIGNMENT.RIGHT, WD_TAB_LEADER.DOTS
         )
-        entry.add_run(f"{title}\t")
+        run = entry.add_run(f"{title}\t")
+        run.font.size = Pt(max(11.5, b.min_size))
         _complex_field(entry, f"PAGEREF _Toc{i + 1} \\h", "1")
     b.page_break()
 
@@ -153,6 +224,7 @@ def build_memoir(data: MemoirExportData) -> DocBuilder:
         font_size=data.font_size,
     )
     b.doc.core_properties.title = f"Mémoire technique — {data.tender_title}"[:250]
+    b.doc.styles["Normal"].paragraph_format.alignment = WD_PARAGRAPH_ALIGNMENT.JUSTIFY
     _cover(b, data)
     titles = [c.title for c in data.chapters]
     if data.requirements:
@@ -180,7 +252,8 @@ def build_memoir(data: MemoirExportData) -> DocBuilder:
         )
     b.header_footer(
         f"{data.company} — {data.tender_title}"[:150],
-        f"Mémoire technique — {data.company}",
+        f"Mémoire technique — {data.company}"
+        + (f" — Réf. {data.reference}" if data.reference else ""),
         first_page_plain=True,
     )
     _refresh_fields_on_open(b)

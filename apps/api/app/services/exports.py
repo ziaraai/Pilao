@@ -241,7 +241,21 @@ def memoir_data(
         logo=load_logo(db, org, storage),
         font=font.name if (font := imposed_font(db, memoir)) else None,
         font_size=font.size if font else None,
+        company_lines=cover_lines(org),
+        signatory=(
+            ", ".join(x for x in (org.signatory_name, org.signatory_role) if x)
+            if org.signatory_name
+            else None
+        ),
     )
+
+
+def cover_lines(org: Organization) -> list[str]:
+    """The company's coordinates as its profile holds them (nothing guessed)."""
+    place = " ".join(x for x in (org.postal_code, org.city) if x)
+    address = ", ".join(x for x in (org.address_line, place) if x)
+    contact = " · ".join(x for x in (org.phone, org.contact_email) if x)
+    return [x for x in (address, contact, f"SIRET {org.siret}" if org.siret else "") if x]
 
 
 def _readme(

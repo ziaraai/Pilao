@@ -529,3 +529,11 @@ Format : numéro, date, décision, raison, statut. Ajouter une entrée pour chaq
 - **Alternatives écartées** : openpyxl (perd les dessins et images) ; recalcul par LibreOffice puis renvoi de sa copie (change la mise en forme du fichier officiel) ; heures estimées par l'IA (règle 1 : l'IA n'invente pas les moyens de l'entreprise ; estimation par surfaces × cadences prévue, P4-14).
 - **Statut** : validé par Faycal (« tu fonces ») ; à relire avec Abdraouf sur le DQE de Rillieux.
 
+
+## ADR-050 — Mise en page professionnelle du mémoire
+
+- **Date** : 2026-11-15
+- **Contexte** : Abdraouf n'a pas aimé le Word du mémoire (page de garde nue, tableaux en grille noire, titres sans relief). Faycal : « faire un truc très professionnel ».
+- **Décision** : page de garde avec bandeau de la couleur de l'entreprise (« MÉMOIRE TECHNIQUE »), logo, objet du marché, encadré clair Acheteur / Référence / Lot / Version, puis « Présenté par » avec les coordonnées **telles que le profil les contient** (adresse, téléphone, e-mail, SIRET, signataire ; rien d'inventé) ; sommaire numéroté souligné ; chaque chapitre ouvert par un bandeau (Titre 1 : lettres blanches sur la couleur de l'entreprise), sections soulignées d'un filet clair ; tableaux à en-tête coloré répété sur chaque page, lignes alternées teintées, filets clairs ; texte justifié (pas dans les tableaux) ; en-tête logo + entreprise + marché avec un filet, pied de page « Mémoire technique — entreprise — Réf. » à gauche et « Page X / Y » à droite. Les autres documents Word (DC1, DC2, listes) profitent des mêmes tableaux, titres et pieds de page. Prompt de rédaction 0.6.0 : introduction qui reprend le besoin, sous-parties, tableaux pour ce qui se compte, courte liste « Nos engagements » qui ne reprend que ce que le chapitre affirme.
+- **Alternatives écartées** : une page « Synthèse de nos engagements » en tête (risque de dépasser le nombre de pages imposé par le RC, ex. 10 pages à Rillieux) ; reprendre la mise en page de 2017 d'ENG PRO (titres encadrés surlignés en jaune, datée).
+- **Statut** : à faire valider par Abdraouf sur un vrai dossier.
