@@ -32,10 +32,13 @@ const KIND_LABEL: Record<string, string> = {
 export function ExportCard({
   memoir,
   onOpenChapter,
+  onOpenMissing,
 }: {
   memoir: Memoir;
   /** The chapter lives in the Mémoire tab: open it there. */
   onOpenChapter?: (sectionId: string) => void;
+  /** « Ce qu'il manque » (ADR-048): the block of the Mémoire tab. */
+  onOpenMissing?: () => void;
 }) {
   const list = useApi<GeneratedDocument[]>(
     `/memoirs/${memoir.id}/exports`,
@@ -121,6 +124,15 @@ export function ExportCard({
             </ul>
             {pending.check.to_complete.length > 0 && (
               <p className="flex flex-wrap gap-2 text-xs">
+                {onOpenMissing && (
+                  <button
+                    type="button"
+                    onClick={onOpenMissing}
+                    className="min-h-6 font-semibold text-brand-navy underline"
+                  >
+                    Compléter maintenant
+                  </button>
+                )}
                 Aller au chapitre :
                 {pending.check.to_complete.map((c) => (
                   <button
@@ -240,6 +252,7 @@ export function ExportTab({
       <ExportCard
         memoir={memoir.data}
         onOpenChapter={(id) => onOpen("memoire", `chapter-${id}`)}
+        onOpenMissing={() => onOpen("memoire", "bloc-missing")}
       />
     </div>
   );

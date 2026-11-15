@@ -231,6 +231,27 @@ describe("to-do list", () => {
     expect(items[0]).toMatchObject({ tab: "analyse", anchor: "bloc-watch" });
     expect(more).toBe(0);
   });
+  it("lists the missing information after the buyer's template", () => {
+    const { items } = todoItems(
+      RILLIEUX,
+      bid({ progress: { ...READY, missing_count: 3 } }),
+      NOW,
+    );
+    const titles = items.map((i) => [i.level, i.title]);
+    const template = titles.findIndex(
+      ([, t]) => t === "Écrire le mémoire dans le cadre fourni par l'acheteur",
+    );
+    expect(titles[template + 1]).toEqual([
+      "warning",
+      "3 informations à compléter",
+    ]);
+    expect(items[template + 1]).toMatchObject({
+      tab: "memoire",
+      anchor: "bloc-missing",
+    });
+    const none = todoItems(RILLIEUX, bid(), NOW).items.map((i) => i.title);
+    expect(none.some((t) => t.includes("à compléter"))).toBe(false);
+  });
   it("keeps six lines and counts the rest", () => {
     const watch = Array.from({ length: 8 }, (_, i) => ({
       text: `Point bloquant ${i}`,

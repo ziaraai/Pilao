@@ -10,6 +10,7 @@ import type {
   DossierProgress,
   MemoirVersion,
 } from "@/lib/types";
+import { missingSummary } from "@/lib/missing";
 
 export type TabId =
   "apercu" | "dce" | "analyse" | "memoire" | "documents" | "export";
@@ -270,6 +271,16 @@ export function todoItems(
       detail: "Sinon l'offre peut être déclarée irrecevable.",
       tab: "analyse",
       anchor: "bloc-memoir",
+    });
+  }
+  const missing = bid.progress?.missing_count ?? 0;
+  if (missing > 0) {
+    all.push({
+      level: "warning",
+      title: missingSummary(missing),
+      detail: "",
+      tab: "memoire",
+      anchor: "bloc-missing",
     });
   }
   const questions = data.questions_deadline?.value;

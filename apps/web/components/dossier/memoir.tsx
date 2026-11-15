@@ -5,6 +5,7 @@ import { useState } from "react";
 import { Disclosure } from "@/components/blocks";
 import { PaidButton } from "@/components/paid-button";
 import { ChapterView } from "@/components/dossier/chapter";
+import { MissingBlock } from "@/components/dossier/missing";
 import { SourceLink, SourceViewer } from "@/components/dossier/source";
 import {
   Alert,
@@ -49,7 +50,14 @@ type Draft = {
 const working = (m: Memoir) =>
   m.status === "generating" || m.conformity_status === "pending";
 
-export function MemoirSection({ bidId }: { bidId: string }) {
+export function MemoirSection({
+  bidId,
+  onChanged,
+}: {
+  bidId: string;
+  /** Something changed the dossier (« Ce qu'il manque »): its progress is read again. */
+  onChanged?: () => void;
+}) {
   const [selected, setSelected] = useState<string | null>(null); // null: the latest version
   const memoir = useApi<Memoir>(
     selected ? `/memoirs/${selected}` : `/bids/${bidId}/memoir`,
@@ -76,36 +84,55 @@ export function MemoirSection({ bidId }: { bidId: string }) {
   }
 
   const ready = analysis.data?.status === "ready";
+  const missing = (
+    <MissingBlock
+      bidId={bidId}
+      memoirStatus={memoir.data?.status ?? null}
+      revisionKey={
+        memoir.data
+          ? `${memoir.data.id}:${memoir.data.sections.map((s) => `${s.revision}${s.status}`).join(",")}`
+          : "none"
+      }
+      onChanged={() => {
+        memoir.reload();
+        onChanged?.();
+      }}
+    />
+  );
   if (!memoir.data) {
     return (
-      <Card title="Mémoire technique" color="brand">
-        {memoir.loading ? (
-          <Loading />
-        ) : (
-          <div className="space-y-3">
-            <p className="text-sm text-slate-600">
-              Le plan du mémoire est préparé à partir de l&apos;analyse : plan
-              imposé par le RC s&apos;il existe, sinon votre mémoire modèle,
-              sinon le plan type du secteur. Vous pourrez le modifier avant la
-              rédaction.
-            </p>
-            <Button onClick={prepare} busy={create.busy} disabled={!ready}>
-              Préparer le plan du mémoire
-            </Button>
-            {!ready && (
-              <p className="text-xs text-slate-500">
-                Disponible quand l&apos;analyse du DCE est prête.
+      <div className="space-y-4">
+        {missing}
+        <Card title="Mémoire technique" color="brand">
+          {memoir.loading ? (
+            <Loading />
+          ) : (
+            <div className="space-y-3">
+              <p className="text-sm text-slate-600">
+                Le plan du mémoire est préparé à partir de l&apos;analyse : plan
+                imposé par le RC s&apos;il existe, sinon votre mémoire modèle,
+                sinon le plan type du secteur. Vous pourrez le modifier avant la
+                rédaction.
               </p>
-            )}
-            {create.error && <Alert tone="danger">{create.error}</Alert>}
-          </div>
-        )}
-      </Card>
+              <Button onClick={prepare} busy={create.busy} disabled={!ready}>
+                Préparer le plan du mémoire
+              </Button>
+              {!ready && (
+                <p className="text-xs text-slate-500">
+                  Disponible quand l&apos;analyse du DCE est prête.
+                </p>
+              )}
+              {create.error && <Alert tone="danger">{create.error}</Alert>}
+            </div>
+          )}
+        </Card>
+      </div>
     );
   }
   const latest = versions.data?.[0]?.id;
   return (
     <div className="space-y-4">
+      {memoir.data.id === latest || selected === null ? missing : null}
       {(versions.data?.length ?? 0) > 1 && (
         <div className="flex flex-wrap items-end gap-3">
           <Field label="Version du mémoire" htmlFor="memoir-version">

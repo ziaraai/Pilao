@@ -194,7 +194,11 @@ function Dossier() {
         />
       </TabPanel>
       <TabPanel id="memoire" active={tab === "memoire"}>
-        <MemoirSection key={`memoir-${analysisKey}-${memoirKey}`} bidId={id} />
+        <MemoirSection
+          key={`memoir-${analysisKey}-${memoirKey}`}
+          bidId={id}
+          onChanged={() => bid.reload()}
+        />
       </TabPanel>
       <TabPanel id="documents" active={tab === "documents"}>
         <DocumentsSection
