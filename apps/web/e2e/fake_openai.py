@@ -49,6 +49,17 @@ def chapter(prompt):
             "commitments": []}
 
 
+def fill(prompt):
+    """« Ce qu'il manque »: the marker becomes the staff the company added, else unchanged."""
+    sentence = re.search(r"<sentence>(.*?)</sentence>", prompt, re.S).group(1)
+    data = json.loads(re.search(r"<company_data>\n(.*?)\n</company_data>", prompt, re.S).group(1))
+    total = sum(h.get("count") or 0 for h in data.get("human_resources", []))
+    if not total:
+        return {"sentence": sentence, "filled": False}
+    done = re.sub(r"\[\s*À COMPLÉTER\s*:\s*nombre d'agents([^\]]*)\]", rf"{total} agents\1", sentence)
+    return {"sentence": done, "filled": done != sentence}
+
+
 def matrix(prompt):
     sections = re.findall(r'<section id="([^"]+)" title="[^"]*">\n(.*?)\n</section>', prompt, re.S)
     items = []
@@ -113,6 +124,7 @@ class H(BaseHTTPRequestHandler):
                   else profile(prompt) if "<profile_document" in prompt
                   else chapter(prompt) if "Chapitre à rédiger" in prompt
                   else matrix(prompt) if "<memoir>" in prompt
+                  else fill(prompt) if "<sentence>" in prompt
                   else score(prompt) if "<tender>" in prompt else ANSWER)
         body = {"id": "x", "object": "chat.completion", "created": 0, "model": "fake",
                 "choices": [{"index": 0, "finish_reason": "stop", "message": {"role": "assistant", "content": json.dumps(answer)}}],
