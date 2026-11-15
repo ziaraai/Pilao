@@ -24,6 +24,8 @@ def add_revision(
     origin: str,
     user_id: uuid.UUID | None,
     instruction: str | None = None,
+    model: str | None = None,
+    prompt_version: str | None = None,
 ) -> MemoirSectionRevision:
     """Record the section's current text as its next revision (the caller holds its lock)."""
     section.revision += 1
@@ -37,8 +39,10 @@ def add_revision(
         sources=section.sources,
         covered_refs=section.covered_refs,
         instruction=instruction,
-        model=section.generated_by_model if origin == "generated" else None,
-        prompt_version=section.prompt_version if origin == "generated" else None,
+        # a sentence completed (ADR-048) names its own model, the chapter keeps its own
+        model=model or (section.generated_by_model if origin == "generated" else None),
+        prompt_version=prompt_version
+        or (section.prompt_version if origin == "generated" else None),
         created_by=user_id,
     )
     db.add(revision)

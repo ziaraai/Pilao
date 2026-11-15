@@ -212,6 +212,7 @@ class FakeQueue:
         self.pending_score: list[uuid.UUID] = []
         self.pending_org_exports: list[uuid.UUID] = []
         self.pending_prefill: list[uuid.UUID] = []
+        self.pending_fills: list[uuid.UUID] = []
         self.pending_imports: list[str] = []
         self.pending_fetches: list[tuple[uuid.UUID, int]] = []  # (fetch, delay in seconds)
         self.ocr = None  # set to an OCR engine to exercise scanned pages
@@ -376,6 +377,19 @@ class FakeQueue:
         if self.down:
             raise ConnectionError("redis down")
         self.pending_prefill.append(org_id)
+
+    def enqueue_fill_marker(self, fill_id: uuid.UUID) -> None:
+        if self.down:
+            raise ConnectionError("redis down")
+        self.pending_fills.append(fill_id)
+
+    def drain_fills(self) -> None:
+        from app.services.marker_fill import run_fill_marker
+
+        while self.pending_fills:
+            fill_id = self.pending_fills.pop(0)
+            with _new_session(self._conn) as session:
+                run_fill_marker(session, fill_id)
 
     def enqueue_import_source(self, source: str) -> None:
         if self.down:

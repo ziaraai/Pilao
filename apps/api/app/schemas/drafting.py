@@ -42,6 +42,13 @@ def _to_complete(v: object) -> list[ToComplete]:
     return kept
 
 
+class MarkerFillOut(BaseModel):
+    """One sentence completed with the company's data (« Ce qu'il manque », ADR-048)."""
+
+    sentence: str = Field(min_length=1)
+    filled: bool = False
+
+
 class ChapterOut(BaseModel):
     markdown: str = Field(min_length=1)
     covered_requirements: list[str] = Field(default_factory=list)

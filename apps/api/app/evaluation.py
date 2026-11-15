@@ -174,6 +174,9 @@ class InlineQueue:
     def enqueue_org_export(self, request_id: uuid.UUID) -> None:
         pass
 
+    def enqueue_fill_marker(self, fill_id: uuid.UUID) -> None:
+        pass  # no « Ce qu'il manque » in an evaluation
+
     def enqueue_profile_prefill(self, org_id: uuid.UUID) -> None:
         pass  # the model comparison does not pre-fill profiles
 

@@ -58,7 +58,7 @@ SECTION_INTERRUPTED = "La rédaction de ce chapitre s'est interrompue. Relancez-
 def _tag_safe(text: str) -> str:
     """Data inside our XML-like tags must not be able to close them (prompt injection)."""
     return re.sub(
-        r"</?\s*(excerpt|requirements|company_data|company_excerpts|references|tender|section|memoir|previous)",
+        r"</?\s*(excerpt|requirements|company_data|company_excerpts|references|tender|section|memoir|previous|marker|sentence)",
         "‹",
         text,
     )

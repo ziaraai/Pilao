@@ -10,10 +10,13 @@ from app.core.errors import ApiError
 from app.db.models import Bid
 from app.schemas.missing import MissingAnswerIn, MissingKeyIn, MissingOut
 from app.services import missing as svc
+from app.services.marker_fill import start_fill
 from app.storage.objects import ObjectStorage, get_storage
+from app.workers.queue import JobQueue, get_job_queue
 
 router = APIRouter(tags=["missing"], dependencies=[Depends(require_module("reponse"))])
 Storage = Annotated[ObjectStorage, Depends(get_storage)]
+Queue = Annotated[JobQueue, Depends(get_job_queue)]
 
 
 def _bid(db: ScopedDb, bid_id: uuid.UUID) -> Bid:
@@ -49,3 +52,13 @@ def regenerate_missing_documents(
     bid_id: uuid.UUID, ctx: CurrentAuth, db: ScopedDb, storage: Storage
 ) -> MissingOut:
     return svc.regenerate_documents(db, ctx.org, ctx.user, _bid(db, bid_id), storage)
+
+
+@router.post("/bids/{bid_id}/missing/fill", status_code=202)
+def fill_missing(
+    bid_id: uuid.UUID, data: MissingKeyIn, ctx: CurrentAuth, db: ScopedDb, queue: Queue
+) -> MissingOut:
+    """A company's data was added to the profile: the AI completes the sentences holding it."""
+    bid = _bid(db, bid_id)
+    start_fill(db, ctx.user, bid, data.key, queue)
+    return svc.missing_for_bid(db, bid)

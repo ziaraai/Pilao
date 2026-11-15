@@ -34,6 +34,7 @@ class JobQueue(Protocol):
     def enqueue_profile_prefill(self, org_id: uuid.UUID) -> None: ...
     def enqueue_import_source(self, source: str) -> None: ...
     def enqueue_fetch_dce(self, fetch_id: uuid.UUID, delay_seconds: int = 0) -> None: ...
+    def enqueue_fill_marker(self, fill_id: uuid.UUID) -> None: ...
 
 
 class RqJobQueue:
@@ -150,6 +151,16 @@ class RqJobQueue:
             result_ttl=3600,
             failure_ttl=7 * 24 * 3600,
             retry=Retry(max=2, interval=[60, 300]),
+        )
+
+    def enqueue_fill_marker(self, fill_id: uuid.UUID) -> None:
+        # « Ce qu'il manque » (ADR-048): one short model call per sentence holding the item.
+        self._q.enqueue(
+            "app.workers.jobs.fill_marker_job",
+            str(fill_id),
+            job_timeout=600,
+            result_ttl=3600,
+            failure_ttl=7 * 24 * 3600,
         )
 
     def enqueue_profile_prefill(self, org_id: uuid.UUID) -> None:

@@ -115,3 +115,19 @@ def test_chapter_out_accepts_strings_and_objects() -> None:
         ToComplete(text="c"),
         ToComplete(text="3"),
     ]
+
+
+def test_fill_prompt_loads() -> None:
+    prompt = load_prompt("completion_repere")
+    assert prompt.version == "0.1.0"
+    system, user = prompt.render(
+        tender_title="Nettoyage des bureaux",
+        marker="nombre d'agents affectés au site",
+        sentence="Équipe : [À COMPLÉTER : nombre d'agents affectés au site].",
+        company_structured_json='{"human_resources": [{"count": 4}]}',
+    )
+    assert "uniquement" in system and "N'invente" in system
+    assert "<marker>nombre d'agents affectés au site</marker>" in user
+    assert "<sentence>Équipe : [À COMPLÉTER : nombre d'agents affectés au site].</sentence>" in user
+    assert '"count": 4' in user and '"filled"' in user
+    assert "{{" not in system + user
