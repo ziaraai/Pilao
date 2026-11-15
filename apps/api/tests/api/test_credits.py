@@ -22,6 +22,7 @@ PRICES = {
     "memoir_generation": 5,
     "chapter_regeneration": 1,
     "profile_prefill": 1,
+    "marker_fill": 0,
 }
 
 
@@ -85,6 +86,7 @@ def test_credits_page(make_client: Factory, outbox: Outbox) -> None:
         ("memoir_generation", "Rédaction du mémoire", 5),
         ("chapter_regeneration", "Régénérer un chapitre", 1),
         ("profile_prefill", "Pré-remplir le profil depuis vos documents", 1),
+        ("marker_fill", "Compléter une information", 0),
     ]
     [line] = body["history"]
     assert (line["kind"], line["credits"], line["action_name"]) == ("welcome", 7, None)
@@ -146,3 +148,12 @@ def test_no_balance_without_a_paid_module(
     assert c.get("/auth/me").json()["credits"]["total"] == 7
     set_modules(db, "user1@example.fr", ["veille"])
     assert c.get("/auth/me").json()["credits"] is None
+
+
+def test_marker_fill_costs_nothing_by_default(
+    make_client: Factory, outbox: Outbox, db: Session
+) -> None:
+    signed_in_client(make_client, outbox)
+    org = db.scalars(select(Organization)).one()
+    assert credits.price(db, "marker_fill") == 0
+    assert credits.charge(db, org, "marker_fill", user_id=None) is None

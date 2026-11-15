@@ -11,7 +11,13 @@ from app.db.models.feedback import Feedback
 from app.db.models.file import File
 from app.db.models.job import Job
 from app.db.models.knowledge import DocumentChunk, KnowledgeDocument
-from app.db.models.memoir import ConformityItem, Memoir, MemoirSection, MemoirSectionRevision
+from app.db.models.memoir import (
+    ConformityItem,
+    MarkerFill,
+    Memoir,
+    MemoirSection,
+    MemoirSectionRevision,
+)
 from app.db.models.organization import Organization
 from app.db.models.platform import PlatformAdmin, PlatformAdminSession, PlatformAuditLog
 from app.db.models.platform_setting import PlatformSetting
@@ -63,6 +69,7 @@ __all__ = [
     "Job",
     "KnowledgeDocument",
     "LoginAttempt",
+    "MarkerFill",
     "Memoir",
     "MemoirSection",
     "MemoirSectionRevision",

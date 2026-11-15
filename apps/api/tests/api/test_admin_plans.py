@@ -141,6 +141,7 @@ def test_action_prices_and_their_real_cost(
         "memoir_generation",
         "chapter_regeneration",
         "profile_prefill",
+        "marker_fill",
     ]
     analysis = rows["dce_analysis"]
     assert (

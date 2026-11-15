@@ -69,6 +69,8 @@ MODULES: tuple[Module, ...] = (
                 1,
                 "profile_extraction",
             ),
+            # « Ce qu'il manque » (ADR-048): one sentence completed with the profile's data
+            PaidAction("marker_fill", "Compléter une information", 0, "marker_fill"),
         ),
     ),
 )

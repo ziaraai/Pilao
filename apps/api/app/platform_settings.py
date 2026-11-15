@@ -19,6 +19,7 @@ TASK_MODELS = {
     "profile_extraction": "llm_model_extraction",
     "tender_scoring": "llm_model_scoring",
     "compliance_reading": "llm_model_vision",
+    "marker_fill": "llm_model_generation",  # one sentence completed (ADR-048)
 }
 # The screen's labels of the tasks (not the AI costs' labels, admin_watch.TASK_LABELS)
 MODEL_LABELS = {
@@ -28,6 +29,7 @@ MODEL_LABELS = {
     "profile_extraction": "Pré-remplissage du profil",
     "tender_scoring": "Note des annonces",
     "compliance_reading": "Lecture des attestations",
+    "marker_fill": "Compléter une information",
 }
 
 Kind = Literal["model", "secret", "bool", "int", "email"]

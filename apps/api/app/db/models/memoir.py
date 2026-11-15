@@ -7,6 +7,7 @@ from sqlalchemy import (
     CheckConstraint,
     Float,
     ForeignKey,
+    Index,
     Integer,
     Text,
     UniqueConstraint,
@@ -86,6 +87,34 @@ class MemoirSection(IdMixin, TimestampMixin, OrgScoped, Base):
     edited_by_user: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
     # Number of the current revision (0 = never drafted); an edit must start from it
     revision: Mapped[int] = mapped_column(Integer, nullable=False, default=0, server_default="0")
+
+
+class MarkerFill(IdMixin, TimestampMixin, OrgScoped, Base):
+    """« Ce qu'il manque » (ADR-048): one request to complete a missing item with the AI,
+    run in the background over every chapter holding it."""
+
+    __tablename__ = "marker_fills"
+    __table_args__ = (
+        CheckConstraint("status in ('pending','running','done','error')", name="status"),
+        CheckConstraint("outcome is null or outcome in ('filled','not_enough')", name="outcome"),
+        Index("ix_marker_fills_memoir_key", "memoir_id", "key"),
+    )
+
+    memoir_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("memoirs.id", ondelete="CASCADE"), nullable=False
+    )
+    key: Mapped[str] = mapped_column(Text, nullable=False)
+    marker_text: Mapped[str] = mapped_column(Text, nullable=False)
+    kind: Mapped[str] = mapped_column(Text, nullable=False)
+    status: Mapped[str] = mapped_column(Text, nullable=False, default="pending")
+    outcome: Mapped[str | None] = mapped_column(Text)
+    sections_filled: Mapped[int] = mapped_column(
+        Integer, nullable=False, default=0, server_default="0"
+    )
+    error: Mapped[str | None] = mapped_column(Text)
+    created_by: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("users.id", ondelete="SET NULL")
+    )
 
 
 class MemoirSectionRevision(IdMixin, TimestampMixin, OrgScoped, Base):

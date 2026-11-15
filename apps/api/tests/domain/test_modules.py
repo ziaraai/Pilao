@@ -29,5 +29,24 @@ def test_paid_actions() -> None:
         ("memoir_generation", "Rédaction du mémoire", 5, "memoir_generation"),
         ("chapter_regeneration", "Régénérer un chapitre", 1, "memoir_regeneration"),
         ("profile_prefill", "Pré-remplir le profil depuis vos documents", 1, "profile_extraction"),
+        ("marker_fill", "Compléter une information", 0, "marker_fill"),
     ]
     assert set(ACTION_BY_KEY) == {a.key for a in PAID_ACTIONS}
+
+
+def test_marker_fill_is_a_free_paid_action() -> None:
+    from app.domain.admin_watch import TASK_LABELS
+    from app.modules import ACTION_BY_KEY, MODULE_OF_ACTION
+    from app.platform_settings import MODEL_LABELS, SETTINGS, TASK_MODELS
+    from app.services.credits import REFUNDED_JOBS
+
+    assert ACTION_BY_KEY["marker_fill"].default_credits == 0
+    assert MODULE_OF_ACTION["marker_fill"] == "reponse"
+    assert TASK_MODELS["marker_fill"] == "llm_model_generation"
+    assert MODEL_LABELS["marker_fill"] == "Compléter une information"
+    assert "model.marker_fill" in {s.name for s in SETTINGS}
+    assert TASK_LABELS["marker_fill"] == "Complétion d'une information"
+    assert REFUNDED_JOBS["fill_marker"] == (
+        "marker_fill",
+        "Remboursé : la complétion n'a pas abouti.",
+    )

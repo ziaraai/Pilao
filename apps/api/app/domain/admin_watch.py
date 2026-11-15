@@ -28,6 +28,7 @@ JOB_LABELS = {
     "memoir_conformity": "Matrice de conformité",
     "export_memoir": "Export",
     "profile_prefill": "Lecture des documents du profil",
+    "fill_marker": "Complétion d'une information",
 }
 
 # ``ai_calls.task`` -> the same, for the AI costs.
@@ -39,6 +40,7 @@ TASK_LABELS = {
     "tender_scoring": "Score des annonces",
     "profile_extraction": "Lecture des documents du profil",
     "compliance_reading": "Lecture des attestations",
+    "marker_fill": "Complétion d'une information",
     "embedding": "Indexation",
 }
 
