@@ -15,7 +15,8 @@
 | Score d'une annonce | `prompts/scoring_annonce.md` | Petit modèle économique | `{score, explanation}` |
 | Typage des fichiers du DCE | règles + petit modèle si doute | Petit modèle | `rc / ccap / cctp / …` |
 | Analyse du DCE | `prompts/extraction_dce.md` | Grand contexte, sortie JSON | `schemas/dce_analysis.schema.json` |
-| Rédaction d'un chapitre | `prompts/generation_memoire_chapitre.md` | **Meilleur modèle en français** | Markdown + sources + flags |
+| Rédaction d'un chapitre | `prompts/generation_memoire_chapitre.md` (0.4.0) | **Meilleur modèle en français** | Markdown + sources + flags ; `to_complete` en `{text, kind}` (tiroir du profil, ADR-048) |
+| Compléter une information | `prompts/completion_repere.md` | Modèle de rédaction (tâche `marker_fill`) | `{sentence, filled}` : la seule phrase qui contenait le repère, recollée par le serveur (ADR-048) |
 | Matrice de conformité | `prompts/matrice_conformite.md` | Modèle intermédiaire | liste `{requirement_ref, status, excerpt}` |
 | Lecture d'une attestation | `prompts/lecture_attestation.md` | Petit modèle avec vision | `{kind, siren, issued_at, valid_until}` |
 | Pré-remplissage du profil | `prompts/extraction_profil.md` | Modèle d'extraction (`LLM_MODEL_EXTRACTION`) | `{human_resources, equipment, certifications, references}`, chaque ligne avec sa phrase source (`excerpt`), vérifiée ensuite par `app/domain/profile_prefill.py` |
@@ -59,6 +60,7 @@ plan (RC imposé > modèle org > plan secteur)
 - **Sélection des références** : similarité entre l'objet de l'AO et les références (embedding) + bonus même type de client, même département, montant proche ; garder 3 à 5.
 - **Longueur** : estimer les pages (≈ 500 mots par page) ; répartir le budget de pages selon le poids des sous-critères.
 - **Régénération d'un chapitre** : même prompt + consigne utilisateur + version précédente.
+- **Ce qu'il manque** (ADR-048) : une donnée ajoutée au profil complète la phrase qui la demandait, sans réécrire le chapitre ; la phrase n'est gardée que si le repère a disparu et qu'elle ne contient aucun nombre ni nom absent des données de l'entreprise.
 - **Longueur de réponse** : la limite de chaque appel est la taille prévue de la réponse plus une marge pour le raisonnement caché des modèles (`LLM_REASONING_TOKENS`). Une réponse coupée est relancée une fois avec une limite doublée (ADR-028).
 - **Coût** : celui facturé par le fournisseur (OpenRouter le renvoie), converti en euros (`USD_EUR_RATE`) ; la grille de LiteLLM ne sert qu'à défaut.
 

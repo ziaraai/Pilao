@@ -503,3 +503,16 @@ Format : numéro, date, décision, raison, statut. Ajouter une entrée pour chaq
 - **Alternatives écartées** : A seule (la page reste longue) ; B seule (pas de résumé avant d'ouvrir l'analyse) ; garder tous les blocs ouverts.
 - **Statut** : validé (livré). Suite : les mêmes briques sur les autres pages (P4-10).
 
+## ADR-048 — « Ce qu'il manque » : guider l'entreprise vers la donnée qui manque
+
+- **Date** : 2026-11-15
+- **Contexte** : en réunion, Abdraouf (ENG PRO) a vu l'analyse et le mémoire ; ce qui l'a inquiété, ce sont les « [À COMPLÉTER] » éparpillés, sans savoir combien il en reste ni où saisir chaque donnée. Il veut que compléter soit le plus facile possible. Spécification : `docs/superpowers/specs/2026-11-15-ce-qui-manque-design.md` (approche « mélange » choisie par Faycal).
+- **Décision** :
+  - La liste des manques est **calculée à la lecture** (`GET /bids/{id}/missing`) depuis le texte des chapitres de la dernière version du mémoire et les documents pré-remplis : elle reste juste après une modification à la main. Deux écritures d'un même manque partagent une clé (`marker_key`). Les manques des documents que le profil ne peut pas combler (nom de l'acheteur, lieu et date de signature) restent dans l'onglet Documents.
+  - Le tiroir de chaque manque vient de l'IA (prompt `generation_memoire_chapitre` 0.4.0 : `to_complete` en `{text, kind}`), rangé dans les signalements du chapitre ; des mots-clés en secours (`app/domain/missing.py`).
+  - Répondre et retirer modifient les chapitres **sans IA** (révision « edited »). Compléter passe par une tâche de fond et le prompt `completion_repere` : le modèle ne voit et ne renvoie que la phrase (ou la ligne, ou la cellule) qui contient le repère ; le serveur la recolle, refuse une phrase qui garde le repère ou contient un nombre ou un nom absent des données (contrôles de `check_chapter`), et laisse un chapitre modifié entre-temps (révision « generated », consigne « Complété : … », modèle et version du prompt de la complétion). Chaque demande est suivie dans `marker_fills`.
+  - Action payante `marker_fill` « Compléter une information », 0 crédit par défaut, remboursée en cas d'échec ; tâche IA `marker_fill` (modèle de rédaction par défaut, réglable).
+  - Front : bloc « Ce qu'il manque » en haut de l'onglet Mémoire, fenêtre d'ajout qui reprend les formulaires du profil, carte « Avant la rédaction » si le profil est vide, ligne de l'Aperçu, lien « Compléter maintenant » dans l'Export.
+- **Alternatives écartées** : ouvrir la page Profil puis régénérer le chapitre (on quitte le dossier, la réécriture coûte et écrase les retouches) ; réponse sur place seulement (le profil ne s'enrichit pas) ; rapprochement « flou » des manques (risque de mélanger deux questions).
+- **Statut** : validé. Suite : le cadre de réponse de l'acheteur (Q19), sur un vrai fichier.
+

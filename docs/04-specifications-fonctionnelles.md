@@ -164,6 +164,16 @@ DC1, DC2 (ou données DUME), liste des moyens humains et matériels, liste des r
 - CA4 : avertissement avant export si des `[À COMPLÉTER]` ou des exigences `missing` restent.
 - CA5 : la police et la taille imposées par le RC (« Times New Roman, taille 11 ») s'appliquent au Word et au PDF du mémoire ; le nombre de pages estimé et le nombre de mots par chapitre en tiennent compte (ADR-046).
 
+**US-4.7 Ce qu'il manque** (ADR-048)
+- CA1 : dans l'onglet Mémoire, un bloc « Ce qu'il manque » regroupe les repères `[À COMPLÉTER : …]` du mémoire et les manques des documents pré-remplis que le profil peut combler ; un même manque présent dans plusieurs chapitres n'apparaît qu'une fois (« dans N chapitres ») ; l'Aperçu affiche « N informations à compléter », qui mène au bloc.
+- CA2 : chaque manque a son tiroir (moyens humains, matériel, certifications, références, identité, ou détail de l'appel d'offres), donné par l'IA à la rédaction, des mots-clés en secours.
+- CA3 : donnée de l'entreprise : une fenêtre ouvre le formulaire du profil sans quitter le dossier ; l'ajout est enregistré dans le profil, puis l'IA complète **seulement la phrase** concernée dans chaque chapitre (le serveur recolle la phrase, le reste du texte ne bouge pas) ; une phrase qui garde le repère ou contient un nombre ou un nom absent des données est refusée ; un chapitre modifié pendant ce temps n'est pas touché.
+- CA4 : détail de l'appel d'offres : la réponse remplace le repère mot pour mot, dans tous les chapitres, sans IA ; « Répondre directement » existe sur toutes les lignes.
+- CA5 : « Retirer cette phrase » supprime la phrase (ou la ligne de liste, ou vide la cellule) qui contient le repère, dans tous les chapitres, après confirmation.
+- CA6 : chaque changement crée une révision (« modifié » pour une réponse ou une suppression, « rédigé » avec la consigne « Complété : … » pour une complétion) et rend la matrice « à revoir ».
+- CA7 : avant la rédaction, si le profil n'a ni moyens humains, ni matériel, ni références, une carte « Avant la rédaction » le dit et ouvre le même formulaire.
+- CA8 : compléter une information est une action payante réglable dans l'administration, à 0 crédit par défaut, remboursée si elle échoue.
+
 ---
 
 ## Module 5 — Coffre-fort et tableau de bord
