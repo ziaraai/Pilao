@@ -21,6 +21,7 @@ from app.services.knowledge import run_index_document
 from app.services.marker_fill import run_fill_marker
 from app.services.memoir_drafting import run_conformity, run_draft_section
 from app.services.org_data import run_org_export
+from app.services.pricing import run_read_prices
 from app.services.profile_prefill import run_profile_prefill
 from app.services.stale_works import sweep_stale_works
 from app.services.tender_import import ALL_READERS, Source, run_import
@@ -128,6 +129,11 @@ def daily_alerts_job() -> None:
 def org_export_job(request_id: str) -> None:
     with get_sessionmaker()() as db:
         run_org_export(db, uuid.UUID(request_id), get_storage())
+
+
+def read_prices_job(sheet_id: str) -> None:
+    with get_sessionmaker()() as db:
+        run_read_prices(db, uuid.UUID(sheet_id), get_storage())
 
 
 def fill_marker_job(fill_id: str) -> None:

@@ -11,11 +11,12 @@ from datetime import UTC, datetime
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
-from app.db.models import DceAnalysis, Job, MarkerFill, MemoirSection
+from app.db.models import DceAnalysis, Job, MarkerFill, MemoirSection, PriceSheet
 from app.services import dce_analysis as analysis_svc
 from app.services import dce_retrieval as retrieval
 from app.services import marker_fill as fills_svc
 from app.services import memoir_drafting as drafting
+from app.services import pricing as pricing_svc
 from app.services import profile_prefill as prefill
 from app.workers.queue import JobQueue
 
@@ -63,7 +64,15 @@ def sweep_stale_works(db: Session, queue: JobQueue, now: datetime | None = None)
     ).all()
     for fill in fills:
         fills_svc.close_stale(db, fill)
+    price_reads = db.scalars(  # chiffrage: a price file reading left « en cours » (ADR-049)
+        select(PriceSheet).where(
+            PriceSheet.status == "reading",
+            PriceSheet.updated_at < now - pricing_svc.STALE_AFTER,
+        )
+    ).all()
+    for sheet in price_reads:
+        pricing_svc.close_stale(db, sheet)
     db.commit()
     for memoir_id in {s.memoir_id for s in sections}:
         drafting.maybe_finish(db, memoir_id, queue)  # the memoir may have nothing left to draft
-    return len(analyses) + len(sections) + len(readings) + fetches + len(fills)
+    return len(analyses) + len(sections) + len(readings) + fetches + len(fills) + len(price_reads)

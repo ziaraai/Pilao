@@ -30,6 +30,7 @@ def test_paid_actions() -> None:
         ("chapter_regeneration", "Régénérer un chapitre", 1, "memoir_regeneration"),
         ("profile_prefill", "Pré-remplir le profil depuis vos documents", 1, "profile_extraction"),
         ("marker_fill", "Compléter une information", 0, "marker_fill"),
+        ("price_read", "Lire un fichier de prix", 1, "price_read"),
     ]
     assert set(ACTION_BY_KEY) == {a.key for a in PAID_ACTIONS}
 

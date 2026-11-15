@@ -35,6 +35,7 @@ class JobQueue(Protocol):
     def enqueue_import_source(self, source: str) -> None: ...
     def enqueue_fetch_dce(self, fetch_id: uuid.UUID, delay_seconds: int = 0) -> None: ...
     def enqueue_fill_marker(self, fill_id: uuid.UUID) -> None: ...
+    def enqueue_read_prices(self, sheet_id: uuid.UUID) -> None: ...
 
 
 class RqJobQueue:
@@ -158,6 +159,16 @@ class RqJobQueue:
         self._q.enqueue(
             "app.workers.jobs.fill_marker_job",
             str(fill_id),
+            job_timeout=600,
+            result_ttl=3600,
+            failure_ttl=7 * 24 * 3600,
+        )
+
+    def enqueue_read_prices(self, sheet_id: uuid.UUID) -> None:
+        # Chiffrage (ADR-049): one model call reading the price file's grid.
+        self._q.enqueue(
+            "app.workers.jobs.read_prices_job",
+            str(sheet_id),
             job_timeout=600,
             result_ttl=3600,
             failure_ttl=7 * 24 * 3600,

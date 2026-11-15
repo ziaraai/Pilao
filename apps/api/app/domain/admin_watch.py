@@ -29,6 +29,7 @@ JOB_LABELS = {
     "export_memoir": "Export",
     "profile_prefill": "Lecture des documents du profil",
     "fill_marker": "Complétion d'une information",
+    "read_prices": "Lecture d'un fichier de prix",
 }
 
 # ``ai_calls.task`` -> the same, for the AI costs.
@@ -41,6 +42,7 @@ TASK_LABELS = {
     "profile_extraction": "Lecture des documents du profil",
     "compliance_reading": "Lecture des attestations",
     "marker_fill": "Complétion d'une information",
+    "price_read": "Lecture d'un fichier de prix",
     "embedding": "Indexation",
 }
 

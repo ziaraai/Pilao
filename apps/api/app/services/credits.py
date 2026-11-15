@@ -309,6 +309,7 @@ REFUNDED_JOBS = {
     "draft_memoir_section": ("chapter_regeneration", "Remboursé : la régénération n'a pas abouti."),
     "profile_prefill": ("profile_prefill", "Remboursé : la lecture n'a pas abouti."),
     "fill_marker": ("marker_fill", "Remboursé : la complétion n'a pas abouti."),
+    "read_prices": ("price_read", "Remboursé : la lecture du fichier de prix n'a pas abouti."),
 }
 DRAFTING_REFUND = "Remboursé : la rédaction n'a pas abouti."
 

@@ -289,7 +289,7 @@ def test_an_unexpected_error_fails_the_fill_and_refunds(
     def broken(*args: Any) -> Any:
         raise RuntimeError("boom")
 
-    monkeypatch.setattr("app.services.marker_fill.company_data", broken)
+    monkeypatch.setattr("app.services.marker_fill.company_data_for_bid", broken)
     queue.drain_fills()
     assert item(c, bid, KEY)["fill"]["status"] == "error"  # type: ignore[index]
     assert _charges(db) == [("charge", -2), ("refund", 2)]

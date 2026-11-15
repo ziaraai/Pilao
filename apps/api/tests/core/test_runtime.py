@@ -74,8 +74,8 @@ def test_unreadable_key_falls_back_to_server(db: Session, monkeypatch: pytest.Mo
 
 def test_registry() -> None:
     names = [s.name for s in SETTINGS]
-    assert len(names) == 14 and len(set(names)) == 14
-    assert [s.kind for s in SETTINGS].count("model") == 7
+    assert len(names) == 15 and len(set(names)) == 15
+    assert [s.kind for s in SETTINGS].count("model") == 8
     assert {f"model.{task}" for task in TASK_MODELS} <= set(names)
     budget = BY_NAME["ai_monthly_budget_eur_per_org"]
     assert (budget.kind, budget.minimum, budget.maximum) == ("int", 1, 10_000)

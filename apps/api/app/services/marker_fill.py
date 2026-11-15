@@ -41,7 +41,7 @@ from app.domain.missing import markers, splice, units
 from app.schemas.drafting import MarkerFillOut
 from app.services import credits
 from app.services.jobs import set_job_status
-from app.services.memoir_drafting import _tag_safe, company_data
+from app.services.memoir_drafting import _tag_safe, company_data_for_bid
 from app.services.memoir_editing import add_revision, mark_matrix_stale
 from app.services.missing import BUSY_MESSAGE, latest_memoir, memoir_busy, missing_for_bid
 from app.workers.queue import JobQueue
@@ -163,7 +163,7 @@ def run_fill_marker(db: Session, fill_id: uuid.UUID) -> None:
         .order_by(MemoirSection.position)
     ).all()
     try:
-        company = json.dumps(company_data(db, org), ensure_ascii=False, indent=1)
+        company = json.dumps(company_data_for_bid(db, org, bid), ensure_ascii=False, indent=1)
         for section in sections:
             content, revision = section.content_md or "", section.revision
             body, model = content, None

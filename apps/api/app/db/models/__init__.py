@@ -21,6 +21,7 @@ from app.db.models.memoir import (
 from app.db.models.organization import Organization
 from app.db.models.platform import PlatformAdmin, PlatformAdminSession, PlatformAuditLog
 from app.db.models.platform_setting import PlatformSetting
+from app.db.models.pricing import PriceSheet, PricingRates
 from app.db.models.profile import (
     Certification,
     CompanyProfile,
@@ -80,6 +81,8 @@ __all__ = [
     "PlatformAdminSession",
     "PlatformAuditLog",
     "PlatformSetting",
+    "PriceSheet",
+    "PricingRates",
     "ProfileSuggestion",
     "PurgeLog",
     "Requirement",

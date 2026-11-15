@@ -23,6 +23,7 @@ PRICES = {
     "chapter_regeneration": 1,
     "profile_prefill": 1,
     "marker_fill": 0,
+    "price_read": 1,
 }
 
 
@@ -87,6 +88,7 @@ def test_credits_page(make_client: Factory, outbox: Outbox) -> None:
         ("chapter_regeneration", "Régénérer un chapitre", 1),
         ("profile_prefill", "Pré-remplir le profil depuis vos documents", 1),
         ("marker_fill", "Compléter une information", 0),
+        ("price_read", "Lire un fichier de prix", 1),
     ]
     [line] = body["history"]
     assert (line["kind"], line["credits"], line["action_name"]) == ("welcome", 7, None)

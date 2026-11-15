@@ -49,7 +49,7 @@ PROMPT = "extraction_dce"
 MAX_OUTPUT_TOKENS = 16_000
 # Order in which pieces are given to the model when everything does not fit.
 PRIORITY = {"rc": 0, "ccap": 1, "ae": 2, "annex": 3, "other": 4, "cctp": 5}
-PRICE_KINDS = ("bpu", "dpgf", "dqe")  # pricing is out of the V1 scope
+PRICE_KINDS = ("bpu", "dpgf", "dqe")  # priced in the « Prix » tab (ADR-049), not analysed
 SCHEMA_PATH = Path(get_settings().prompts_dir).parent / "schemas" / "dce_analysis.schema.json"
 
 SCOPE_FULL = "produis la fiche complète, toutes rubriques comprises."
@@ -104,7 +104,7 @@ def load_docs(db: Session, version: DceVersion) -> tuple[list[Doc], list[str]]:
     for f in files:
         if f.detected_kind in PRICE_KINDS:
             warnings.append(
-                f"« {f.path} » ({f.detected_kind.upper()}) n'est pas analysé : chiffrage hors périmètre."
+                f"« {f.path} » ({f.detected_kind.upper()}) : à chiffrer dans l'onglet Prix."
             )
             continue
         if f.text_status == "ocr_unavailable":

@@ -20,6 +20,7 @@ TASK_MODELS = {
     "tender_scoring": "llm_model_scoring",
     "compliance_reading": "llm_model_vision",
     "marker_fill": "llm_model_generation",  # one sentence completed (ADR-048)
+    "price_read": "llm_model_extraction",  # the cells to price in a BPU / DPGF / DQE (ADR-049)
 }
 # The screen's labels of the tasks (not the AI costs' labels, admin_watch.TASK_LABELS)
 MODEL_LABELS = {
@@ -30,6 +31,7 @@ MODEL_LABELS = {
     "tender_scoring": "Note des annonces",
     "compliance_reading": "Lecture des attestations",
     "marker_fill": "Compléter une information",
+    "price_read": "Lecture des fichiers de prix",
 }
 
 Kind = Literal["model", "secret", "bool", "int", "email"]

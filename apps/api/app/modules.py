@@ -71,6 +71,8 @@ MODULES: tuple[Module, ...] = (
             ),
             # « Ce qu'il manque » (ADR-048): one sentence completed with the profile's data
             PaidAction("marker_fill", "Compléter une information", 0, "marker_fill"),
+            # Chiffrage (ADR-049): the AI finds the cells to price in the buyer's file
+            PaidAction("price_read", "Lire un fichier de prix", 1, "price_read"),
         ),
     ),
 )

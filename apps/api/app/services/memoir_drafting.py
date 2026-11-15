@@ -67,6 +67,18 @@ def _tag_safe(text: str) -> str:
 # ---------- inputs: only the company's own, confirmed data (CLAUDE.md §5.1 / §5.3) --------
 
 
+def company_data_for_bid(db: Session, org: Organization, bid: Bid) -> dict[str, Any]:
+    """The company's facts, plus the hours it typed in this dossier's price files (ADR-049):
+    its own figures for this market, never a price."""
+    from app.services.pricing import bid_hours  # pricing reads the DCE: imported when used
+
+    data = company_data(db, org)
+    hours = bid_hours(db, bid)
+    if hours is not None:
+        data["dossier_hours"] = hours
+    return data
+
+
 def company_data(db: Session, org: Organization) -> dict[str, Any]:
     """Structured facts in the shape of schemas/company_profile.schema.json."""
     profile = db.scalar(select(CompanyProfile))
@@ -328,7 +340,7 @@ def run_draft_section(
         )
         or "(aucun extrait : la base documentaire est vide ou rien n'y correspond)"
     )
-    company = company_data(db, org)
+    company = company_data_for_bid(db, org, bid)
     references = _references(db, memoir)
     instruction = ""
     if section.instruction or section.content_md:
