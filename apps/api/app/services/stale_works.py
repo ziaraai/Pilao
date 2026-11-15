@@ -11,9 +11,10 @@ from datetime import UTC, datetime
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
-from app.db.models import DceAnalysis, Job, MemoirSection
+from app.db.models import DceAnalysis, Job, MarkerFill, MemoirSection
 from app.services import dce_analysis as analysis_svc
 from app.services import dce_retrieval as retrieval
+from app.services import marker_fill as fills_svc
 from app.services import memoir_drafting as drafting
 from app.services import profile_prefill as prefill
 from app.workers.queue import JobQueue
@@ -54,7 +55,15 @@ def sweep_stale_works(db: Session, queue: JobQueue, now: datetime | None = None)
         else:  # an older one, forgotten under a newer reading: no charge of its own to find
             job.status, job.error, job.finished_at = "error", prefill.INTERRUPTED, now
     fetches = retrieval.close_stale(db, now)  # a DCE retrieval left « en cours »
+    fills = db.scalars(  # « Ce qu'il manque »: a completion left « en cours » (ADR-048)
+        select(MarkerFill).where(
+            MarkerFill.status.in_(("pending", "running")),
+            MarkerFill.updated_at < now - fills_svc.STALE_AFTER,
+        )
+    ).all()
+    for fill in fills:
+        fills_svc.close_stale(db, fill)
     db.commit()
     for memoir_id in {s.memoir_id for s in sections}:
         drafting.maybe_finish(db, memoir_id, queue)  # the memoir may have nothing left to draft
-    return len(analyses) + len(sections) + len(readings) + fetches
+    return len(analyses) + len(sections) + len(readings) + fetches + len(fills)

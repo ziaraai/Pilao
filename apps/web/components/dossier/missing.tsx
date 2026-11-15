@@ -310,7 +310,7 @@ export function ProfileGapsCard({
       {adding && (
         <AddToProfileDialog
           kind={GAP_KIND[adding]}
-          markerText={messages.find((m) => m.key === adding)?.text ?? ""}
+          markerText={null}
           onClose={() => setAdding(null)}
           onSaved={() => {
             setAdding(null);

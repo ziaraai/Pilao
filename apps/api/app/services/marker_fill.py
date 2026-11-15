@@ -10,6 +10,8 @@ edited while the completion ran is left alone.
 import json
 import logging
 import uuid
+from collections import Counter
+from datetime import UTC, datetime, timedelta
 
 from sqlalchemy import select
 from sqlalchemy.orm import Session
@@ -28,7 +30,13 @@ from app.db.models import (
     Organization,
     User,
 )
-from app.domain.memoir_checks import check_chapter, flag_dicts, flags_after_edit, force_title
+from app.domain.memoir_checks import (
+    check_chapter,
+    flag_dicts,
+    flags_after_edit,
+    force_title,
+    numbers_in,
+)
 from app.domain.missing import markers, splice, units
 from app.schemas.drafting import MarkerFillOut
 from app.services import credits
@@ -44,6 +52,32 @@ JOB_FILL = "fill_marker"
 FILL_PROMPT = "completion_repere"
 PROVIDER_DOWN = "Service d'IA indisponible : réessayez."
 QUEUE_DOWN = "File d'attente indisponible : réessayez."
+FAILED = "La complétion n'a pas abouti : réessayez."
+INTERRUPTED = "La complétion a été interrompue : réessayez."
+# Past the queue's timeout (600 s): a completion still « en cours » is dead (worker killed)
+STALE_AFTER = timedelta(minutes=15)
+
+
+def close_stale(db: Session, fill: MarkerFill) -> None:
+    """A completion left for dead: failed, its credits given back (caller commits)."""
+    fill.status, fill.error = "error", INTERRUPTED
+    set_job_status(db, JOB_FILL, fill.id, "error", INTERRUPTED)
+
+
+def _accepted(sentence: str, unit_text: str, key: str, company: str) -> bool:
+    """The model's sentence is kept only when it fills the marker and invents nothing: the
+    marker is gone, every other marker of the unit is still there, and every number (even
+    1 to 10, which the drafting's guard tolerates) and every name comes from the company's
+    data or from the unit itself."""
+    if any(m.key == key for m in markers(sentence)):
+        return False
+    others = Counter(m.key for m in markers(unit_text) if m.key != key)
+    if Counter(m.key for m in markers(sentence) if m.key != key) != others:
+        return False  # another missing item silently dropped (or added)
+    context = company + "\n" + unit_text
+    if not numbers_in(sentence) <= numbers_in(context):
+        return False
+    return not any(f.type in ("number", "name") for f in check_chapter(sentence, context, [], 0))
 
 
 def start_fill(db: Session, user: User, bid: Bid, key: str, queue: JobQueue) -> MarkerFill:
@@ -63,7 +97,9 @@ def start_fill(db: Session, user: User, bid: Bid, key: str, queue: JobQueue) -> 
         )
     ).first()
     if running is not None:
-        return running  # already on its way: never charged twice
+        if running.updated_at >= datetime.now(UTC) - STALE_AFTER:
+            return running  # already on its way: never charged twice
+        close_stale(db, running)  # left for dead: refunded, and a new one can start
     fill = MarkerFill(
         org_id=bid.org_id,
         memoir_id=memoir.id,
@@ -120,7 +156,6 @@ def run_fill_marker(db: Session, fill_id: uuid.UUID) -> None:
     set_job_status(db, JOB_FILL, fill.id, "running")
     db.commit()
 
-    company = json.dumps(company_data(db, org), ensure_ascii=False, indent=1)
     prompt = load_prompt(FILL_PROMPT)
     sections = db.scalars(
         select(MemoirSection)
@@ -128,6 +163,7 @@ def run_fill_marker(db: Session, fill_id: uuid.UUID) -> None:
         .order_by(MemoirSection.position)
     ).all()
     try:
+        company = json.dumps(company_data(db, org), ensure_ascii=False, indent=1)
         for section in sections:
             content, revision = section.content_md or "", section.revision
             body, model = content, None
@@ -152,10 +188,7 @@ def run_fill_marker(db: Session, fill_id: uuid.UUID) -> None:
                     max_tokens=600,
                 )
                 sentence = result.data.sentence.strip()
-                if not result.data.filled or any(m.key == fill.key for m in markers(sentence)):
-                    continue
-                guard = check_chapter(sentence, company + "\n" + unit.text, [], 0)
-                if any(f.type in ("number", "name") for f in guard):
+                if not result.data.filled or not _accepted(sentence, unit.text, fill.key, company):
                     continue  # a fact absent from the company's data: never written
                 body, model = splice(body, unit, sentence), result.model
             if body == content:
@@ -187,6 +220,11 @@ def run_fill_marker(db: Session, fill_id: uuid.UUID) -> None:
     except llm.LlmError as exc:
         db.rollback()
         _fail(db, db.get_one(MarkerFill, fill_id), str(exc))
+        return
+    except Exception:
+        logger.exception("marker fill %s failed", fill_id)
+        db.rollback()
+        _fail(db, db.get_one(MarkerFill, fill_id), FAILED)
         return
     fill.outcome = "filled" if fill.sections_filled else "not_enough"
     fill.status = "done"

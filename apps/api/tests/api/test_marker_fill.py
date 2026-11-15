@@ -2,6 +2,7 @@
 
 import json
 from collections.abc import Callable
+from datetime import UTC, datetime, timedelta
 from typing import Any
 
 import pytest
@@ -11,8 +12,9 @@ from sqlalchemy.orm import Session
 
 from app.ai import llm
 from app.core.config import get_settings
-from app.db.models import CreditEntry, CreditPrice, MemoirSection
+from app.db.models import CreditEntry, CreditPrice, MarkerFill, MemoirSection
 from app.domain.missing import marker_key
+from app.services.stale_works import sweep_stale_works
 from tests.api.helpers import signed_in_client
 from tests.api.test_memoir import Factory
 from tests.api.test_memoir_drafting import WriterModel, _user, latest
@@ -212,3 +214,112 @@ def test_fill_busy_or_unknown(
     db.commit()
     res = fill(c, bid)
     assert res.status_code == 409 and res.json()["error"]["code"] == "memoir_busy"
+
+
+# ---------- final review ------------------------------------------------------------------
+
+
+def _price(db: Session, credits: int) -> None:
+    db.add(CreditPrice(action="marker_fill", credits=credits))
+    db.commit()
+
+
+def _charges(db: Session) -> list[tuple[str, int]]:
+    db.expire_all()
+    return [
+        (e.kind, e.monthly + e.extra)
+        for e in db.scalars(
+            select(CreditEntry).where(CreditEntry.action == "marker_fill").order_by(CreditEntry.at)
+        )
+    ]
+
+
+def _left_for_dead(db: Session) -> None:
+    db.execute(
+        update(MarkerFill).values(
+            status="running", updated_at=datetime.now(UTC) - timedelta(hours=1)
+        )
+    )
+    db.commit()
+
+
+def test_a_fill_left_running_is_closed_by_the_sweep_and_refunded(
+    make_client: Factory, outbox: Outbox, queue: FakeQueue, filler: FillModel, db: Session
+) -> None:
+    c = signed_in_client(make_client, outbox)
+    bid, _ = drafted_bid(c, queue)
+    _price(db, 2)
+    assert fill(c, bid).status_code == 202
+    queue.pending_fills.clear()  # the worker died with it
+    _left_for_dead(db)
+    assert sweep_stale_works(db, queue) == 1
+    assert _charges(db) == [("charge", -2), ("refund", 2)]
+    assert item(c, bid, KEY)["fill"]["status"] == "error"  # type: ignore[index]
+    assert sweep_stale_works(db, queue) == 0  # closed once
+
+
+def test_a_dead_fill_does_not_block_a_new_one(
+    make_client: Factory, outbox: Outbox, queue: FakeQueue, filler: FillModel, db: Session
+) -> None:
+    c = signed_in_client(make_client, outbox)
+    bid, _ = drafted_bid(c, queue)
+    with_staff(c)
+    assert fill(c, bid).status_code == 202
+    queue.pending_fills.clear()
+    _left_for_dead(db)
+    assert fill(c, bid).status_code == 202
+    assert len(db.scalars(select(MarkerFill)).all()) == 2
+    queue.drain_fills()
+    assert item(c, bid, KEY) is None
+
+
+def test_an_unexpected_error_fails_the_fill_and_refunds(
+    make_client: Factory,
+    outbox: Outbox,
+    queue: FakeQueue,
+    filler: FillModel,
+    db: Session,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    c = signed_in_client(make_client, outbox)
+    bid, _ = drafted_bid(c, queue)
+    _price(db, 2)
+    assert fill(c, bid).status_code == 202
+
+    def broken(*args: Any) -> Any:
+        raise RuntimeError("boom")
+
+    monkeypatch.setattr("app.services.marker_fill.company_data", broken)
+    queue.drain_fills()
+    assert item(c, bid, KEY)["fill"]["status"] == "error"  # type: ignore[index]
+    assert _charges(db) == [("charge", -2), ("refund", 2)]
+
+
+def test_fill_refuses_a_small_invented_number(
+    make_client: Factory, outbox: Outbox, queue: FakeQueue, filler: FillModel
+) -> None:
+    filler.fill_reply = {"sentence": "Équipe dédiée : 3 agents affectés au site.", "filled": True}
+    c = signed_in_client(make_client, outbox)
+    bid, memoir = drafted_bid(c, queue)  # no staff in the profile: 3 comes from nowhere
+    assert fill(c, bid).status_code == 202
+    queue.drain_fills()
+    assert MARK in latest(c, memoir["id"])["sections"][0]["content_md"]
+    assert item(c, bid, KEY)["fill"]["outcome"] == "not_enough"  # type: ignore[index]
+
+
+def test_fill_refuses_to_drop_another_marker(
+    make_client: Factory, outbox: Outbox, queue: FakeQueue, filler: FillModel
+) -> None:
+    filler.sentence = " encadrés par [À COMPLÉTER : nom du chef d'équipe]."
+    filler.fill_reply = {
+        "sentence": "4 agents affectés au site encadrés par un chef d'équipe expérimenté.",
+        "filled": True,
+    }
+    c = signed_in_client(make_client, outbox)
+    bid, memoir = drafted_bid(c, queue)
+    with_staff(c)
+    assert fill(c, bid).status_code == 202
+    queue.drain_fills()
+    first = latest(c, memoir["id"])["sections"][0]["content_md"]
+    assert MARK in first and "[À COMPLÉTER : nom du chef d'équipe]" in first
+    assert item(c, bid, marker_key("nom du chef d'équipe")) is not None

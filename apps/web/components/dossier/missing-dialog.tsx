@@ -7,7 +7,7 @@ import { AddItemForm } from "@/components/profile/add-item-form";
 import { CompanyIdentity } from "@/components/profile/company-identity";
 import { AddReferenceForm } from "@/components/profile/references";
 import { Button } from "@/components/ui";
-import { KIND_META } from "@/lib/missing";
+import { KIND_META, dialogIntro } from "@/lib/missing";
 import {
   CERTIFICATION_COLUMNS,
   EQUIPMENT_COLUMNS,
@@ -36,7 +36,8 @@ export function AddToProfileDialog({
   onSaved,
 }: {
   kind: MissingKind;
-  markerText: string;
+  /** ``null``: opened before the drafting, with no marker to complete. */
+  markerText: string | null;
   onClose: () => void;
   onSaved: () => void;
 }) {
@@ -65,11 +66,7 @@ export function AddToProfileDialog({
         >
           {meta.icon} {meta.button ?? "Compléter"}
         </h2>
-        <p className="text-sm text-slate-700">
-          Il manque : <strong>{markerText}</strong>. Ce que vous ajoutez est
-          enregistré dans votre profil et servira à tous vos dossiers ; Pilao
-          complète ensuite les phrases concernées.
-        </p>
+        <p className="text-sm text-slate-700">{dialogIntro(markerText)}</p>
         {list && (
           <AddItemForm
             path={list.path}
@@ -90,9 +87,11 @@ export function AddToProfileDialog({
           </p>
         )}
         <div className="flex flex-wrap gap-2 border-t border-slate-200 pt-3">
-          <Button variant="secondary" onClick={onSaved}>
-            J&apos;ai déjà cette donnée dans mon profil
-          </Button>
+          {markerText && (
+            <Button variant="secondary" onClick={onSaved}>
+              J&apos;ai déjà cette donnée dans mon profil
+            </Button>
+          )}
           <Button variant="ghost" onClick={() => ref.current?.close()}>
             Fermer
           </Button>

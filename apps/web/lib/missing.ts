@@ -89,3 +89,13 @@ export function gapMessages(
     text: `Votre profil n'a pas de ${g.what} : le mémoire aura des trous.`,
   }));
 }
+
+/** The first lines of the add-to-profile window; ``null``: opened before the drafting
+ * (« Avant la rédaction »), with no marker and no sentence to complete yet. */
+export function dialogIntro(markerText: string | null): string {
+  const where =
+    "Ce que vous ajoutez est enregistré dans votre profil et servira à tous vos dossiers";
+  return markerText
+    ? `Il manque : ${markerText}. ${where} ; Pilao complète ensuite les phrases concernées.`
+    : `${where}.`;
+}

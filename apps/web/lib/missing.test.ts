@@ -3,6 +3,7 @@ import { describe, expect, it } from "vitest";
 import {
   KIND_META,
   chaptersLabel,
+  dialogIntro,
   fillMessage,
   gapMessages,
   isCompanyKind,
@@ -102,5 +103,17 @@ describe("« Ce qu'il manque »", () => {
     expect(
       gapMessages({ staff: false, equipment: false, references: false }),
     ).toEqual([]);
+  });
+});
+
+describe("the add-to-profile window", () => {
+  it("names the missing item, or only says where the data goes", () => {
+    expect(dialogIntro("nombre d'agents")).toBe(
+      "Il manque : nombre d'agents. Ce que vous ajoutez est enregistré dans votre profil et servira à tous vos dossiers ; Pilao complète ensuite les phrases concernées.",
+    );
+    // before the drafting (« Avant la rédaction »): no marker, no sentence to complete
+    expect(dialogIntro(null)).toBe(
+      "Ce que vous ajoutez est enregistré dans votre profil et servira à tous vos dossiers.",
+    );
   });
 });
