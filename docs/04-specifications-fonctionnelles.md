@@ -174,6 +174,16 @@ DC1, DC2 (ou données DUME), liste des moyens humains et matériels, liste des r
 - CA7 : avant la rédaction, si le profil n'a ni moyens humains, ni matériel, ni références, une carte « Avant la rédaction » le dit et ouvre le même formulaire.
 - CA8 : compléter une information est une action payante réglable dans l'administration, à 0 crédit par défaut, remboursée si elle échoue.
 
+**US-4.8 Chiffrage : remplir le fichier de prix de l'acheteur** (ADR-049)
+En tant qu'entreprise, je veux que Pilao remplisse le BPU, le DPGF ou le DQE de l'acheteur avec mes prix, pour ne plus le faire à la main dans Excel.
+- CA1 : dans le Profil (onglet « Chiffre d'affaires »), je saisis une fois mon taux horaire de vente HT et mes majorations en % (nuit, dimanche, jours fériés) ; un champ vide laisse les prix qui en dépendent à compléter.
+- CA2 : l'onglet « Prix » du dossier liste les fichiers de prix du dernier DCE ; un PDF qui a son jumeau Excel est masqué ; un PDF seul est signalé « non remplissable » (demander la version Excel).
+- CA3 : « Lire le fichier » (action payante, 1 crédit par défaut, remboursée en cas d'échec) : l'IA repère chaque ligne à chiffrer (désignation, unité, quantité, case du prix, cases « heures » et « taux » s'il y en a, prix à l'heure et sa majoration) ; le serveur écarte toute case qui est une formule ou un libellé et lit lui-même les quantités ; les consignes du fichier sont affichées.
+- CA4 : pour chaque ligne, je saisis des heures (prix = heures × taux) ou un prix ; les prix à l'heure (nuit, dimanche, férié) se calculent avec mes majorations ; un taux propre au dossier peut remplacer le mien ; le total HT et le nombre de prix manquants sont affichés. Pilao ne devine jamais une heure ni un prix.
+- CA5 : « Télécharger le fichier rempli » rend le fichier de l'acheteur lui-même, rempli case par case (mise en forme, dessins, formules et zone d'impression intacts ; totaux recalculés à l'ouverture) ; un prix manquant laisse la case telle quelle.
+- CA6 : une case qui devait reprendre le prix mais contient une valeur fixe (lien rompu dans le fichier de l'acheteur) reçoit aussi le prix, et c'est signalé.
+- CA7 : les heures saisies (par ligne, quantité, total annuel) servent à la rédaction du mémoire et à « Ce qu'il manque » ; aucun prix n'entre jamais dans le mémoire.
+
 ---
 
 ## Module 5 — Coffre-fort et tableau de bord
@@ -304,4 +314,4 @@ Dans « Réglages », un interrupteur coupe le robot pour tous les clients (bout
 
 ## Hors périmètre V1
 
-Téléchargement automatique des DCE hors PLACE et plateformes Atexo (sites à captcha : récupération guidée), chiffrage, dépôt de l'offre, marchés privés, application mobile, analyse DECP, facturation Stripe (prévoir l'emplacement, ne pas coder).
+Téléchargement automatique des DCE hors PLACE et plateformes Atexo (sites à captcha : récupération guidée), estimation automatique des heures (surfaces × cadences), dépôt de l'offre, marchés privés, application mobile, analyse DECP, facturation Stripe (prévoir l'emplacement, ne pas coder).

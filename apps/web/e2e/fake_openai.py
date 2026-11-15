@@ -101,6 +101,20 @@ CATALOGUE = [  # lot 5: OpenRouter's catalogue, as the administration reads it
 ]
 
 
+# Chiffrage (ADR-049): the cells to price in the journey's DQE (fixtures.py)
+PRICES = {
+    "lines": [
+        {"sheet": "DQE", "section": "prestation quotidienne", "label": "Hôtel de ville",
+         "unit": "jour", "quantity_cell": "I5", "price_cell": "B5", "hours_cell": "C5",
+         "rate_cell": "D5", "hourly": False, "surcharge": "none"},
+        {"sheet": "DQE", "section": "interventions", "label": "Nuit (21h-6h)", "unit": "heure",
+         "quantity_cell": "I6", "price_cell": "B6", "hours_cell": None, "rate_cell": None,
+         "hourly": True, "surcharge": "night"},
+    ],
+    "notes": ["Prix en euros HT"],
+}
+
+
 class H(BaseHTTPRequestHandler):
     def _json(self, status, payload):
         data = json.dumps(payload).encode()
@@ -126,6 +140,7 @@ class H(BaseHTTPRequestHandler):
                   else chapter(prompt) if "Chapitre à rédiger" in prompt
                   else matrix(prompt) if "<memoir>" in prompt
                   else fill(prompt) if "<sentence>" in prompt
+                  else PRICES if "<grid>" in prompt
                   else score(prompt) if "<tender>" in prompt else ANSWER)
         body = {"id": "x", "object": "chat.completion", "created": 0, "model": "fake",
                 "choices": [{"index": 0, "finish_reason": "stop", "message": {"role": "assistant", "content": json.dumps(answer)}}],

@@ -1026,3 +1026,50 @@ export type AdminCatalogueModel = {
   price_out_eur: number;
   context_length: number;
 };
+
+// ---------- chiffrage (ADR-049) -----------------------------------------------------------
+
+export type Surcharge = "none" | "night" | "sunday" | "holiday";
+
+export type Rates = {
+  hourly_rate_cents: number | null;
+  night_pct: number | null;
+  sunday_pct: number | null;
+  holiday_pct: number | null;
+};
+
+export type PriceLine = {
+  id: string;
+  section: string;
+  label: string;
+  unit: string;
+  quantity: string | null;
+  hourly: boolean;
+  surcharge: Surcharge;
+  hours: string | null;
+  price_cents: number | null;
+  total_cents: number | null;
+  source: "hours" | "price" | "hourly" | "none";
+};
+
+export type PriceSheet = {
+  id: string;
+  status: "reading" | "ready" | "error";
+  error: string | null;
+  warnings: string[];
+  notes: string[];
+  rate_cents: number | null;
+  lines: PriceLine[];
+  total_cents: number;
+  missing_count: number;
+};
+
+export type PriceFile = {
+  dce_file_id: string;
+  path: string;
+  kind: string;
+  fillable: boolean;
+  sheet: PriceSheet | null;
+};
+
+export type Prices = { rates: Rates; files: PriceFile[] };

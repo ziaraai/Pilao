@@ -13,13 +13,14 @@ import type {
 import { missingSummary } from "@/lib/missing";
 
 export type TabId =
-  "apercu" | "dce" | "analyse" | "memoire" | "documents" | "export";
+  "apercu" | "dce" | "analyse" | "memoire" | "prix" | "documents" | "export";
 
 export const TABS: { id: TabId; label: string }[] = [
   { id: "apercu", label: "Aperçu" },
   { id: "dce", label: "DCE" },
   { id: "analyse", label: "Analyse" },
   { id: "memoire", label: "Mémoire" },
+  { id: "prix", label: "Prix" },
   { id: "documents", label: "Documents" },
   { id: "export", label: "Export" },
 ];
@@ -50,6 +51,7 @@ export function tabDone(
     dce: !!progress?.dce_ready,
     analyse: !!progress?.analysis_ready,
     memoire: !!progress?.memoir_ready,
+    prix: false, // no « done » mark: prices are checked by the company until the deposit
     documents: !!progress?.documents_ready,
     export: !!progress?.exported,
   };

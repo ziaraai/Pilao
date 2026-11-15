@@ -9,9 +9,18 @@ rc = make_pdf([["REGLEMENT DE LA CONSULTATION", "Acheteur : Ville de Lyon", "Dat
                ["Criteres : valeur technique 60 %, prix 40 %", "Plan impose du memoire : 1. Moyens 2. Methodologie"]])
 cctp = make_pdf([["CAHIER DES CLAUSES TECHNIQUES PARTICULIERES", "Article 1 : nettoyage quotidien des bureaux avant 8h"],
                  ["Article 2 : vitrerie interieure une fois par trimestre", "Article 3 : produits ecolabellises"]])
+# Chiffrage (ADR-049): the buyer's price file, a price per day with hours × rate beside it
+dqe = Workbook(); ws = dqe.active; ws.title = "DQE"
+ws["A3"] = "prestation quotidienne"
+ws["A4"], ws["B4"], ws["C4"], ws["D4"], ws["I4"], ws["J4"] = "Site", "prix € HT/J", "nombre d'heures", "coût horaire HT", "Quantité", "Total HT"
+ws["A5"], ws["B5"], ws["D5"], ws["H5"], ws["I5"], ws["J5"] = "Hôtel de ville", 0, 0, "=B5", 208, "=I5*H5"
+ws["A6"], ws["B6"], ws["H6"], ws["I6"] = "Nuit (21h-6h)", 0, "=B6", 2
+ws["J8"] = "=SUM(J5:J6)"
+dqe_buf = io.BytesIO(); dqe.save(dqe_buf)
 buf = io.BytesIO()
 with zipfile.ZipFile(buf, "w") as zf:
     zf.writestr("DCE/RC.pdf", rc); zf.writestr("DCE/CCTP.pdf", cctp)
+    zf.writestr("DCE/DQE.xlsx", dqe_buf.getvalue())
 open(f"{out}/DCE_mairie.zip", "wb").write(buf.getvalue())
 open(f"{out}/attestation_urssaf.pdf", "wb").write(make_pdf([["ATTESTATION DE VIGILANCE", "URSSAF Rhone-Alpes"]]))
 open(f"{out}/memoire_2025.docx", "wb").write(make_docx([("Heading 1", "Moyens materiels"), ("Normal", "Nous utilisons des autolaveuses et des monobrosses professionnelles."), ("Normal", "Nous disposons de 3 autolaveuses Tennant T5 pour les grandes surfaces."), ("Normal", "Equipe : agents de service et 2 chefs d'equipe.")]))

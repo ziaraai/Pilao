@@ -160,6 +160,7 @@ describe("tabs", () => {
   });
   it("reads the tab from the address, unknown or empty falls back", () => {
     expect(tabFromQuery("analyse", READY)).toBe("analyse");
+    expect(tabFromQuery("prix", READY)).toBe("prix");
     expect(tabFromQuery("xyz", READY)).toBe("apercu");
     expect(tabFromQuery("", NONE)).toBe("dce");
     expect(tabFromQuery(null, READY)).toBe("apercu");
@@ -170,6 +171,7 @@ describe("tabs", () => {
       dce: true,
       analyse: true,
       memoire: true,
+      prix: false,
       documents: false,
       export: true,
     });

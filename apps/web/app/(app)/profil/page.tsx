@@ -9,6 +9,7 @@ import { DataRights } from "@/components/profile/data-rights";
 import { PlanCredits } from "@/components/profile/plan-credits";
 import { ProfilePrefill } from "@/components/profile/prefill";
 import { Members } from "@/components/profile/members";
+import { RatesCard } from "@/components/profile/rates";
 import { References } from "@/components/profile/references";
 import { SimpleList } from "@/components/profile/simple-list";
 import { WatchSettings } from "@/components/profile/watch-settings";
@@ -200,6 +201,7 @@ function ProfileTabs() {
       >
         {current === "identite" && <CompanyIdentity />}
         {current === "identite" && answers && <DceRetrievalSettings />}
+        {current === "chiffre-affaires" && answers && <RatesCard />}
         {(current === "veille" || current === "chiffre-affaires") && (
           <WatchSettings
             key={current} // a fresh form from the saved profile on each tab

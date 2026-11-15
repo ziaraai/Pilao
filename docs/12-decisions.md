@@ -516,3 +516,16 @@ Format : numéro, date, décision, raison, statut. Ajouter une entrée pour chaq
 - **Alternatives écartées** : ouvrir la page Profil puis régénérer le chapitre (on quitte le dossier, la réécriture coûte et écrase les retouches) ; réponse sur place seulement (le profil ne s'enrichit pas) ; rapprochement « flou » des manques (risque de mélanger deux questions).
 - **Statut** : validé. Suite : le cadre de réponse de l'acheteur (Q19), sur un vrai fichier.
 
+## ADR-049 — Chiffrage : remplir le fichier de prix de l'acheteur
+
+- **Date** : 2026-11-15
+- **Contexte** : sur le marché 26020M (Rillieux-la-Pape), Abdraouf ne trouvait pas les prix : les BPU, DPGF et DQE étaient écartés de l'analyse (« chiffrage hors périmètre ») et le mémoire restait plein de `[À COMPLÉTER]` sur les heures. Il veut que Pilao lui remplisse le DQE. Faycal a demandé d'avancer sans questions ; spécification : `docs/superpowers/specs/2026-11-15-chiffrage-design.md`.
+- **Décision** :
+  - Taux de l'entreprise (`pricing_rates`) : taux horaire HT, majorations nuit / dimanche / férié.
+  - Une `price_sheets` par fichier de prix : l'IA (tâche `price_read`, prompt `lecture_bordereau_prix`) lit le classeur cellule par cellule et propose les lignes ; le serveur garde seulement les cases que le fichier confirme (jamais une formule ni un libellé) et lit lui-même les quantités. Action payante `price_read`, 1 crédit par défaut, remboursée en cas d'échec, lectures bloquées fermées par le balayage.
+  - Prix = heures × taux, prix saisi, ou taux + majoration pour un prix à l'heure. Rien de deviné.
+  - Le fichier rendu est **celui de l'acheteur**, modifié case par case dans son XML (`exports/xlsx_fill.py`) : openpyxl réécrit tout le classeur et perd les dessins (DPGF de Récamier). Les résultats en cache des formules sont retirés et `fullCalcOnLoad` posé : LibreOffice 24.2 ne recalcule pas sinon (vérifié). `.xls` / `.ods` convertis en `.xlsx` par LibreOffice, signalé. Lien rompu (colonne qui reprend le prix par `=B5` sauf sur une ligne à valeur fixe) : le prix y est écrit aussi, et signalé.
+  - Les heures saisies vont au mémoire (`dossier_hours` dans les données de l'entreprise, prompt de rédaction 0.5.0, complétion « Ce qu'il manque ») ; jamais un prix.
+- **Alternatives écartées** : openpyxl (perd les dessins et images) ; recalcul par LibreOffice puis renvoi de sa copie (change la mise en forme du fichier officiel) ; heures estimées par l'IA (règle 1 : l'IA n'invente pas les moyens de l'entreprise ; estimation par surfaces × cadences prévue, P4-14).
+- **Statut** : validé par Faycal (« tu fonces ») ; à relire avec Abdraouf sur le DQE de Rillieux.
+

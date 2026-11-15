@@ -240,6 +240,28 @@ generated_documents (
 )
 ```
 
+## Chiffrage (ADR-049)
+
+```sql
+pricing_rates (            -- une ligne par entreprise (Profil)
+  id, org_id unique, hourly_rate_cents int null check (> 0),
+  night_pct int null, sunday_pct int null, holiday_pct int null
+)
+
+price_sheets (             -- un fichier de prix (BPU, DPGF, DQE) d'un dossier
+  id, org_id, bid_id, dce_file_id unique,
+  source_file_id null,     -- le .xlsx rempli : celui de l'acheteur ou sa conversion (.xls, .ods)
+  filled_file_id null,     -- la dernière copie remplie remise (remplacée à chaque téléchargement)
+  status text check (status in ('reading','ready','error')), error text null,
+  lines jsonb,             -- [{id « Feuille!B5 », sheet, section, label, unit, quantity, price_cell, hours_cell, rate_cell, hourly, surcharge}]
+  mirrors jsonb,           -- {ligne: [cases du lien rompu]}
+  warnings jsonb, notes jsonb,
+  entries jsonb,           -- {ligne: {hours | price_cents}} saisis par l'entreprise
+  rate_cents int null,     -- taux du dossier (sinon celui du profil)
+  created_by null
+)
+```
+
 ## Coffre-fort
 
 ```sql

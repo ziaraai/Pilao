@@ -9,6 +9,7 @@ import { AnalysisSection } from "@/components/dossier/analysis";
 import { DceSection } from "@/components/dossier/dce";
 import { DocumentsSection } from "@/components/dossier/documents";
 import { ExportTab } from "@/components/dossier/export";
+import { PricesTab } from "@/components/dossier/prices";
 import { MemoirSection } from "@/components/dossier/memoir";
 import { Overview } from "@/components/dossier/overview";
 import { ResultSection } from "@/components/dossier/result";
@@ -199,6 +200,9 @@ function Dossier() {
           bidId={id}
           onChanged={() => bid.reload()}
         />
+      </TabPanel>
+      <TabPanel id="prix" active={tab === "prix"}>
+        {tab === "prix" && <PricesTab bidId={id} />}
       </TabPanel>
       <TabPanel id="documents" active={tab === "documents"}>
         <DocumentsSection

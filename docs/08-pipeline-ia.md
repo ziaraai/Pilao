@@ -17,6 +17,7 @@
 | Analyse du DCE | `prompts/extraction_dce.md` | Grand contexte, sortie JSON | `schemas/dce_analysis.schema.json` |
 | Rédaction d'un chapitre | `prompts/generation_memoire_chapitre.md` (0.4.0) | **Meilleur modèle en français** | Markdown + sources + flags ; `to_complete` en `{text, kind}` (tiroir du profil, ADR-048) |
 | Compléter une information | `prompts/completion_repere.md` | Modèle de rédaction (tâche `marker_fill`) | `{sentence, filled}` : la seule phrase qui contenait le repère, recollée par le serveur (ADR-048) |
+| Lire un fichier de prix | `prompts/lecture_bordereau_prix.md` | Modèle d'extraction (tâche `price_read`) | `{lines, notes}` : les cases à remplir du BPU / DPGF / DQE, vérifiées par le serveur sur le fichier ; jamais un prix (ADR-049) |
 | Matrice de conformité | `prompts/matrice_conformite.md` | Modèle intermédiaire | liste `{requirement_ref, status, excerpt}` |
 | Lecture d'une attestation | `prompts/lecture_attestation.md` | Petit modèle avec vision | `{kind, siren, issued_at, valid_until}` |
 | Pré-remplissage du profil | `prompts/extraction_profil.md` | Modèle d'extraction (`LLM_MODEL_EXTRACTION`) | `{human_resources, equipment, certifications, references}`, chaque ligne avec sa phrase source (`excerpt`), vérifiée ensuite par `app/domain/profile_prefill.py` |
