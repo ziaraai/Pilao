@@ -7,11 +7,11 @@ import {
   Button,
   Card,
   Empty,
-  Field,
   Input,
   tableHead,
   tableRow,
 } from "@/components/ui";
+import { AddItemForm } from "@/components/profile/add-item-form";
 import { ExcelImport, TemplateLink } from "@/components/profile/excel-import";
 import { api } from "@/lib/api";
 import { useAction, useApi } from "@/lib/hooks";
@@ -48,8 +48,6 @@ export function SimpleList<T extends { id: string }>({
 }) {
   const list = useApi<T[]>(path);
   const empty = Object.fromEntries(columns.map((c) => [c.key, ""]));
-  const [draft, setDraft] = useState<Record<string, string>>(empty);
-  const add = useAction();
   const remove = useAction();
   const save = useAction();
   const [editing, setEditing] = useState<string | null>(null);
@@ -73,16 +71,6 @@ export function SimpleList<T extends { id: string }>({
     );
     if (ok) {
       setEditing(null);
-      list.reload();
-      onChange();
-    }
-  }
-
-  async function onAdd(e: React.FormEvent) {
-    e.preventDefault();
-    const body = payloadOf(draft, columns);
-    if (await add.run(() => api(path, { json: body }))) {
-      setDraft(empty);
       list.reload();
       onChange();
     }
@@ -206,45 +194,17 @@ export function SimpleList<T extends { id: string }>({
           </table>
         </div>
       )}
-      <form
-        onSubmit={onAdd}
-        className="mt-4 grid items-end gap-3 sm:grid-cols-[repeat(auto-fit,minmax(10rem,1fr))]"
-        noValidate
-      >
-        {columns.map((c) => (
-          <Field key={c.key} label={c.label} htmlFor={`${path}-${c.key}`}>
-            <Input
-              id={`${path}-${c.key}`}
-              type={c.type ?? "text"}
-              placeholder={c.placeholder}
-              aria-describedby={c.hint ? `${path}-${c.key}-hint` : undefined}
-              value={draft[c.key]}
-              required={c.required}
-              onChange={(e) =>
-                setDraft((d) => ({ ...d, [c.key]: e.target.value }))
-              }
-            />
-          </Field>
-        ))}
-        <Button type="submit" variant="secondary" busy={add.busy}>
-          Ajouter
-        </Button>
-      </form>
-      {/* Hints sit under the whole row: inside a field they would push it out of line. */}
-      {columns
-        .filter((c) => c.hint)
-        .map((c) => (
-          <p
-            key={c.key}
-            id={`${path}-${c.key}-hint`}
-            className="mt-2 text-xs text-slate-500"
-          >
-            {c.label} : {c.hint}
-          </p>
-        ))}
-      {(save.error || add.error || remove.error) && (
+      <AddItemForm
+        path={path}
+        columns={columns}
+        onSaved={() => {
+          list.reload();
+          onChange();
+        }}
+      />
+      {(save.error || remove.error) && (
         <div className="mt-3">
-          <Alert tone="danger">{save.error ?? add.error ?? remove.error}</Alert>
+          <Alert tone="danger">{save.error ?? remove.error}</Alert>
         </div>
       )}
     </Card>

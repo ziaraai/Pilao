@@ -42,14 +42,26 @@ const FIELDS: {
 const DEFAULT_COLOR = "#011844";
 
 /** Identity used by DC1/DC2, and the logo and colour of the Word documents. */
-export function CompanyIdentity() {
+export function CompanyIdentity({ onSaved }: { onSaved?: () => void } = {}) {
   const company = useApi<Company>("/profile/company");
   if (company.error) return <Alert tone="danger">{company.error}</Alert>;
   if (!company.data) return null;
-  return <IdentityForm key={company.data.siret} company={company.data} />;
+  return (
+    <IdentityForm
+      key={company.data.siret}
+      company={company.data}
+      onSaved={onSaved}
+    />
+  );
 }
 
-function IdentityForm({ company }: { company: Company }) {
+function IdentityForm({
+  company,
+  onSaved,
+}: {
+  company: Company;
+  onSaved?: () => void;
+}) {
   const [form, setForm] = useState<Form>(() => ({
     name: company.name,
     legal_form: company.legal_form,
@@ -93,7 +105,10 @@ function IdentityForm({ company }: { company: Company }) {
           const ok = await save.run(() =>
             api<Company>("/profile/company", { method: "PUT", json: form }),
           );
-          if (ok) setSaved(true);
+          if (ok) {
+            setSaved(true);
+            onSaved?.();
+          }
         }}
       >
         <p className="text-sm text-slate-600">

@@ -14,9 +14,13 @@ import { SimpleList } from "@/components/profile/simple-list";
 import { WatchSettings } from "@/components/profile/watch-settings";
 import { Alert, Card, Loading, PageTitle } from "@/components/ui";
 import { useMe } from "@/lib/auth";
-import { formatDate } from "@/lib/format";
 import { useApi } from "@/lib/hooks";
 import { hasModule } from "@/lib/modules";
+import {
+  CERTIFICATION_COLUMNS,
+  EQUIPMENT_COLUMNS,
+  HUMAN_RESOURCE_COLUMNS,
+} from "@/lib/profile-columns";
 import type { Completeness, Profile, Trade } from "@/lib/types";
 
 // One tab per part of the profile; `keys` are the completeness items it holds.
@@ -217,21 +221,7 @@ function ProfileTabs() {
               onChange={completeness.reload}
               excel={{ what: "ligne(s) de moyens humains" }}
               emptyText="Aucun moyen humain : ajoutez vos équipes (ex. 12 agents de service)."
-              columns={[
-                {
-                  key: "qualification",
-                  label: "Qualification",
-                  required: true,
-                },
-                {
-                  key: "count",
-                  label: "Nombre",
-                  type: "number",
-                  required: true,
-                  render: (v) => `× ${String(v)}`,
-                },
-                { key: "description", label: "Précisions" },
-              ]}
+              columns={HUMAN_RESOURCE_COLUMNS}
             />
             <SimpleList
               title="Moyens matériels"
@@ -239,21 +229,7 @@ function ProfileTabs() {
               onChange={completeness.reload}
               excel={{ what: "ligne(s) de matériel" }}
               emptyText="Aucun matériel : ajoutez vos machines (ex. autolaveuse)."
-              columns={[
-                { key: "name", label: "Matériel", required: true },
-                {
-                  key: "category",
-                  label: "Type de matériel",
-                  placeholder: "ex. autolaveuse, monobrosse",
-                  hint: "sert à regrouper votre matériel par type dans la liste des moyens matériels du dossier.",
-                },
-                {
-                  key: "quantity",
-                  label: "Quantité",
-                  type: "number",
-                  render: (v) => `× ${String(v)}`,
-                },
-              ]}
+              columns={EQUIPMENT_COLUMNS}
             />
           </>
         )}
@@ -263,16 +239,7 @@ function ProfileTabs() {
             path="/profile/certifications"
             onChange={completeness.reload}
             emptyText="Aucune certification (ISO 9001, Qualipropre…)."
-            columns={[
-              { key: "name", label: "Certification", required: true },
-              { key: "number", label: "Numéro" },
-              {
-                key: "valid_until",
-                label: "Valable jusqu'au",
-                type: "date",
-                render: (v) => `jusqu'au ${formatDate(String(v))}`,
-              },
-            ]}
+            columns={CERTIFICATION_COLUMNS}
           />
         )}
         {current === "references" && (

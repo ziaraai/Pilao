@@ -181,6 +181,35 @@ export type DossierProgress = {
   documents_ready: boolean;
   exported: boolean;
   blocking_points: number;
+  /** « Ce qu'il manque » (ADR-048): the missing items of the dossier. */
+  missing_count?: number;
+};
+export type MissingKind =
+  "staff" | "equipment" | "certification" | "reference" | "identity" | "tender";
+export type MissingFill = {
+  status: "pending" | "running" | "done" | "error";
+  outcome: "filled" | "not_enough" | null;
+  error: string | null;
+};
+export type MissingItem = {
+  key: string;
+  text: string;
+  kind: MissingKind;
+  sections: { id: string; title: string }[];
+  documents: string[];
+  fill: MissingFill | null;
+};
+/** ``true``: the profile has none of them. */
+export type ProfileGaps = {
+  staff: boolean;
+  equipment: boolean;
+  references: boolean;
+};
+export type MissingList = {
+  memoir_id: string | null;
+  memoir_busy: boolean;
+  items: MissingItem[];
+  profile_gaps: ProfileGaps;
 };
 export type DceFile = {
   id: string;

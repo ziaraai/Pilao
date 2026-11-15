@@ -145,57 +145,7 @@ export function References({ onChange }: { onChange: () => void }) {
         className="mt-4 grid items-end gap-3 sm:grid-cols-3"
         noValidate
       >
-        <Field label="Client" htmlFor="ref-client">
-          <Input
-            id="ref-client"
-            value={draft.client_name}
-            onChange={(e) =>
-              setDraft({ ...draft, client_name: e.target.value })
-            }
-          />
-        </Field>
-        <Field label="Type de client" htmlFor="ref-type">
-          <Select
-            id="ref-type"
-            value={draft.client_type}
-            onChange={(e) =>
-              setDraft({ ...draft, client_type: e.target.value })
-            }
-          >
-            <option value="public">Public</option>
-            <option value="private">Privé</option>
-          </Select>
-        </Field>
-        <Field label="Objet du marché" htmlFor="ref-title">
-          <Input
-            id="ref-title"
-            value={draft.title}
-            onChange={(e) => setDraft({ ...draft, title: e.target.value })}
-          />
-        </Field>
-        <Field label="Département" htmlFor="ref-dept">
-          <Input
-            id="ref-dept"
-            value={draft.department}
-            onChange={(e) => setDraft({ ...draft, department: e.target.value })}
-          />
-        </Field>
-        <Field label="Montant (€ HT)" htmlFor="ref-amount">
-          <Input
-            id="ref-amount"
-            inputMode="decimal"
-            value={draft.amount}
-            onChange={(e) => setDraft({ ...draft, amount: e.target.value })}
-          />
-        </Field>
-        <Field label="Année" htmlFor="ref-year">
-          <Input
-            id="ref-year"
-            type="number"
-            value={draft.year}
-            onChange={(e) => setDraft({ ...draft, year: e.target.value })}
-          />
-        </Field>
+        <ReferenceFields draft={draft} setDraft={setDraft} />
         {editing ? (
           <div className="flex flex-wrap gap-2">
             <Button type="submit" busy={add.busy}>
@@ -217,5 +167,107 @@ export function References({ onChange }: { onChange: () => void }) {
         </div>
       )}
     </Card>
+  );
+}
+
+/** The fields of a reference: the profile's form and the « Ce qu'il manque » window. */
+function ReferenceFields({
+  draft,
+  setDraft,
+  prefix = "ref",
+}: {
+  draft: ReferenceDraft;
+  setDraft: (d: ReferenceDraft) => void;
+  prefix?: string;
+}) {
+  return (
+    <>
+      <Field label="Client" htmlFor={`${prefix}-client`}>
+        <Input
+          id={`${prefix}-client`}
+          value={draft.client_name}
+          onChange={(e) => setDraft({ ...draft, client_name: e.target.value })}
+        />
+      </Field>
+      <Field label="Type de client" htmlFor={`${prefix}-type`}>
+        <Select
+          id={`${prefix}-type`}
+          value={draft.client_type}
+          onChange={(e) => setDraft({ ...draft, client_type: e.target.value })}
+        >
+          <option value="public">Public</option>
+          <option value="private">Privé</option>
+        </Select>
+      </Field>
+      <Field label="Objet du marché" htmlFor={`${prefix}-title`}>
+        <Input
+          id={`${prefix}-title`}
+          value={draft.title}
+          onChange={(e) => setDraft({ ...draft, title: e.target.value })}
+        />
+      </Field>
+      <Field label="Département" htmlFor={`${prefix}-dept`}>
+        <Input
+          id={`${prefix}-dept`}
+          value={draft.department}
+          onChange={(e) => setDraft({ ...draft, department: e.target.value })}
+        />
+      </Field>
+      <Field label="Montant (€ HT)" htmlFor={`${prefix}-amount`}>
+        <Input
+          id={`${prefix}-amount`}
+          inputMode="decimal"
+          value={draft.amount}
+          onChange={(e) => setDraft({ ...draft, amount: e.target.value })}
+        />
+      </Field>
+      <Field label="Année" htmlFor={`${prefix}-year`}>
+        <Input
+          id={`${prefix}-year`}
+          type="number"
+          value={draft.year}
+          onChange={(e) => setDraft({ ...draft, year: e.target.value })}
+        />
+      </Field>
+    </>
+  );
+}
+
+/** Add one reference (« Ce qu'il manque », ADR-048). */
+export function AddReferenceForm({ onSaved }: { onSaved: () => void }) {
+  const [draft, setDraft] = useState<ReferenceDraft>(EMPTY_REFERENCE);
+  const add = useAction();
+
+  async function onAdd(e: React.FormEvent) {
+    e.preventDefault();
+    const body = referencePayload(draft);
+    if (await add.run(() => api("/profile/references", { json: body }))) {
+      setDraft(EMPTY_REFERENCE);
+      onSaved();
+    }
+  }
+
+  return (
+    <>
+      <form
+        onSubmit={onAdd}
+        className="mt-4 grid items-end gap-3 sm:grid-cols-3"
+        noValidate
+      >
+        <ReferenceFields
+          draft={draft}
+          setDraft={setDraft}
+          prefix="missing-ref"
+        />
+        <Button type="submit" variant="secondary" busy={add.busy}>
+          Ajouter la référence
+        </Button>
+      </form>
+      {add.error && (
+        <div className="mt-3">
+          <Alert tone="danger">{add.error}</Alert>
+        </div>
+      )}
+    </>
   );
 }
