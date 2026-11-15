@@ -4,6 +4,7 @@ import json
 import logging
 import re
 import uuid
+from dataclasses import replace
 from datetime import UTC, datetime, timedelta
 from typing import Any
 
@@ -34,7 +35,7 @@ from app.db.models import (
     User,
 )
 from app.domain import framework_amounts
-from app.domain.memoir_checks import check_chapter, force_title
+from app.domain.memoir_checks import check_chapter, flag_dicts, force_title, marker_key
 from app.domain.trades import TRADES
 from app.schemas.drafting import ChapterOut, MatrixOut
 from app.services import credits
@@ -396,6 +397,12 @@ def run_draft_section(
         ]
     )
     flags = check_chapter(markdown, context, out.commitments, section.word_budget)
+    # The drawer the model gave each missing item (« Ce qu'il manque », ADR-048)
+    drawers = {marker_key(t.text): t.kind for t in out.to_complete if t.kind}
+    flags = [
+        replace(f, kind=drawers.get(marker_key(f.text))) if f.type == "to_complete" else f
+        for f in flags
+    ]
     fresh = db.get(MemoirSection, section_id, populate_existing=True, with_for_update=True)
     if fresh is None:  # memoir deleted meanwhile
         db.commit()
@@ -414,7 +421,7 @@ def run_draft_section(
         for s in out.sources
         if s.excerpt_id in excerpts  # an unknown excerpt id is dropped, never shown
     ]
-    fresh.flags = [{"type": f.type, "text": f.text, "term": f.term} for f in flags]
+    fresh.flags = flag_dicts(flags)
     fresh.generated_by_model, fresh.prompt_version = result.model, prompt.version
     add_revision(db, fresh, "generated", None, instruction=fresh.instruction)
     fresh.status, fresh.error, fresh.edited_by_user, fresh.instruction = "ready", None, False, None

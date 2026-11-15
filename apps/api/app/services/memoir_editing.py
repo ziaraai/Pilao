@@ -13,7 +13,7 @@ from sqlalchemy.orm import Session
 
 from app.core.errors import ApiError
 from app.db.models import AuditLog, Memoir, MemoirSection, MemoirSectionRevision, User
-from app.domain.memoir_checks import flags_after_edit, force_title
+from app.domain.memoir_checks import flag_dicts, flags_after_edit, force_title
 
 MAX_CHAPTER_CHARS = 60_000
 
@@ -81,10 +81,7 @@ def edit_section(
         raise ApiError(422, "chapter_too_long", "Chapitre trop long (60 000 caractères maximum).")
     memoir, locked = _editable(db, section, base_revision)
     locked.content_md = force_title(body, locked.title)
-    locked.flags = [
-        {"type": f.type, "text": f.text, "term": f.term}
-        for f in flags_after_edit(locked.content_md, locked.flags, locked.word_budget)
-    ]
+    locked.flags = flag_dicts(flags_after_edit(locked.content_md, locked.flags, locked.word_budget))
     locked.status, locked.error, locked.edited_by_user = "ready", None, True
     add_revision(db, locked, "edited", user.id)
     mark_matrix_stale(memoir)

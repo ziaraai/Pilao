@@ -42,6 +42,7 @@ class WriterModel(FakeModel):
         self.sentence = ""  # added to every chapter
         self.matrix: Matrix | None = None  # None = the model returns invalid JSON
         self.outage = False
+        self.to_complete: list[Any] = ["nombre d'agents affectés au site"]
 
     def __call__(
         self, model: str, messages: list[dict[str, Any]], max_tokens: int | None = None
@@ -85,7 +86,7 @@ class WriterModel(FakeModel):
                     *({"excerpt_id": e, "used_for": "méthode de travail"} for e in excerpts[:1]),
                     {"excerpt_id": str(uuid.uuid4()), "used_for": "source inventée"},
                 ],
-                "to_complete": ["nombre d'agents affectés au site"],
+                "to_complete": self.to_complete,
                 "commitments": ["Intervention sous 2 heures"],
             }
         )
@@ -548,3 +549,13 @@ def test_the_chapter_prompt_gives_the_accord_cadre_range(
         "Montant estimé : non précisé (accord-cadre de 80 000 € à 170 000 € HT par an)"
         in model.chapter_prompts[0]
     )
+
+
+def test_drafted_marker_carries_the_model_drawer(
+    make_client: Factory, outbox: Outbox, queue: FakeQueue, model: WriterModel
+) -> None:
+    model.to_complete = [{"text": "nombre d'agents affectés au site", "kind": "staff"}]
+    memoir = drafted(signed_in_client(make_client, outbox), queue)
+    for section in memoir["sections"]:
+        todo = [f for f in section["flags"] if f["type"] == "to_complete"]
+        assert todo and all(f["kind"] == "staff" for f in todo)

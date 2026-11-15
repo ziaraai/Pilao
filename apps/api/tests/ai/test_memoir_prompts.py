@@ -1,7 +1,7 @@
 """Prompts `generation_memoire_chapitre` and `matrice_conformite`, and their output schemas."""
 
 from app.ai.prompts import load_prompt
-from app.schemas.drafting import ChapterOut, MatrixOut
+from app.schemas.drafting import ChapterOut, MatrixOut, ToComplete
 from app.services.memoir_drafting import _tag_safe
 
 CHAPTER_VARS = {
@@ -24,7 +24,7 @@ CHAPTER_VARS = {
 
 def test_chapter_prompt_renders_with_its_guards() -> None:
     prompt = load_prompt("generation_memoire_chapitre")
-    assert prompt.version == "0.3.0"
+    assert prompt.version == "0.4.0"
     system, user = prompt.render(**CHAPTER_VARS)
     assert "N'invente aucune information sur l'entreprise" in system
     assert "Ne demande jamais par un `[À COMPLÉTER]` une information qui figure" in system
@@ -83,4 +83,35 @@ def test_matrix_output_keeps_only_valid_items() -> None:
     assert [(i.requirement_ref, i.status) for i in out.items] == [
         ("CCTP-1", "covered"),
         ("CCTP-2", "missing"),
+    ]
+
+
+def test_chapter_prompt_asks_for_drawers() -> None:
+    prompt = load_prompt("generation_memoire_chapitre")
+    system, user = prompt.render(**CHAPTER_VARS)
+    text = system + user
+    assert '"kind"' in text
+    for kind in ("staff", "equipment", "certification", "reference", "identity", "tender"):
+        assert kind in text
+
+
+def test_chapter_out_accepts_strings_and_objects() -> None:
+    out = ChapterOut.model_validate(
+        {
+            "markdown": "x",
+            "to_complete": [
+                "a",
+                {"text": "b", "kind": "equipment"},
+                {"text": "c", "kind": "robot"},
+                {"kind": "staff"},
+                3,
+                None,
+            ],
+        }
+    )
+    assert out.to_complete == [
+        ToComplete(text="a"),
+        ToComplete(text="b", kind="equipment"),
+        ToComplete(text="c"),
+        ToComplete(text="3"),
     ]

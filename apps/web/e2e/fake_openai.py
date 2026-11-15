@@ -45,7 +45,8 @@ def chapter(prompt):
               "Équipe dédiée : [À COMPLÉTER : nombre d'agents affectés au site]."]
     return {"markdown": "\n".join(lines), "covered_requirements": refs,
             "sources": [{"excerpt_id": e, "used_for": "matériel"} for e in excerpts[:1]],
-            "to_complete": ["nombre d'agents affectés au site"], "commitments": []}
+            "to_complete": [{"text": "nombre d'agents affectés au site", "kind": "staff"}],
+            "commitments": []}
 
 
 def matrix(prompt):
