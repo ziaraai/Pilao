@@ -143,6 +143,20 @@ class Flag:
     type: str  # to_complete | commitment | number | name | length
     text: str
     term: str | None = None  # what to highlight in the chapter
+    kind: str | None = None  # to_complete: the profile drawer it belongs to (app.domain.missing)
+
+
+def marker_key(text: str) -> str:
+    """Two spellings of the same missing item share a key (« Nombre d’agents » = « nombre
+    d'agents ») : no accents, lower case, punctuation as spaces, spaces squeezed."""
+    plain = unicodedata.normalize("NFKD", text)
+    plain = "".join(c for c in plain if not unicodedata.combining(c)).lower()
+    return " ".join(re.sub(r"[^\w]+", " ", plain).split())
+
+
+def flag_dicts(flags: list[Flag]) -> list[dict[str, object]]:
+    """How a chapter's flags are stored (``memoir_sections.flags``)."""
+    return [{"type": f.type, "text": f.text, "term": f.term, "kind": f.kind} for f in flags]
 
 
 def _norm_number(raw: str) -> str:
@@ -273,11 +287,18 @@ def flags_after_edit(
     """The user's own words are not "invented": markers, commitments and length are recomputed;
     a number or a name the model had invented stays flagged while it is still in the text."""
     text = TO_COMPLETE.sub("", markdown)
+    drawers = {
+        marker_key(str(f["text"])): str(f["kind"])
+        for f in previous
+        if f.get("type") == "to_complete" and f.get("kind") and f.get("text")
+    }
+    todos = [
+        Flag(f.type, f.text, f.term, drawers.get(marker_key(f.text)))
+        for f in _to_complete(markdown)
+    ]
     kept = [
         Flag(str(f["type"]), str(f["text"]), str(f["term"]))
         for f in previous
         if f.get("type") in ("number", "name") and f.get("term") and str(f["term"]) in text
     ]
-    return (
-        _to_complete(markdown) + _commitments(markdown, []) + kept + _length(markdown, word_budget)
-    )
+    return todos + _commitments(markdown, []) + kept + _length(markdown, word_budget)

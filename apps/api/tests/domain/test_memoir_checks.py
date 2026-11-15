@@ -1,4 +1,11 @@
-from app.domain.memoir_checks import check_chapter, flags_after_edit, force_title, numbers_in
+from app.domain.memoir_checks import (
+    Flag,
+    check_chapter,
+    flag_dicts,
+    flags_after_edit,
+    force_title,
+    numbers_in,
+)
 
 CONTEXT = """Effectif : 12 agents. Autolaveuses : 3. Surface : 2 500 m². Chiffre d'affaires 1 250 000 €.
 Exigence CCTP-1 : passage quotidien avant 8h."""
@@ -110,3 +117,20 @@ def test_after_an_edit_the_user_words_are_trusted() -> None:
         ("commitment", "Nous nous engageons à rappeler sous 4 h."),
         ("number", "45"),  # still there: still to check; 37 and Jean Dupont were removed
     ]  # 99 was typed by the user: not flagged
+
+
+def test_flags_after_edit_keeps_marker_kind() -> None:
+    previous: list[dict[str, object]] = [
+        {"type": "to_complete", "text": "nombre d'agents", "term": None, "kind": "staff"}
+    ]
+    flags = flags_after_edit("## T\n\nÉquipe : [À COMPLÉTER : Nombre d’agents].", previous, 0)
+    [todo] = [f for f in flags if f.type == "to_complete"]
+    assert todo.kind == "staff"
+    other = flags_after_edit("## T\n\n[À COMPLÉTER : horaires].", previous, 0)
+    assert [f.kind for f in other if f.type == "to_complete"] == [None]
+
+
+def test_flag_dicts_carry_the_kind() -> None:
+    assert flag_dicts([Flag("to_complete", "x", None, "staff")]) == [
+        {"type": "to_complete", "text": "x", "term": None, "kind": "staff"}
+    ]
