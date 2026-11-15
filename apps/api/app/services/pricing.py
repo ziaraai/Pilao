@@ -35,6 +35,7 @@ from app.db.models import (
 from app.documents.convert import ConversionUnavailable, soffice_convert
 from app.domain.price_grid import PriceFileError, grid_text, read_workbook
 from app.domain.pricing import (
+    LineIn,
     Priced,
     PriceLine,
     PriceReadOut,
@@ -69,7 +70,7 @@ logger = logging.getLogger("pilao.pricing")
 JOB_READ = "read_prices"
 TASK = "price_read"
 PROMPT = "lecture_bordereau_prix"
-MAX_OUTPUT_TOKENS = 16_000
+MAX_OUTPUT_TOKENS = 32_000  # a 300-line DPGF answers with short lines (cells only)
 STALE_AFTER = timedelta(minutes=15)  # past the queue's timeout (600 s): the reading is dead
 FILLABLE = ("xlsx", "xlsm")
 CONVERTIBLE = ("xls", "ods")
@@ -337,25 +338,36 @@ def run_read_prices(db: Session, sheet_id: uuid.UUID, storage: ObjectStorage) ->
     try:
         data, converted = _source_bytes(db, sheet, dce_file, storage)
         sheets = read_workbook(data)
-        grid, cut = grid_text(sheets)
-        if not any(s.cells for s in sheets if not s.hidden):
+        filled = [s for s in sheets if not s.hidden and s.cells]
+        if not filled:
             raise PriceFileError("Ce fichier ne contient aucune case remplie.")
         prompt = load_prompt(PROMPT)
-        system, user_msg = prompt.render(
-            file_name=dce_file.path.replace("<", "‹"),
-            grid=grid.replace("</grid", "‹/grid"),
-        )
-        result = llm.complete(
-            db,
-            org_id=sheet.org_id,
-            task=TASK,
-            messages=[{"role": "system", "content": system}, {"role": "user", "content": user_msg}],
-            response_model=PriceReadOut,
-            prompt_version=prompt.version,
-            bid_id=sheet.bid_id,
-            max_tokens=MAX_OUTPUT_TOKENS,
-        )
-        lines, warnings = validate_lines(result.data.lines, sheets)
+        proposed: list[LineIn] = []
+        notes: list[str] = []
+        cut = False
+        for part in filled:  # one call per sheet: a DPGF often has one sheet per lot
+            grid, part_cut = grid_text([part])
+            cut = cut or part_cut
+            system, user_msg = prompt.render(
+                file_name=dce_file.path.replace("<", "‹"),
+                grid=grid.replace("</grid", "‹/grid"),
+            )
+            result = llm.complete(
+                db,
+                org_id=sheet.org_id,
+                task=TASK,
+                messages=[
+                    {"role": "system", "content": system},
+                    {"role": "user", "content": user_msg},
+                ],
+                response_model=PriceReadOut,
+                prompt_version=prompt.version,
+                bid_id=sheet.bid_id,
+                max_tokens=MAX_OUTPUT_TOKENS,
+            )
+            proposed.extend(result.data.lines)
+            notes.extend(n for n in result.data.notes if n not in notes)
+        lines, warnings = validate_lines(proposed, sheets)
         if not lines:
             _fail(db, sheet, NO_LINES)
             return
@@ -381,7 +393,7 @@ def run_read_prices(db: Session, sheet_id: uuid.UUID, storage: ObjectStorage) ->
         sheet.lines = [ln.to_dict() for ln in lines]
         sheet.mirrors = mirrors
         sheet.warnings = warnings
-        sheet.notes = [re.sub(r"\s+", " ", n).strip()[:300] for n in result.data.notes[:5]]
+        sheet.notes = [re.sub(r"\s+", " ", n).strip()[:300] for n in notes[:5]]
         sheet.entries = {k: v for k, v in sheet.entries.items() if k in labels}
         sheet.status, sheet.error = "ready", None
         set_job_status(db, JOB_READ, sheet.id, "done")

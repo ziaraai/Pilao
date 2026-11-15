@@ -9,7 +9,7 @@ from app.domain.pricing import PriceReadOut
 
 def test_price_prompt_renders_with_its_guards() -> None:
     prompt = load_prompt("lecture_bordereau_prix")
-    assert prompt.version == "0.1.0"
+    assert prompt.version == "0.3.0"
     system, user = prompt.render(file_name="DCE/DQE.xlsx", grid="=== Feuille « DQE » ===\nB5: 0")
     assert "jamais une formule" in system  # the price cell is never a formula
     assert "ne proposes **jamais** de prix" in system
@@ -24,3 +24,5 @@ def test_the_example_answer_is_valid() -> None:
     assert example is not None
     out = PriceReadOut.model_validate(json.loads(example.group(1)))
     assert out.lines[0].price_cell == "B5" and out.lines[0].hours_cell == "C5"
+    assert out.lines[0].label_cell == "A5" and out.lines[1].surcharge == "night"
+    assert out.lines[1].hours_cell is None  # omitted fields take their defaults

@@ -7,7 +7,7 @@ with its own surcharge for an hourly price. Nothing missing is ever guessed.
 """
 
 import re
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from decimal import ROUND_HALF_UP, Decimal, InvalidOperation
 from typing import Any, Literal
 
@@ -26,7 +26,8 @@ class LineIn(BaseModel):
 
     sheet: str = Field(max_length=200)
     section: str = Field(default="", max_length=300)
-    label: str = Field(max_length=500)
+    label: str = Field(default="", max_length=500)  # a fallback: the label's cell comes first
+    label_cell: str | None = Field(default=None, max_length=12)
     unit: str = Field(default="", max_length=50)
     quantity_cell: str | None = Field(default=None, max_length=12)
     price_cell: str = Field(max_length=12)
@@ -130,7 +131,11 @@ def validate_lines(
     for p in proposed[:MAX_LINES]:
         sheet = by_name.get(p.sheet)
         price = _ref(p.price_cell)
-        label = re.sub(r"\s+", " ", p.label).strip()
+        label_ref = _ref(p.label_cell)
+        written = sheet.cells.get(label_ref) if sheet is not None and label_ref else None
+        shown = (written.cached if written.formula else written.raw) if written else None
+        text = shown if isinstance(shown, str) and shown.strip() else p.label
+        label = re.sub(r"\s+", " ", text).strip()[:500]
         if sheet is None or price is None or not label:
             dropped += 1
             continue
@@ -168,6 +173,7 @@ def validate_lines(
                 surcharge=p.surcharge if p.hourly else "none",
             )
         )
+    lines = _fold_copies(lines, by_name)
     warnings = []
     if dropped:
         warnings.append(
@@ -183,6 +189,48 @@ def _split(ref: str) -> tuple[str, int]:
     match = _CELL.match(ref)
     assert match is not None
     return match.group(1), int(match.group(2))
+
+
+def _copy_columns(sheet: Sheet) -> dict[str, set[str]]:
+    """Column → the columns that repeat it row by row (« H5: =B5 » makes H a copy of B)."""
+    copies: dict[str, set[str]] = {}
+    for ref, cell in sheet.cells.items():
+        match = _SAME_ROW_REF.match(cell.raw) if cell.formula else None
+        if match and int(match.group(2)) == _split(ref)[1] and match.group(1) != _split(ref)[0]:
+            copies.setdefault(match.group(1), set()).add(_split(ref)[0])
+    return copies
+
+
+def _fold_copies(lines: list[PriceLine], sheets: dict[str, Sheet]) -> list[PriceLine]:
+    """A line given in a column that only repeats a price column (a DQE beside its BPU) is
+    the same line: folded into the line of the price column (which takes its quantity if it
+    had none), or moved there when the model gave only the copy. The copy cell is then found
+    as a broken link and receives the price too."""
+    price_cols = {(ln.sheet, _split(ln.price_cell)[0]) for ln in lines}
+    by_cell = {(ln.sheet, ln.price_cell): i for i, ln in enumerate(lines)}
+    kept: list[PriceLine | None] = list(lines)
+    copy_columns = {name: _copy_columns(sheets[name]) for name in {ln.sheet for ln in lines}}
+    for i, ln in enumerate(lines):
+        col, row = _split(ln.price_cell)
+        sheet = sheets[ln.sheet]
+        origins = [
+            c
+            for c, copies in copy_columns[ln.sheet].items()
+            if col in copies and (ln.sheet, c) in price_cols
+        ]
+        if len(origins) != 1:
+            continue
+        origin = f"{origins[0]}{row}"
+        if (ln.sheet, origin) in by_cell:
+            j = by_cell[(ln.sheet, origin)]
+            target = kept[j]
+            if target is not None and target.quantity is None and ln.quantity is not None:
+                kept[j] = replace(target, quantity=ln.quantity)
+            kept[i] = None
+        elif _writable(sheet.cells.get(origin)):
+            kept[i] = replace(ln, id=f"{ln.sheet}!{origin}", price_cell=origin)
+            by_cell[(ln.sheet, origin)] = i
+    return [ln for ln in kept if ln is not None]
 
 
 def broken_links(lines: list[PriceLine], sheets: list[Sheet]) -> dict[str, list[str]]:

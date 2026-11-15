@@ -190,3 +190,40 @@ def test_writes_and_hours_summary() -> None:
         ],
         "heures_totales": "520",
     }
+
+
+def test_twin_of_a_broken_link_is_folded_into_its_line() -> None:
+    """Real model on the 26020M DQE: the yearly table listed B32 (BPU, no quantity) and H32
+    (DQE, the fixed 0, with the quantity) as two lines. One line, H32 its broken link."""
+    sheets = read_workbook(rillieux_like())
+    twins = [
+        *proposed(),
+        line("H32", "Gymnase A", section="prestation annuelle", quantity_cell="I32"),
+    ]
+    twins[2] = line(
+        "B32", "Gymnase A", section="prestation annuelle"
+    )  # no quantity on the BPU side
+    lines, warnings = validate_lines(twins, sheets)
+    assert [ln.id for ln in lines] == ["DQE!B5", "DQE!B6", "DQE!B32", "DQE!B42"]
+    assert lines[2].quantity == Decimal(2) and warnings == []
+    assert broken_links(lines, sheets) == {"DQE!B32": ["H32"]}
+
+
+def test_a_line_given_on_the_copy_side_is_moved_to_the_origin() -> None:
+    sheets = read_workbook(rillieux_like())
+    only_copy = [p for p in proposed() if p.price_cell != "B32"]
+    only_copy.append(line("H32", "Gymnase A", section="prestation annuelle", quantity_cell="I32"))
+    lines, _ = validate_lines(only_copy, sheets)
+    yearly = next(ln for ln in lines if ln.section == "prestation annuelle")
+    assert yearly.id == "DQE!B32" and yearly.quantity == Decimal(2)  # the BPU price is filled too
+    assert broken_links(lines, sheets) == {"DQE!B32": ["H32"]}
+
+
+def test_label_read_from_its_cell() -> None:
+    """The model gives the label's cell (short answers on a 300-line DPGF): the server reads
+    the text itself; a label typed by the model is only a fallback."""
+    sheets = read_workbook(rillieux_like())
+    from_cell = line("B5", "", label_cell="A5", quantity_cell="I5")
+    typed = line("B6", "Gymnase B (tapé)", label_cell="I6", quantity_cell="I6")  # I6 is a number
+    lines, _ = validate_lines([from_cell, typed], sheets)
+    assert [ln.label for ln in lines] == ["Gymnase A", "Gymnase B (tapé)"]
