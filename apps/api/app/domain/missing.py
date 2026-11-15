@@ -57,6 +57,9 @@ _RULES: tuple[tuple[MissingKind, tuple[str, ...]], ...] = (
             "tva",
             "kbis",
             "capital social",
+            "naf",
+            "telephone",
+            "habilite",
         ),
     ),
     (
@@ -105,9 +108,22 @@ def _word(word: str) -> re.Pattern[str]:
 _PATTERNS = [(kind, [_word(w) for w in words]) for kind, words in _RULES]
 
 
+# « (Profil > Identité) »: the DC1/DC2 name the section of the profile themselves
+_SECTIONS: tuple[tuple[str, MissingKind], ...] = (
+    ("profil identite", "identity"),
+    ("profil references", "reference"),
+    ("profil certifications", "certification"),
+    ("profil moyens humains", "staff"),
+    ("profil moyens materiels", "equipment"),
+)
+
+
 def classify(text: str) -> MissingKind:
     """The drawer of a missing item from its words; ``tender`` (answered in place) otherwise."""
     key = marker_key(text)
+    for section, kind in _SECTIONS:
+        if section in key:
+            return kind
     for kind, patterns in _PATTERNS:
         if any(p.search(key) for p in patterns):
             return kind

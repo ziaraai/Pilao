@@ -17,6 +17,7 @@ from app.db.models import (
 )
 from app.schemas.bids import BidIn, BidPatch, BidProgressOut
 from app.services import files as files_svc
+from app.services.missing import missing_count
 from app.services.tenders import release_matches
 from app.storage.objects import ObjectStorage
 
@@ -101,4 +102,5 @@ def progress(db: Session, bid: Bid) -> BidProgressOut:
         blocking_points=sum(
             1 for w in watch_points if isinstance(w, dict) and w.get("severity") == "blocking"
         ),
+        missing_count=missing_count(db, bid),
     )

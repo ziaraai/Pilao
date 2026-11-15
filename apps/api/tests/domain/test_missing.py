@@ -29,6 +29,13 @@ def test_marker_key_normalizes() -> None:
         ("chiffre d'affaires 2025", "identity"),
         ("effectif total de l'entreprise", "identity"),
         ("horaires d'intervention sur ce site", "tender"),
+        # the DC1/DC2's own words
+        ("code NAF", "identity"),
+        ("téléphone (Profil > Identité)", "identity"),
+        ("personne habilitée à engager l'entreprise", "identity"),
+        ("références de prestations similaires (Profil > Références)", "reference"),
+        ("lieu et date de signature", "tender"),
+        ("nom de l'acheteur", "tender"),
     ],
 )
 def test_classify(text: str, kind: str) -> None:

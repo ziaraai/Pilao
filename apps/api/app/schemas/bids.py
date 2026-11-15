@@ -43,6 +43,7 @@ class BidProgressOut(BaseModel):
     documents_ready: bool
     exported: bool
     blocking_points: int
+    missing_count: int = 0  # « Ce qu'il manque » (ADR-048)
 
 
 class BidOut(BaseModel):

@@ -28,6 +28,7 @@ from app.routers import (
     knowledge,
     members,
     memoir,
+    missing,
     organization,
     profile,
     tenders,
@@ -70,6 +71,7 @@ app.include_router(documents.router)
 app.include_router(tenders.router)
 app.include_router(dashboard.router)
 app.include_router(credits.router)
+app.include_router(missing.router)
 app.include_router(organization.router)
 app.include_router(members.router)
 app.include_router(feedback.router)

@@ -446,6 +446,7 @@ def test_bid_progress_follows_the_dossier(
         "documents_ready": False,
         "exported": False,
         "blocking_points": 0,
+        "missing_count": 0,
     }
     model.extra = {
         "watch_points": [
