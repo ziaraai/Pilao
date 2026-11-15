@@ -53,10 +53,11 @@ def fill(prompt):
     """« Ce qu'il manque »: the marker becomes the staff the company added, else unchanged."""
     sentence = re.search(r"<sentence>(.*?)</sentence>", prompt, re.S).group(1)
     data = json.loads(re.search(r"<company_data>\n(.*?)\n</company_data>", prompt, re.S).group(1))
-    total = sum(h.get("count") or 0 for h in data.get("human_resources", []))
-    if not total:
+    counts = [h["count"] for h in data.get("human_resources", []) if h.get("count")]
+    if not counts:
         return {"sentence": sentence, "filled": False}
-    done = re.sub(r"\[\s*À COMPLÉTER\s*:\s*nombre d'agents([^\]]*)\]", rf"{total} agents\1", sentence)
+    # the line the company just added (a number of its data: a sum would be refused)
+    done = re.sub(r"\[\s*À COMPLÉTER\s*:\s*nombre d'agents([^\]]*)\]", rf"{counts[-1]} agents\1", sentence)
     return {"sentence": done, "filled": done != sentence}
 
 

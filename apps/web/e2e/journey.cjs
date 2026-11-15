@@ -480,6 +480,62 @@ let current; // the page, for a screenshot when a step fails
     "chapter edited (marker highlighted, matrix flagged outdated), earlier version restored",
   );
 
+  // 6d bis. « Ce qu'il manque » (ADR-048): listed once, filled from the profile
+  await page.getByRole("tab", { name: "Aperçu" }).click();
+  await page.getByRole("button", { name: /1 information à compléter/ }).click();
+  const missingBlock = page.locator("#bloc-missing");
+  await missingBlock.getByText("Ce qu'il manque : 1 information").waitFor();
+  const agentsRow = missingBlock.locator("li", {
+    hasText: "nombre d'agents affectés au site",
+  });
+  await agentsRow.getByText("dans 2 chapitres").waitFor();
+  await page.setViewportSize({ width: 390, height: 844 });
+  if (
+    await page.evaluate(
+      () => document.documentElement.scrollWidth > window.innerWidth + 1,
+    )
+  )
+    throw new Error("« Ce qu'il manque » widens the page on a phone");
+  await missingBlock.screenshot({ path: `${S}/07b-manques-telephone.png` });
+  await page.setViewportSize({ width: 1280, height: 900 });
+  await agentsRow
+    .getByRole("button", { name: "Ajouter dans Moyens humains" })
+    .click();
+  const addDialog = page.getByRole("dialog");
+  await addDialog.getByLabel("Qualification").fill("Agent de service");
+  await addDialog.getByLabel("Nombre").fill("4");
+  await addDialog.getByRole("button", { name: "Ajouter", exact: true }).click();
+  await memoirPanel.getByText("Rien ne manque").waitFor({ timeout: 90000 });
+  if (
+    await memoirPanel
+      .locator("mark", {
+        hasText: "[À COMPLÉTER : nombre d'agents affectés au site]",
+      })
+      .count()
+  )
+    throw new Error("the marker is still in the chapters");
+  await memoirPanel
+    .getByText("4 agents affectés au site", { exact: false })
+    .first()
+    .waitFor();
+  await page.getByRole("tab", { name: "Aperçu" }).click();
+  await page
+    .getByText("Déjà exporté")
+    .or(page.getByText("Word, PDF ou dossier complet"))
+    .first()
+    .waitFor();
+  if (
+    await page
+      .getByText(/informations? à compléter/)
+      .filter({ visible: true })
+      .count()
+  )
+    throw new Error("the overview still lists missing information");
+  await page.getByRole("tab", { name: "Mémoire" }).click();
+  step(
+    "« Ce qu'il manque »: one line for two chapters, staff added from the dossier, sentences completed",
+  );
+
   // 6e. Pre-filled DC1 (P2-06)
   await page.getByRole("tab", { name: "Documents" }).click();
   const docsCard = page.locator("section", {

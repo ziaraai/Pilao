@@ -80,6 +80,9 @@ export function MissingBlock({
 
   function changed(next: MissingList) {
     list.setData(next);
+    // a completion runs in the background: read the list again until it ends (setData
+    // alone does not start the polling of useApi)
+    if (next.memoir_busy || next.items.some(running)) list.reload();
     onChanged();
   }
 
