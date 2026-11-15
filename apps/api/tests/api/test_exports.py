@@ -397,3 +397,16 @@ def test_cover_lines_hold_only_what_the_profile_has() -> None:
         "04 77 00 00 00",
         "SIRET 12345678900011",
     ]
+
+
+def test_a_chapter_has_one_banner_only() -> None:
+    """The model sometimes writes « ## Nos engagements » inside a chapter: only the chapter's
+    own title opens on the banner (Heading 1), a later « ## » is a section (Heading 2)."""
+    from app.exports.docx_builder import DocBuilder
+
+    b = DocBuilder(brand_color=None, logo=None, company="X")
+    b.markdown("## 1. Moyens\n\nTexte.\n\n## Nos engagements\n\n- Un.\n", heading_offset=-1)
+    styles = [
+        (p.style.name, p.text) for p in b.doc.paragraphs if p.style.name.startswith("Heading")
+    ]
+    assert styles == [("Heading 1", "1. Moyens"), ("Heading 2", "Nos engagements")]

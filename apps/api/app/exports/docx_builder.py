@@ -329,10 +329,14 @@ class DocBuilder:
         self.doc.add_paragraph()
 
     def markdown(self, source: str, heading_offset: int = 0) -> None:
-        """A chapter: ``## Title`` becomes Heading 1 with ``heading_offset=-1``."""
+        """A chapter: ``## Title`` becomes Heading 1 with ``heading_offset=-1``. Only the first
+        title opens on the chapter banner: a later one of the same level is a section."""
+        banner_used = False
         for block in md.parse(source):
             if isinstance(block, md.Heading):
                 level = min(max(block.level + heading_offset, 1), 3)
+                if level == 1:
+                    level, banner_used = (2 if banner_used else 1), True
                 self.md_runs(self.doc.add_paragraph(style=f"Heading {level}"), block.runs)
             elif isinstance(block, md.ListBlock):
                 style = "List Number" if block.ordered else "List Bullet"
