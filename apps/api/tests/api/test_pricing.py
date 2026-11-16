@@ -304,3 +304,43 @@ def test_typed_hours_reach_the_memoir_never_the_prices(
     assert data["dossier_hours"]["heures_totales"] == "520"
     assert data["dossier_hours"]["lignes"][0]["libelle"] == "Gymnase A"
     assert "6250" not in json.dumps(data) and "62.5" not in json.dumps(data)
+
+
+def test_the_same_line_in_the_other_price_file_follows(
+    make_client: Factory, outbox: Outbox, queue: FakeQueue, reader: PriceModel
+) -> None:
+    """Rillieux: the BPM and the DQE hold the same lines and must carry the same prices; what
+    is typed in one goes to the same line of the other (same section, same label)."""
+    c = signed_in_client(make_client, outbox)
+    c.put("/profile/rates", json={"hourly_rate_cents": 2500})
+    files = {
+        "DCE/RC.pdf": RC,
+        "DCE/26020M_DQE.xlsx": rillieux_like(),
+        "DCE/BPM.xlsx": rillieux_like(),
+    }
+    bid = new_bid(c)
+    deposit(c, bid, ("DCE.zip", zipped(files)))
+    queue.drain_dce()
+    listed = prices(c, bid)["files"]
+    assert sorted(f["path"] for f in listed) == ["DCE/26020M_DQE.xlsx", "DCE/BPM.xlsx"]
+    first, second = listed
+    c.post(f"/bids/{bid}/prices/{first['dce_file_id']}/read")
+    queue.drain_price_reads()
+    sheet = next(
+        f["sheet"] for f in prices(c, bid)["files"] if f["dce_file_id"] == first["dce_file_id"]
+    )
+    c.put(f"/price-sheets/{sheet['id']}", json={"entries": {"DQE!B5": {"hours": "3"}}})
+    # read later: the second file starts with what was typed in the first
+    c.post(f"/bids/{bid}/prices/{second['dce_file_id']}/read")
+    queue.drain_price_reads()
+    other = next(
+        f["sheet"] for f in prices(c, bid)["files"] if f["dce_file_id"] == second["dce_file_id"]
+    )
+    assert other["lines"][0]["hours"] == "3" and other["lines"][0]["price_cents"] == 7500
+    assert any("repris" in w for w in other["warnings"])
+    # typed afterwards in the second: the first follows
+    c.put(f"/price-sheets/{other['id']}", json={"entries": {"DQE!B6": {"price_cents": 9000}}})
+    again = next(
+        f["sheet"] for f in prices(c, bid)["files"] if f["dce_file_id"] == first["dce_file_id"]
+    )
+    assert again["lines"][1]["price_cents"] == 9000

@@ -176,6 +176,7 @@ function PriceFileCard({
           sheet={sheet}
           rates={rates}
           readAgain={readButton("Relire le fichier")}
+          onSaved={reload} // the same lines of the other price files follow
         />
       )}
     </Card>
@@ -186,12 +187,20 @@ function SheetEditor({
   sheet,
   rates,
   readAgain,
+  onSaved,
 }: {
   sheet: PriceSheet;
   rates: Rates;
   readAgain: ReactNode;
+  onSaved: () => void;
 }) {
   const [current, setCurrent] = useState(sheet);
+  const [seen, setSeen] = useState(sheet);
+  if (sheet !== seen) {
+    // read again by the page (a twin file was typed in): the server's figures win
+    setSeen(sheet);
+    setCurrent(sheet);
+  }
   const save = useAction();
   const download = useAction();
   const rate = current.rate_cents ?? rates.hourly_rate_cents;
@@ -203,7 +212,10 @@ function SheetEditor({
         json: body,
       }),
     );
-    if (next) setCurrent(next);
+    if (next) {
+      setCurrent(next);
+      onSaved();
+    }
   }
 
   return (
@@ -368,7 +380,8 @@ function SectionRows({
       )}
       {lines.map((line) => (
         <LineRow
-          key={line.id}
+          // a line changed from elsewhere (its twin in another file) shows its new figures
+          key={`${line.id}:${line.hours}:${line.source === "price" ? line.price_cents : ""}`}
           line={line}
           rates={rates}
           rateCents={rateCents}

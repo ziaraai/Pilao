@@ -322,6 +322,25 @@ def _source_bytes(
     return converted, True
 
 
+def _line_key(line: dict[str, Any]) -> str:
+    """Two price files of a dossier describe the same line with the same section and label
+    (Rillieux: the BPM and the DQE); the key ignores case, accents and spacing."""
+    text = f"{line.get('section') or ''}|{line.get('label') or ''}"
+    plain = unicodedata.normalize("NFKD", text).encode("ascii", "ignore").decode().lower()
+    return re.sub(r"\s+", " ", plain).strip()
+
+
+def _siblings(db: Session, sheet: PriceSheet, lock: bool = False) -> list[PriceSheet]:
+    query = select(PriceSheet).where(
+        PriceSheet.bid_id == sheet.bid_id, PriceSheet.id != sheet.id, PriceSheet.status == "ready"
+    )
+    return list(db.scalars(query.with_for_update() if lock else query))
+
+
+def _file_name(db: Session, sheet: PriceSheet) -> str:
+    return db.get_one(DceFile, sheet.dce_file_id).path.rsplit("/", 1)[-1]
+
+
 def _plural(n: int, word: str) -> str:
     return f"{n} {word}{'s' if n > 1 else ''}"
 
@@ -392,9 +411,24 @@ def run_read_prices(db: Session, sheet_id: uuid.UUID, storage: ObjectStorage) ->
             )
         sheet.lines = [ln.to_dict() for ln in lines]
         sheet.mirrors = mirrors
-        sheet.warnings = warnings
         sheet.notes = [re.sub(r"\s+", " ", n).strip()[:300] for n in notes[:5]]
-        sheet.entries = {k: v for k, v in sheet.entries.items() if k in labels}
+        entries = {k: v for k, v in sheet.entries.items() if k in labels}
+        by_key = {_line_key(d): d["id"] for d in sheet.lines}
+        for other in _siblings(db, sheet):
+            copied = 0
+            for line in other.lines:
+                target = by_key.get(_line_key(line))
+                entry = other.entries.get(line["id"])
+                if target and entry and target not in entries:
+                    entries[target] = dict(entry)
+                    copied += 1
+            if copied:
+                warnings.append(
+                    f"Heures et prix repris de « {_file_name(db, other)} » pour "
+                    f"{_plural(copied, 'ligne')} identique{'s' if copied > 1 else ''}."
+                )
+        sheet.entries = entries  # a new object: an in-place change of JSONB is not saved
+        sheet.warnings = list(warnings)
         sheet.status, sheet.error = "ready", None
         set_job_status(db, JOB_READ, sheet.id, "done")
         db.commit()
@@ -447,6 +481,18 @@ def update_sheet(db: Session, user: User, sheet: PriceSheet, data: SheetUpdateIn
         else:
             entries.pop(line_id, None)
     locked.entries = entries
+    keys = {d["id"]: _line_key(d) for d in locked.lines}
+    changed = {keys[i]: entries.get(i) for i in data.entries}
+    for other in _siblings(db, locked, lock=True):
+        synced = dict(other.entries)
+        for line in other.lines:
+            key = _line_key(line)
+            if key in changed:
+                if changed[key]:
+                    synced[line["id"]] = dict(changed[key])  # type: ignore[arg-type]
+                else:
+                    synced.pop(line["id"], None)
+        other.entries = synced
     if data.set_rate:
         locked.rate_cents = data.rate_cents
     db.add(

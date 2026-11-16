@@ -14,7 +14,7 @@ KIND_LABELS = {
     "ccap": "Cahier des clauses administratives particulières (CCAP)",
     "cctp": "Cahier des clauses techniques particulières (CCTP)",
     "ae": "Acte d'engagement (AE)",
-    "bpu": "Bordereau des prix unitaires (BPU)",
+    "bpu": "Bordereau des prix unitaires ou mixtes (BPU, BPM)",
     "dpgf": "Décomposition du prix global et forfaitaire (DPGF)",
     "dqe": "Détail quantitatif estimatif (DQE)",
     "annex": "Annexe",
@@ -28,7 +28,7 @@ _RULES: tuple[tuple[str, tuple[str, ...]], ...] = (
     ("ccap", (r"\bccap\b", r"clauses administratives particulieres")),
     ("cctp", (r"\bcctp\b", r"clauses techniques particulieres")),
     ("ae", (r"\bae\b", r"acte (d )?engagement", r"\battri ?1\b")),
-    ("bpu", (r"\bbpu\b", r"bordereau (des )?prix")),
+    ("bpu", (r"\bbpu\b", r"\bbpm\b", r"bordereau (des )?prix")),  # BPM: prix mixtes
     ("dpgf", (r"\bdpgf\b", r"decomposition (du )?prix global")),
     ("dqe", (r"\bdqe\b", r"detail quantitatif")),
 )
@@ -63,7 +63,7 @@ _CONTENT_RULES: tuple[tuple[str, str], ...] = (
     ("ccap", r"cahier des clauses administratives particulieres"),
     ("cctp", r"cahier des clauses techniques particulieres"),
     ("ae", r"acte (d )?engagement"),
-    ("bpu", r"bordereau (des )?prix unitaires"),
+    ("bpu", r"bordereau (des )?prix (unitaires|mixtes)"),
     ("dpgf", r"decomposition (du )?prix global (et )?forfaitaire"),
     ("dqe", r"detail quantitatif (et )?estimatif"),
 )

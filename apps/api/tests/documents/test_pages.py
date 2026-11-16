@@ -130,6 +130,8 @@ def test_image_and_corrupt_inputs() -> None:
         ("ATTRI1.pdf", "ae"),
         ("AE lot 2.pdf", "ae"),
         ("BPU.xlsx", "bpu"),
+        ("26020M_BPM_prestations_entretien_bat_sportifs.xlsx", "bpu"),  # prix mixtes
+        ("Bordereau des prix mixtes.pdf", "bpu"),
         ("DPGF.xlsx", "dpgf"),
         ("DQE.xlsx", "dqe"),
         ("Annexe 3 au CCTP - surfaces.pdf", "annex"),
@@ -147,4 +149,5 @@ def test_kind_from_content_uses_the_title_not_later_mentions() -> None:
     cctp = "CAHIER DES CLAUSES TECHNIQUES PARTICULIÈRES\nVoir le règlement de la consultation (RC)."
     assert kind_from_content(cctp).kind == "cctp"
     assert kind_from_content("Bordereau des prix unitaires - lot 1").kind == "bpu"
+    assert kind_from_content("BPM (Bordereau des Prix Mixtes)").kind == "bpu"
     assert kind_from_content("Lettre d'information").source == "none"
