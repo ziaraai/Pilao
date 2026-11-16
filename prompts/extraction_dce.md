@@ -1,6 +1,6 @@
 ---
 id: extraction_dce
-version: 0.4.0
+version: 0.5.0
 task: dce_analysis
 output_schema: schemas/dce_analysis.schema.json
 ---
@@ -38,7 +38,7 @@ Produis la fiche d'analyse :
 - `site_visit` : obligatoire ou non, date(s), modalités.
 - `questions_deadline` : date limite pour poser des questions.
 - `award_criteria` : critères et sous-critères avec pondérations (en %).
-- `memoir_requirements` : plan imposé (titres dans l'ordre, tels qu'écrits), nombre de pages maximum, format, cadre de réponse fourni ou non.
+- `memoir_requirements` : plan imposé (titres dans l'ordre, tels qu'écrits), nombre de pages maximum, format, cadre de réponse fourni ou non. **Si le DCE contient un cadre de mémoire ou de réponse à compléter** (un document avec des rubriques ou des encadrés à remplir par le candidat), `imposed_outline` reprend **les rubriques de ce cadre**, dans son ordre et mot pour mot (« Sous-critère 1.1 : … »), sans y ajouter les critères du RC qui les regroupent : chaque rubrique du cadre sera un chapitre, rempli sous son encadré.
 - `required_documents` : pièces de candidature et d'offre demandées.
 - `requirements` : exigences techniques du CCTP, une par ligne, numérotées `CCTP-1`, `CCTP-2`… avec catégorie (`frequency`, `surface`, `product`, `schedule`, `staff`, `equipment`, `quality`, `safety`, `environment`, `reporting`, `other`) et importance (`mandatory`, `expected`, `nice_to_have`).
 - `watch_points` : pénalités, clauses inhabituelles, reprise du personnel, clause sociale ou environnementale, variantes, groupement interdit, etc. Chacun avec un `title` : titre court de 8 mots au plus (ex. « Visite obligatoire »).

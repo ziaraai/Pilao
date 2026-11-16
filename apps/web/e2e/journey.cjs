@@ -615,6 +615,39 @@ let current; // the page, for a screenshot when a step fails
     zipButton.click(),
   ]);
   await zipDownload.saveAs(`${S}/dossier.zip`);
+  // ADR-051: the memoir written into the buyer's own frame
+  await exportCard
+    .getByText("cadre de mémoire à compléter", { exact: false })
+    .waitFor();
+  await exportCard
+    .getByRole("button", {
+      name: "Mémoire dans le cadre de l'acheteur (.docx)",
+    })
+    .click();
+  await exportCard.getByRole("button", { name: "Exporter quand même" }).click();
+  const frameRow = exportCard
+    .locator("li")
+    .filter({ hasText: "Mémoire dans le cadre de l'acheteur" });
+  const frameButton = frameRow.getByRole("button", { name: /^Télécharger/ });
+  await frameButton.waitFor({ timeout: 120000 });
+  const [frameDownload] = await Promise.all([
+    page.waitForEvent("download"),
+    frameButton.click(),
+  ]);
+  await frameDownload.saveAs(`${S}/cadre.docx`);
+  const framed = docxText(`${S}/cadre.docx`);
+  if (
+    !framed.includes("Nom du candidat : Nettoyage E2E") ||
+    !framed.includes("CADRE DE MEMOIRE TECHNIQUE") ||
+    framed.indexOf("1. Moyens humains et materiels") >
+      framed.indexOf("2. Methodologie et organisation")
+  )
+    throw new Error(
+      "the buyer's frame was not filled: " + framed.slice(0, 400),
+    );
+  step(
+    "memoir written into the buyer's frame: the candidate's name, the boxes kept",
+  );
   // The overview follows the work done in the other tabs
   await page.getByRole("tab", { name: "Aperçu" }).click();
   await page.getByText("Déjà exporté").waitFor();

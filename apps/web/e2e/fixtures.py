@@ -21,6 +21,18 @@ buf = io.BytesIO()
 with zipfile.ZipFile(buf, "w") as zf:
     zf.writestr("DCE/RC.pdf", rc); zf.writestr("DCE/CCTP.pdf", cctp)
     zf.writestr("DCE/DQE.xlsx", dqe_buf.getvalue())
+    # ADR-051: the buyer's memoir frame, its boxes to fill
+    import docx as _docx
+    frame = _docx.Document()
+    frame.add_heading("CADRE DE MEMOIRE TECHNIQUE", level=1)
+    frame.add_paragraph("Nom du candidat : ………………………………")
+    for title in ("1. Moyens humains et materiels", "2. Methodologie et organisation"):
+        box = frame.add_table(rows=2, cols=1)
+        box.rows[0].cells[0].text = title
+        box.rows[1].cells[0].text = "- Ce que l'acheteur attend"
+        frame.add_paragraph("")
+    frame_buf = io.BytesIO(); frame.save(frame_buf)
+    zf.writestr("DCE/Cadre de memoire technique.docx", frame_buf.getvalue())
 open(f"{out}/DCE_mairie.zip", "wb").write(buf.getvalue())
 open(f"{out}/attestation_urssaf.pdf", "wb").write(make_pdf([["ATTESTATION DE VIGILANCE", "URSSAF Rhone-Alpes"]]))
 open(f"{out}/memoire_2025.docx", "wb").write(make_docx([("Heading 1", "Moyens materiels"), ("Normal", "Nous utilisons des autolaveuses et des monobrosses professionnelles."), ("Normal", "Nous disposons de 3 autolaveuses Tennant T5 pour les grandes surfaces."), ("Normal", "Equipe : agents de service et 2 chefs d'equipe.")]))

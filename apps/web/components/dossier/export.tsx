@@ -15,7 +15,7 @@ import type {
   MemoirVersion,
 } from "@/lib/types";
 
-type Format = "docx" | "pdf" | "zip";
+type Format = "docx" | "pdf" | "zip" | "frame";
 
 const FORMATS: { format: Format; label: string }[] = [
   { format: "docx", label: "Mémoire Word (.docx)" },
@@ -23,6 +23,7 @@ const FORMATS: { format: Format; label: string }[] = [
   { format: "zip", label: "Dossier complet (.zip)" },
 ];
 const KIND_LABEL: Record<string, string> = {
+  memoir_frame_docx: "Mémoire dans le cadre de l'acheteur",
   memoir_docx: "Mémoire Word",
   memoir_pdf: "Mémoire PDF",
   bundle_zip: "Dossier complet",
@@ -49,6 +50,9 @@ export function ExportCard({
     check: ExportCheck;
   } | null>(null);
   const [clicked, setClicked] = useState<Format | null>(null);
+  // the buyer's frame, when the DCE holds one (ADR-051): offered first
+  const frame = useApi<ExportCheck>(`/memoirs/${memoir.id}/export-check`);
+  const frameFile = frame.data?.frame_file ?? null;
   const prepare = useAction();
   const start = useAction();
   const download = useAction();
@@ -87,11 +91,30 @@ export function ExportCard({
           contenu et des engagements de son offre, que Pilao ne dépose jamais à
           votre place.
         </p>
+        {frameFile && (
+          <div className="space-y-2 rounded-md bg-sky-50 p-4 ring-1 ring-sky-200">
+            <p className="text-sm text-sky-950">
+              Le DCE fournit un <strong>cadre de mémoire à compléter</strong> («{" "}
+              {frameFile} »). Le règlement l&apos;exige souvent : Pilao rend le
+              fichier de l&apos;acheteur, avec le nom de votre entreprise et
+              chaque chapitre placé sous son encadré.
+            </p>
+            <Button
+              disabled={busy || !!pending}
+              busy={(prepare.busy || start.busy) && clicked === "frame"}
+              onClick={() => ask("frame")}
+            >
+              Mémoire dans le cadre de l&apos;acheteur (.docx)
+            </Button>
+          </div>
+        )}
         <div className="flex flex-wrap gap-2">
           {FORMATS.map((f) => (
             <Button
               key={f.format}
-              variant={f.format === "zip" ? "primary" : "secondary"}
+              variant={
+                f.format === "zip" && !frameFile ? "primary" : "secondary"
+              }
               disabled={busy || !!pending}
               busy={(prepare.busy || start.busy) && clicked === f.format}
               onClick={() => ask(f.format)}
@@ -199,6 +222,15 @@ export function ExportCard({
                 {d.error && (
                   <p className="w-full text-xs text-red-700">{d.error}</p>
                 )}
+                {d.kind === "memoir_frame_docx" &&
+                  d.status === "ready" &&
+                  d.warnings.length > 0 && (
+                    <ul className="ml-4 w-full list-disc text-xs text-amber-900">
+                      {d.warnings.map((w) => (
+                        <li key={w}>{w}</li>
+                      ))}
+                    </ul>
+                  )}
               </li>
             ))}
           </ul>

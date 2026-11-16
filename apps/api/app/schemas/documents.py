@@ -27,7 +27,7 @@ class DocumentKindOut(BaseModel):
 
 
 class ExportIn(BaseModel):
-    format: Literal["docx", "pdf", "zip"]
+    format: Literal["docx", "pdf", "zip", "frame"]
     acknowledge_warnings: bool = False  # US-4.6 CA4: the user has read the warnings
 
 
@@ -50,3 +50,4 @@ class ExportCheckOut(BaseModel):
     conformity_status: str
     estimated_pages: int | None
     max_pages: int | None
+    frame_file: str | None = None  # the buyer's frame to complete, when the DCE holds one

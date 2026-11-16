@@ -100,7 +100,8 @@ def _memoir(db: ScopedDb, memoir_id: uuid.UUID) -> Memoir:
 @router.get("/memoirs/{memoir_id}/export-check")
 def export_check(memoir_id: uuid.UUID, db: ScopedDb) -> ExportCheckOut:
     """US-4.6 CA4: what remains before exporting, shown to the user first."""
-    check = exports.export_check(db, _memoir(db, memoir_id))
+    memoir = _memoir(db, memoir_id)
+    check = exports.export_check(db, memoir)
     return ExportCheckOut(
         warnings=check.warnings,
         to_complete=[
@@ -112,6 +113,7 @@ def export_check(memoir_id: uuid.UUID, db: ScopedDb) -> ExportCheckOut:
         conformity_status=check.conformity_status,
         estimated_pages=check.pages,
         max_pages=check.max_pages,
+        frame_file=exports.frame_name(db, memoir.bid_id),
     )
 
 

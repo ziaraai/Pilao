@@ -26,6 +26,8 @@ from app.db.models import (
     ComplianceDocument,
     ConformityItem,
     DceAnalysis,
+    DceFile,
+    DceVersion,
     File,
     GeneratedDocument,
     Job,
@@ -35,6 +37,7 @@ from app.db.models import (
     Requirement,
     User,
 )
+from app.domain.frame import is_frame_name, plain_name
 from app.domain.imposed_font import ImposedFont
 from app.domain.imposed_font import from_analysis as font_from_analysis
 from app.domain.markdown import TODO
@@ -42,6 +45,7 @@ from app.domain.memoir_checks import count_words
 from app.domain.memoir_plan import words_per_page
 from app.exports.bundle import build_zip, safe_name
 from app.exports.dc_forms import FORMS, PROOF_LABELS, french_date
+from app.exports.frame_docx import fill_frame
 from app.exports.memoir_docx import Chapter, MemoirExportData, RequirementRow, build_memoir
 from app.exports.pdf import PdfConverter, PdfUnavailable
 from app.services.documents import (
@@ -60,8 +64,19 @@ from app.workers.queue import JobQueue
 
 logger = logging.getLogger("pilao.exports")
 JOB_EXPORT = "export_memoir"
-FORMATS = {"docx": "memoir_docx", "pdf": "memoir_pdf", "zip": "bundle_zip"}
-MIMES = {"memoir_docx": (DOCX_MIME, "docx"), "memoir_pdf": ("application/pdf", "pdf")}
+FORMATS = {
+    "docx": "memoir_docx",
+    "pdf": "memoir_pdf",
+    "zip": "bundle_zip",
+    "frame": "memoir_frame_docx",  # the buyer's own frame, filled (ADR-051)
+}
+MIMES = {
+    "memoir_docx": (DOCX_MIME, "docx"),
+    "memoir_pdf": ("application/pdf", "pdf"),
+    "memoir_frame_docx": (DOCX_MIME, "docx"),
+}
+NO_FRAME = "Aucun cadre de mémoire à compléter dans le DCE de ce dossier."
+FRAME_KINDS = ("annex", "other")  # a frame is never typed RC, CCTP, AE or a price file
 ZIP_MIME = "application/zip"
 
 
@@ -107,6 +122,30 @@ def imposed_font(db: Session, memoir: Memoir) -> ImposedFont | None:
     """The font the RC of the memoir's DCE imposes, read from its format constraints."""
     analysis = db.get(DceAnalysis, memoir.dce_analysis_id)
     return font_from_analysis(analysis.data or {}) if analysis is not None else None
+
+
+def memoir_frame(db: Session, bid_id: uuid.UUID) -> DceFile | None:
+    """The buyer's memoir frame in the latest DCE: a Word file named as such (« Cadre de
+    mémoire technique », « Mémoire technique et environnemental »), « cadre » first."""
+    version = db.scalars(
+        select(DceVersion)
+        .where(DceVersion.bid_id == bid_id, DceVersion.status == "ready")
+        .order_by(DceVersion.version.desc())
+    ).first()
+    if version is None:
+        return None
+    frames = [
+        f
+        for f in db.scalars(select(DceFile).where(DceFile.dce_version_id == version.id))
+        if f.detected_kind in FRAME_KINDS and is_frame_name(f.path)
+    ]
+    frames.sort(key=lambda f: ("cadre" not in plain_name(f.path), f.path))
+    return frames[0] if frames else None
+
+
+def frame_name(db: Session, bid_id: uuid.UUID) -> str | None:
+    frame = memoir_frame(db, bid_id)
+    return plain_name(frame.path).capitalize() if frame else None
 
 
 def estimated_pages(db: Session, memoir: Memoir, words: int) -> int | None:
@@ -159,6 +198,8 @@ def request_export(
         raise ApiError(409, "memoir_not_generated", "Lancez d'abord la rédaction du mémoire.")
     if memoir.status == "generating":
         raise ApiError(409, "memoir_busy", "Attendez la fin de la rédaction en cours.")
+    if fmt == "frame" and memoir_frame(db, memoir.bid_id) is None:
+        raise ApiError(422, "no_frame", NO_FRAME)
     warnings = export_check(db, memoir).warnings
     if warnings and not acknowledged:
         raise ApiError(
@@ -291,9 +332,17 @@ def _bundle(
     data: MemoirExportData,
     storage: ObjectStorage,
     converter: PdfConverter,
+    in_frame: bool = False,
 ) -> bytes:
     entries: list[tuple[str, bytes]] = [("01 - Mémoire technique.docx", docx)]
-    contents, notes = ["01 - Mémoire technique (Word"], []
+    contents = [
+        (
+            "01 - Mémoire technique, rédigé dans le cadre fourni par l'acheteur (Word"
+            if in_frame
+            else "01 - Mémoire technique (Word"
+        )
+    ]
+    notes: list[str] = list(doc.warnings) if in_frame else []
     try:
         entries.append(("01 - Mémoire technique.pdf", converter.convert(docx)))
         contents[0] += " et PDF)"
@@ -345,14 +394,26 @@ def run_export(
     data = memoir_data(db, org, memoir, bid, storage)
     builder = build_memoir(data)
     docx = builder.to_bytes()
+    to_complete = builder.to_complete
     base = safe_name(f"Mémoire technique - {bid.title[:80]} - v{memoir.version}")
+    frame = memoir_frame(db, bid.id) if doc.kind in ("memoir_frame_docx", "bundle_zip") else None
+    if frame is not None:  # the buyer's frame, filled: what the bundle carries as the memoir
+        source = db.get_one(File, frame.file_id)
+        filled = fill_frame(storage.get(source.storage_key).read(), data)
+        docx, to_complete = filled.content, filled.to_complete
+        doc.warnings = [*doc.warnings, *filled.warnings]
     try:
-        if doc.kind == "memoir_docx":
+        if doc.kind == "memoir_frame_docx":
+            content, (mime, ext) = docx, MIMES["memoir_frame_docx"]
+            base = safe_name(f"Mémoire technique (cadre de l'acheteur) - {bid.title[:80]}")
+        elif doc.kind == "memoir_docx":
             content, (mime, ext) = docx, MIMES["memoir_docx"]
         elif doc.kind == "memoir_pdf":
             content, (mime, ext) = converter.convert(docx), MIMES["memoir_pdf"]
         else:
-            content = _bundle(db, org, bid, doc, docx, data, storage, converter)
+            content = _bundle(
+                db, org, bid, doc, docx, data, storage, converter, in_frame=frame is not None
+            )
             mime, ext = ZIP_MIME, "zip"
             base = safe_name(f"Dossier de réponse - {bid.title[:80]}")
     except PdfUnavailable as exc:  # permanent: the Word file is still there to export
@@ -364,7 +425,7 @@ def run_export(
         db.commit()
         return
 
-    doc.to_complete = builder.to_complete
+    doc.to_complete = to_complete
     memoir.status = "exported"
     set_job_status(db, JOB_EXPORT, doc_id, "done")
     save_file(db, org, doc, content, f"{base}.{ext}", mime, ext, storage)

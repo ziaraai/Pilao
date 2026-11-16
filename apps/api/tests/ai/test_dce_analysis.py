@@ -25,7 +25,8 @@ CCAP = doc("DCE/CCAP.docx", "ccap", ["Pénalités : 100 € par jour"], paginate
 
 def test_prompt_renders_with_guards_and_versions() -> None:
     prompt = load_prompt("extraction_dce")
-    assert prompt.version == "0.4.0"
+    assert prompt.version == "0.5.0"
+    assert "les rubriques de ce cadre" in prompt.user  # ADR-051: the frame is the outline
     system, user = prompt.render(
         company_summary="ACME", documents=render(RC), scope=SCOPE_FULL, json_schema="{}"
     )

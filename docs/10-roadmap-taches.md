@@ -95,7 +95,7 @@ Reste à faire :
 - [x] P4-09 Page du dossier en onglets (Aperçu, DCE, Analyse, Mémoire, Documents, Export), résumé et « À faire avant de répondre », blocs à déplier et tableaux (ADR-047)
 - [ ] P4-10 Les mêmes briques (onglets, blocs à déplier, cases, tableaux) sur les autres pages : annonces, profil, coffre-fort, administration
 - [x] P4-11 « Ce qu'il manque » (US-4.7, ADR-048) : la liste des informations à compléter du dossier, chaque manque relié à son tiroir du profil (ajout depuis le dossier puis phrase complétée par l'IA), réponse sur place, phrase retirée, profil vide signalé avant la rédaction
-- [ ] P4-12 Remplir le cadre de réponse fourni par l'acheteur (Q19), à concevoir sur un vrai fichier
+- [x] P4-12 Remplir le cadre de réponse fourni par l'acheteur (Q19, US-4.9, ADR-051) : le Word de l'acheteur rendu rempli, chaque chapitre sous son encadré, le plan qui suit le cadre
 - [x] P4-13 Chiffrage (US-4.8, ADR-049) : onglet « Prix », lecture du BPU / DPGF / DQE par l'IA, heures ou prix saisis, taux et majorations du profil, fichier de l'acheteur rempli case par case, heures données au mémoire
 - [ ] P4-14 Estimer les heures depuis les surfaces du CCTP et les cadences de l'entreprise (proposition à valider, jamais imposée)
 

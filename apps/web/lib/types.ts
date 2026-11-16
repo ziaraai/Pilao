@@ -519,6 +519,7 @@ export type ExportCheck = {
   conformity_status: string;
   estimated_pages: number | null;
   max_pages: number | null;
+  frame_file: string | null; // the buyer's memoir frame to complete (ADR-051)
 };
 export type TenderMatch = {
   tender_id: string;

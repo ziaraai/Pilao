@@ -17,6 +17,7 @@ DOCUMENT_KINDS = (
     "memoir_docx",
     "memoir_pdf",
     "bundle_zip",
+    "memoir_frame_docx",  # the memoir written into the buyer's own frame (ADR-051)
 )
 
 

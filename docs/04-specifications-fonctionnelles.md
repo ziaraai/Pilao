@@ -183,6 +183,15 @@ En tant qu'entreprise, je veux que Pilao remplisse le BPU, le DPGF ou le DQE de 
 - CA5 : « Télécharger le fichier rempli » rend le fichier de l'acheteur lui-même, rempli case par case (mise en forme, dessins, formules et zone d'impression intacts ; totaux recalculés à l'ouverture) ; un prix manquant laisse la case telle quelle.
 - CA6 : une case qui devait reprendre le prix mais contient une valeur fixe (lien rompu dans le fichier de l'acheteur) reçoit aussi le prix, et c'est signalé.
 - CA7 : les heures saisies (par ligne, quantité, total annuel) servent à la rédaction du mémoire et à « Ce qu'il manque » ; aucun prix n'entre jamais dans le mémoire.
+- CA8 : le BPM (bordereau des prix mixtes) est un fichier de prix ; une heure ou un prix saisi dans un fichier est repris sur la même ligne (même rubrique, même libellé) des autres fichiers de prix du dossier.
+
+**US-4.9 Le mémoire dans le cadre de l'acheteur** (ADR-051)
+En tant qu'entreprise, quand le DCE fournit un cadre de mémoire à compléter (« le cadre doit être complété, sinon l'offre est irrecevable »), je veux récupérer ce fichier rempli avec mon mémoire.
+- CA1 : un Word du DCE nommé comme un cadre (« Cadre de mémoire technique », « Mémoire technique et environnemental », « Cadre de réponse »), qui n'est ni le RC, ni le CCTP, ni l'AE, ni un fichier de prix, est le cadre ; l'onglet Export le signale et propose « Mémoire dans le cadre de l'acheteur (.docx) » en premier.
+- CA2 : le fichier rendu est celui de l'acheteur (mise en page, logo, en-têtes, pieds de page gardés) ; « Nom du candidat : ……… » reçoit le nom de l'entreprise ; chaque chapitre est placé sous l'encadré ou l'intertitre qu'il traite, sans répéter son titre, dans la police imposée par le RC ; le texte de l'acheteur n'est jamais modifié.
+- CA3 : un chapitre rapproché d'un encadré par l'ordre ou par une famille de mots (« développement durable » / « environnement ») est signalé « à vérifier » ; un chapitre sans encadré est ajouté à la fin et signalé.
+- CA4 : le dossier complet (.zip) contient le mémoire rempli dans le cadre quand le DCE en fournit un.
+- CA5 : pour un nouveau dossier, l'analyse reprend les rubriques du cadre comme plan imposé, mot pour mot.
 
 ---
 

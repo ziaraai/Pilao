@@ -410,3 +410,100 @@ def test_a_chapter_has_one_banner_only() -> None:
         (p.style.name, p.text) for p in b.doc.paragraphs if p.style.name.startswith("Heading")
     ]
     assert styles == [("Heading 1", "1. Moyens"), ("Heading 2", "Nos engagements")]
+
+
+# ---------- the buyer's memoir frame (ADR-051) ------------------------------------------
+
+
+def frame_docx() -> bytes:
+    doc = Document()
+    doc.add_heading("CADRE DE MÉMOIRE TECHNIQUE", level=1)
+    doc.add_paragraph("Nom du candidat : ………………………………")
+    for title in ("1. Moyens humains affectés", "2. Méthodologie de travail"):
+        box = doc.add_table(rows=2, cols=1)
+        box.rows[0].cells[0].text = title
+        box.rows[1].cells[0].text = "– Ce qui est attendu"
+        doc.add_paragraph("")
+    buf = io.BytesIO()
+    doc.save(buf)
+    return buf.getvalue()
+
+
+def add_frame(db: Session, storage: MemoryStorage, memoir_id: str, path: str) -> None:
+    """The frame added to the dossier's processed DCE, as the DCE processing would."""
+    from sqlalchemy import select
+
+    from app.core.tenancy import scope_session
+    from app.db.models import Bid, DceFile, DceVersion, Memoir, Organization
+    from app.services.files import store_generated
+
+    bid = db.get_one(Bid, db.get_one(Memoir, uuid.UUID(memoir_id)).bid_id)
+    org = db.get_one(Organization, bid.org_id)
+    scope_session(db, org.id)  # the company's own file
+    version = db.scalars(
+        select(DceVersion).where(DceVersion.bid_id == bid.id, DceVersion.status == "ready")
+    ).first()
+    assert version is not None
+    data = frame_docx()
+    record = store_generated(db, org, None, data, "cadre", "application/zip", "docx", storage)
+    db.add(
+        DceFile(
+            org_id=org.id,
+            dce_version_id=version.id,
+            file_id=record.id,
+            path=path,
+            sha256=record.sha256,
+            detected_kind="annex",
+            text_status="ready",
+        )
+    )
+    db.commit()
+
+
+def test_memoir_written_in_the_buyers_frame(
+    make_client: Factory,
+    outbox: Outbox,
+    queue: FakeQueue,
+    model: WriterModel,  # noqa: F811
+    converter: FakeConverter,
+    storage: MemoryStorage,
+    db: Session,
+) -> None:
+    c = signed_in_client(make_client, outbox)
+    m = drafted(c, queue)
+    assert c.get(f"/memoirs/{m['id']}/export-check").json()["frame_file"] is None
+    refused = export(c, m["id"], "frame")
+    assert refused.status_code == 422 and refused.json()["error"]["code"] == "no_frame"
+
+    add_frame(db, storage, m["id"], "DCE/Cadre_de_m#U00e9moire_technique.docx")
+    check = c.get(f"/memoirs/{m['id']}/export-check").json()
+    assert check["frame_file"] == "Cadre de mémoire technique"
+    doc = exported(c, queue, converter, m["id"], "frame")
+    assert doc["status"] == "ready" and "cadre de l'acheteur" in doc["filename"]
+    word = Document(io.BytesIO(content(storage, db, doc["file_id"])))
+    texts = [p.text for p in word.paragraphs]
+    assert "Nom du candidat : Entreprise 1" in texts
+    assert "CADRE DE MÉMOIRE TECHNIQUE" in texts  # the buyer's file, not Pilao's cover
+    assert doc["to_complete"] == ["nombre d'agents affectés au site"]
+    body = [c.tag.rsplit("}", 1)[-1] for c in word.element.body.iterchildren()]
+    assert body.count("tbl") >= 2  # its boxes are kept
+
+
+def test_bundle_carries_the_memoir_in_the_frame(
+    make_client: Factory,
+    outbox: Outbox,
+    queue: FakeQueue,
+    model: WriterModel,  # noqa: F811
+    converter: FakeConverter,
+    storage: MemoryStorage,
+    db: Session,
+) -> None:
+    c = signed_in_client(make_client, outbox)
+    m = drafted(c, queue)
+    add_frame(db, storage, m["id"], "DCE/Cadre de réponse.docx")
+    doc = exported(c, queue, converter, m["id"], "zip")
+    archive = zipfile.ZipFile(io.BytesIO(content(storage, db, doc["file_id"])))
+    memoir = Document(io.BytesIO(archive.read("01 - Mémoire technique.docx")))
+    assert "Nom du candidat : Entreprise 1" in [p.text for p in memoir.paragraphs]
+    readme = archive.read("LISEZ-MOI.txt").decode()
+    assert "cadre fourni par l'acheteur" in readme
