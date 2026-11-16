@@ -27,6 +27,7 @@ class PriceLineOut(BaseModel):
     quantity: str | None
     hourly: bool
     surcharge: Literal["none", "night", "sunday", "holiday"]
+    option: bool  # an option or PSE: priced, out of the total
     hours: str | None
     price_cents: int | None
     total_cents: int | None
@@ -41,7 +42,8 @@ class PriceSheetOut(BaseModel):
     notes: list[str]
     rate_cents: int | None  # this dossier's rate (None: the company's)
     lines: list[PriceLineOut]
-    total_cents: int
+    total_cents: int  # the offer, options left out
+    options_total_cents: int
     missing_count: int
 
 

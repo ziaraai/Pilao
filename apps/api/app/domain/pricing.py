@@ -3,10 +3,13 @@
 The AI proposes the lines of the buyer's file (which cell takes the price, the hours, the
 rate); the server keeps only the proposals the file confirms and reads the quantities itself.
 Prices come from the company only: hours × its hourly rate, a price it typed, or its rate
-with its own surcharge for an hourly price. Nothing missing is ever guessed.
+with its own surcharge for an hourly price. Nothing missing is ever guessed. An option (PSE,
+variante, « OPTION : … ») is priced like any line but kept out of the offer's total: the buyer
+counts it apart, often « pour mémoire ».
 """
 
 import re
+import unicodedata
 from dataclasses import dataclass, replace
 from decimal import ROUND_HALF_UP, Decimal, InvalidOperation
 from typing import Any, Literal
@@ -19,6 +22,10 @@ MAX_LINES = 500
 Surcharge = Literal["none", "night", "sunday", "holiday"]
 _CELL = re.compile(r"^\$?([A-Z]{1,3})\$?([1-9][0-9]{0,6})$")
 _SAME_ROW_REF = re.compile(r"^=\s*\+?\$?([A-Z]{1,3})\$?([1-9][0-9]{0,6})\s*$")
+# the words that open an option's label or rubric (accents folded): « OPTION : … », « PSE n°1 »
+_OPTION = re.compile(
+    r"^\W*(options?\b|pse\b|variantes?\b|prestations? supplementaires? eventuelles?)"
+)
 
 
 class LineIn(BaseModel):
@@ -35,6 +42,7 @@ class LineIn(BaseModel):
     rate_cell: str | None = Field(default=None, max_length=12)
     hourly: bool = False
     surcharge: Surcharge = "none"
+    option: bool = False
 
 
 class PriceReadOut(BaseModel):
@@ -55,6 +63,7 @@ class PriceLine:
     rate_cell: str | None
     hourly: bool
     surcharge: Surcharge
+    option: bool = False  # priced, out of the total
 
     def to_dict(self) -> dict[str, Any]:
         return {
@@ -69,6 +78,7 @@ class PriceLine:
             "rate_cell": self.rate_cell,
             "hourly": self.hourly,
             "surcharge": self.surcharge,
+            "option": self.option,
         }
 
     @classmethod
@@ -86,6 +96,7 @@ class PriceLine:
             rate_cell=d.get("rate_cell"),
             hourly=bool(d.get("hourly")),
             surcharge=d.get("surcharge") or "none",
+            option=bool(d.get("option")),
         )
 
 
@@ -108,6 +119,15 @@ def _number(value: Any) -> Decimal | None:
         except InvalidOperation:
             return None
     return None
+
+
+def is_option(section: str, label: str) -> bool:
+    """« OPTION : Shampouinage moquette », a « PSE n°1 » or « Variante » rubric."""
+    return any(_OPTION.match(_fold(text)) for text in (label, section))
+
+
+def _fold(text: str) -> str:
+    return unicodedata.normalize("NFKD", text).encode("ascii", "ignore").decode().lower()
 
 
 def _writable(cell: Cell | None) -> bool:
@@ -158,11 +178,12 @@ def validate_lines(
         quantity = None
         if qty_cell is not None:
             quantity = _number(qty_cell.cached if qty_cell.formula else qty_cell.raw)
+        section = re.sub(r"\s+", " ", p.section).strip()
         lines.append(
             PriceLine(
                 id=line_id,
                 sheet=sheet.name,
-                section=re.sub(r"\s+", " ", p.section).strip(),
+                section=section,
                 label=label,
                 unit=p.unit.strip(),
                 quantity=quantity,
@@ -171,6 +192,7 @@ def validate_lines(
                 rate_cell=rate,
                 hourly=p.hourly,
                 surcharge=p.surcharge if p.hourly else "none",
+                option=p.option or is_option(section, label),
             )
         )
     lines = _fold_copies(lines, by_name)
@@ -300,8 +322,9 @@ class LinePrice:
 @dataclass(frozen=True)
 class Priced:
     lines: list[LinePrice]
-    total_cents: int
+    total_cents: int  # the offer: options left out
     missing_count: int
+    options_cents: int = 0  # the options' own total
 
 
 def _cents(value: Decimal) -> int:
@@ -324,7 +347,7 @@ def compute(
     """``rate_cents``: this dossier's hourly rate, else the company's."""
     rate = rate_cents if rate_cents is not None else rates.hourly_rate_cents
     out: list[LinePrice] = []
-    total = 0
+    total = options = 0
     for ln in lines:
         entry = entries.get(ln.id) or {}
         typed = entry.get("price_cents")
@@ -344,9 +367,12 @@ def compute(
         line_total = None
         if price is not None and ln.quantity is not None:
             line_total = _cents(ln.quantity * price)
-            total += line_total
+            if ln.option:
+                options += line_total
+            else:
+                total += line_total
         out.append(LinePrice(ln.id, hours, used_rate, price, line_total, source))
-    return Priced(out, total, sum(1 for p in out if p.missing))
+    return Priced(out, total, sum(1 for p in out if p.missing), options)
 
 
 def fill_writes(
@@ -383,7 +409,7 @@ def hours_summary(lines: list[PriceLine], priced: Priced) -> dict[str, Any] | No
     total = Decimal(0)
     for ln in lines:
         p = by_id[ln.id]
-        if p.hours is None or ln.hourly:
+        if p.hours is None or ln.hourly or ln.option:
             continue
         row: dict[str, Any] = {
             "rubrique": ln.section,

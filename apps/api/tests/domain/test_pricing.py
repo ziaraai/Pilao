@@ -9,6 +9,7 @@ from openpyxl import Workbook
 from app.domain.price_grid import PriceFileError, grid_text, read_workbook
 from app.domain.pricing import (
     LineIn,
+    PriceLine,
     Rates,
     broken_links,
     compute,
@@ -227,3 +228,104 @@ def test_label_read_from_its_cell() -> None:
     typed = line("B6", "Gymnase B (tapé)", label_cell="I6", quantity_cell="I6")  # I6 is a number
     lines, _ = validate_lines([from_cell, typed], sheets)
     assert [ln.label for ln in lines] == ["Gymnase A", "Gymnase B (tapé)"]
+
+
+def dpgf_with_option() -> bytes:
+    """The shape of a DPGF « nettoyage de livraison » (Abdraouf, Bat E): prices per m², an
+    option at the bottom that the buyer wants priced but « pour mémoire »."""
+    wb = Workbook()
+    ws = wb.active
+    assert ws is not None
+    ws.title = "DPGF"
+    ws["B7"] = "Nettoyage en vue d'OPR"
+    rows = (
+        (8, "Du niveau SS-1 au niveau R+7 surface noble", 5221),
+        (9, "Vitrages 2 faces", 780),
+        (20, "OPTION : Shampouinage moquette", 264),
+        (21, "Shampouinage des escaliers", 40),
+    )
+    for row, label, qty in rows:
+        ws[f"B{row}"], ws[f"C{row}"], ws[f"D{row}"] = label, "m²", qty
+        ws[f"F{row}"] = f"=D{row}*E{row}"
+    ws["F23"] = "=SUM(F8:F9)"
+    buf = io.BytesIO()
+    wb.save(buf)
+    return buf.getvalue()
+
+
+def dpgf_lines() -> list[LineIn]:
+    def m2(cell: str, row: int, **kw: object) -> LineIn:
+        base: dict[str, object] = {"sheet": "DPGF", "section": "Nettoyage en vue d'OPR"}
+        base.update(label_cell=f"B{row}", unit="m²", quantity_cell=f"D{row}", price_cell=cell)
+        base.update(kw)
+        return LineIn.model_validate(base)
+
+    return [
+        m2("E8", 8),
+        m2("E9", 9),
+        m2("E20", 20),  # « OPTION : … »: an option by its label, even unflagged
+        m2("E21", 21, option=True),  # flagged by the reading
+    ]
+
+
+def test_options_priced_but_kept_out_of_the_total() -> None:
+    """Bat E: 20 868,70 € HT for the base, the carpet shampoo « PM » beside it."""
+    lines, _ = validate_lines(dpgf_lines(), read_workbook(dpgf_with_option()))
+    assert [ln.option for ln in lines] == [False, False, True, True]
+    entries = {
+        "DPGF!E8": {"price_cents": 170},
+        "DPGF!E9": {"price_cents": 96},
+        "DPGF!E20": {"price_cents": 400},
+        "DPGF!E21": {"price_cents": 500},
+    }
+    out = compute(lines, entries, RATES, rate_cents=None)
+    assert out.total_cents == 5221 * 170 + 780 * 96  # 8 875,70 + 748,80
+    assert out.options_cents == 264 * 400 + 40 * 500
+    assert {p.id: p.total_cents for p in out.lines}["DPGF!E20"] == 264 * 400  # still shown
+    writes = fill_writes(lines, out, {})
+    assert writes["DPGF"]["E20"] == 4.0  # the buyer asked for its price: written
+
+
+def test_an_unpriced_option_is_still_missing() -> None:
+    lines, _ = validate_lines(dpgf_lines(), read_workbook(dpgf_with_option()))
+    out = compute(lines, {"DPGF!E8": {"price_cents": 170}}, RATES, rate_cents=None)
+    assert out.missing_count == 3 and out.options_cents == 0
+
+
+@pytest.mark.parametrize(
+    ("section", "label", "expected"),
+    [
+        ("Nettoyage", "OPTION : Shampouinage moquette", True),
+        ("Nettoyage", "Option 2 - lavage des façades", True),
+        ("PSE n°1 : vitrerie haute", "Vitrages", True),
+        ("Prestations supplémentaires éventuelles", "Vitrages", True),
+        ("Variante", "Produits écolabellisés", True),
+        ("Nettoyage", "Optionnel selon planning", False),
+        ("Nettoyage", "Vitrages, en option si demandé", False),
+        ("Prestations", "Locaux techniques", False),
+    ],
+)
+def test_option_known_by_its_words(section: str, label: str, expected: bool) -> None:
+    sheets = read_workbook(dpgf_with_option())
+    proposal = LineIn(sheet="DPGF", section=section, label=label, price_cell="E8")
+    lines, _ = validate_lines([proposal], sheets)
+    assert lines[0].option is expected
+
+
+def test_option_kept_when_stored_and_read_back() -> None:
+    lines, _ = validate_lines(dpgf_lines(), read_workbook(dpgf_with_option()))
+    again = [PriceLine.from_dict(ln.to_dict()) for ln in lines]
+    assert again == lines
+    old = lines[0].to_dict()
+    del old["option"]  # a line stored before options existed
+    assert PriceLine.from_dict(old).option is False
+
+
+def test_option_hours_stay_out_of_the_memoir() -> None:
+    lines, _ = validate_lines(dpgf_lines(), read_workbook(dpgf_with_option()))
+    entries = {"DPGF!E8": {"hours": "0.05"}, "DPGF!E20": {"hours": "0.2"}}
+    summary = hours_summary(lines, compute(lines, entries, RATES, rate_cents=None))
+    assert summary is not None
+    assert [r["libelle"] for r in summary["lignes"]] == [
+        "Du niveau SS-1 au niveau R+7 surface noble"
+    ]

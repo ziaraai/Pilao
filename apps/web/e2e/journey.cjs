@@ -554,6 +554,16 @@ let current; // the page, for a screenshot when a step fails
   await page.getByText("62,50 € · 2,5 h × 25,00 €").waitFor();
   await page.getByText("31,25 € · taux + majoration nuit").waitFor(); // 25 € + 25 %
   await page.getByRole("cell", { name: "13 062,50 €" }).waitFor(); // 62,50 × 208 + 31,25 × 2
+  // an option: priced and written, its total apart from the offer's
+  const optionBox = page.getByLabel(
+    "Prix unitaire HT : OPTION : Vitrerie haute",
+  );
+  await optionBox.fill("1,50");
+  await optionBox.press("Tab");
+  await page.getByRole("cell", { name: "180,00 €" }).first().waitFor(); // 1,50 × 120
+  await page.getByText("Total HT de l'offre de base").waitFor();
+  await page.getByText("Options, chiffrées à part (hors total)").waitFor();
+  await page.getByRole("cell", { name: "13 062,50 €" }).waitFor(); // unchanged by the option
   const [dqeDownload] = await Promise.all([
     page.waitForEvent("download"),
     page.getByRole("button", { name: "Télécharger le fichier rempli" }).click(),
@@ -561,15 +571,17 @@ let current; // the page, for a screenshot when a step fails
   await dqeDownload.saveAs(`${S}/dqe_rempli.xlsx`);
   const filledDqe = execFileSync(PY, [
     "-c",
-    "import sys, openpyxl; ws = openpyxl.load_workbook(sys.argv[1])['DQE']; print(ws['B5'].value, ws['C5'].value, ws['D5'].value, ws['B6'].value, ws['H5'].value)",
+    "import sys, openpyxl; ws = openpyxl.load_workbook(sys.argv[1])['DQE']; print(ws['B5'].value, ws['C5'].value, ws['D5'].value, ws['B6'].value, ws['H5'].value, ws['B7'].value)",
     `${S}/dqe_rempli.xlsx`,
   ])
     .toString()
     .trim();
-  if (filledDqe !== "62.5 2.5 25 31.25 =B5")
+  if (filledDqe !== "62.5 2.5 25 31.25 =B5 1.5")
     throw new Error("the DQE was not filled: " + filledDqe);
   await page.screenshot({ path: `${S}/prix.png`, fullPage: true });
-  step("chiffrage: the DQE read, hours typed, the buyer's own file filled");
+  step(
+    "chiffrage: the DQE read, hours typed, an option apart, the buyer's own file filled",
+  );
 
   // 6e. Pre-filled DC1 (P2-06)
   await page.getByRole("tab", { name: "Documents" }).click();

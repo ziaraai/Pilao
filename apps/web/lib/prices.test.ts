@@ -9,6 +9,7 @@ import {
   quantityText,
   ratesSummary,
   sourceText,
+  totalLabel,
 } from "@/lib/prices";
 import type { PriceLine, Rates } from "@/lib/types";
 
@@ -28,6 +29,7 @@ function line(over: Partial<PriceLine> = {}): PriceLine {
     quantity: "208",
     hourly: false,
     surcharge: "none",
+    option: false,
     hours: null,
     price_cents: null,
     total_cents: null,
@@ -100,5 +102,14 @@ describe("prices", () => {
     expect(quantityText("12.5", "m²")).toBe("12,5 m²");
     expect(quantityText("3", "u")).toBe("3 u");
     expect(quantityText(null, "jour")).toBe("—");
+  });
+});
+
+describe("totalLabel", () => {
+  it("names the base offer when options are priced apart", () => {
+    expect(totalLabel([line()])).toBe("Total HT");
+    expect(totalLabel([line(), line({ id: "DPGF!E20", option: true })])).toBe(
+      "Total HT de l'offre de base",
+    );
   });
 });

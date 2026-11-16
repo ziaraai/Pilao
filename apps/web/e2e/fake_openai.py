@@ -110,6 +110,8 @@ PRICES = {
         {"sheet": "DQE", "section": "interventions", "label": "Nuit (21h-6h)", "unit": "heure",
          "quantity_cell": "I6", "price_cell": "B6", "hours_cell": None, "rate_cell": None,
          "hourly": True, "surcharge": "night"},
+        {"sheet": "DQE", "section": "options", "label_cell": "A7", "unit": "m²",
+         "quantity_cell": "I7", "price_cell": "B7", "option": True},
     ],
     "notes": ["Prix en euros HT"],
 }

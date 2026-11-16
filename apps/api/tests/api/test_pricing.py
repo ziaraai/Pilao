@@ -344,3 +344,23 @@ def test_the_same_line_in_the_other_price_file_follows(
         f["sheet"] for f in prices(c, bid)["files"] if f["dce_file_id"] == first["dce_file_id"]
     )
     assert again["lines"][1]["price_cents"] == 9000
+
+
+def test_an_option_is_shown_apart_from_the_total(
+    make_client: Factory, outbox: Outbox, queue: FakeQueue, reader: PriceModel
+) -> None:
+    """A PSE or « OPTION : … » line: priced and written, but the offer's total leaves it out."""
+    c = signed_in_client(make_client, outbox)
+    c.put("/profile/rates", json={"hourly_rate_cents": 2500, "night_pct": 25})
+    reader.lines = [dict(ln) for ln in LINES]
+    reader.lines[2]["option"] = True  # the yearly service, as a PSE
+    sheet = read(c, queue, bid_with_prices(c, queue))
+    assert [ln["option"] for ln in sheet["lines"]] == [False, False, True, False]
+    res = c.put(
+        f"/price-sheets/{sheet['id']}",
+        json={"entries": {"DQE!B5": {"hours": "2,5"}, "DQE!B32": {"price_cents": 40000}}},
+    )
+    out = res.json()
+    assert out["total_cents"] == 6250 * 208 + 3125 * 2
+    assert out["options_total_cents"] == 40000 * 2
+    assert out["lines"][2]["total_cents"] == 40000 * 2

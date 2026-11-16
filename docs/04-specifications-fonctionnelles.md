@@ -184,6 +184,7 @@ En tant qu'entreprise, je veux que Pilao remplisse le BPU, le DPGF ou le DQE de 
 - CA6 : une case qui devait reprendre le prix mais contient une valeur fixe (lien rompu dans le fichier de l'acheteur) reçoit aussi le prix, et c'est signalé.
 - CA7 : les heures saisies (par ligne, quantité, total annuel) servent à la rédaction du mémoire et à « Ce qu'il manque » ; aucun prix n'entre jamais dans le mémoire.
 - CA8 : le BPM (bordereau des prix mixtes) est un fichier de prix ; une heure ou un prix saisi dans un fichier est repris sur la même ligne (même rubrique, même libellé) des autres fichiers de prix du dossier.
+- CA9 : une ligne en option, une PSE (prestation supplémentaire éventuelle) ou une variante (« OPTION : Shampouinage moquette », rubrique « PSE n°1 ») est marquée « Option » : son prix est saisi et écrit dans le fichier comme les autres, mais le total HT affiché est celui de l'offre de base, et les options ont leur propre total, à part. Une option non chiffrée compte dans les prix manquants ; ses heures ne vont pas au mémoire.
 
 **US-4.9 Le mémoire dans le cadre de l'acheteur** (ADR-051)
 En tant qu'entreprise, quand le DCE fournit un cadre de mémoire à compléter (« le cadre doit être complété, sinon l'offre est irrecevable »), je veux récupérer ce fichier rempli avec mon mémoire.

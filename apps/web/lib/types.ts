@@ -1047,6 +1047,7 @@ export type PriceLine = {
   quantity: string | null;
   hourly: boolean;
   surcharge: Surcharge;
+  option: boolean; // an option or PSE: priced, out of the total
   hours: string | null;
   price_cents: number | null;
   total_cents: number | null;
@@ -1061,7 +1062,8 @@ export type PriceSheet = {
   notes: string[];
   rate_cents: number | null;
   lines: PriceLine[];
-  total_cents: number;
+  total_cents: number; // the offer, options left out
+  options_total_cents: number;
   missing_count: number;
 };
 

@@ -89,6 +89,12 @@ export function bySection(
   return groups;
 }
 
+export function totalLabel(lines: PriceLine[]): string {
+  return lines.some((l) => l.option)
+    ? "Total HT de l'offre de base"
+    : "Total HT";
+}
+
 export function missingText(count: number): string {
   if (count === 0) return "Tous les prix sont remplis";
   return count === 1 ? "1 prix à compléter" : `${count} prix à compléter`;

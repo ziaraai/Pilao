@@ -15,6 +15,8 @@ ws["A3"] = "prestation quotidienne"
 ws["A4"], ws["B4"], ws["C4"], ws["D4"], ws["I4"], ws["J4"] = "Site", "prix € HT/J", "nombre d'heures", "coût horaire HT", "Quantité", "Total HT"
 ws["A5"], ws["B5"], ws["D5"], ws["H5"], ws["I5"], ws["J5"] = "Hôtel de ville", 0, 0, "=B5", 208, "=I5*H5"
 ws["A6"], ws["B6"], ws["H6"], ws["I6"] = "Nuit (21h-6h)", 0, "=B6", 2
+# an option priced « pour mémoire », out of the buyer's total
+ws["A7"], ws["B7"], ws["H7"], ws["I7"], ws["J7"] = "OPTION : Vitrerie haute", 0, "=B7", 120, "=I7*H7"
 ws["J8"] = "=SUM(J5:J6)"
 dqe_buf = io.BytesIO(); dqe.save(dqe_buf)
 buf = io.BytesIO()

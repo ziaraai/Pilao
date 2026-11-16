@@ -528,6 +528,7 @@ Format : numéro, date, décision, raison, statut. Ajouter une entrée pour chaq
   - Les heures saisies vont au mémoire (`dossier_hours` dans les données de l'entreprise, prompt de rédaction 0.5.0, complétion « Ce qu'il manque ») ; jamais un prix.
 - **Alternatives écartées** : openpyxl (perd les dessins et images) ; recalcul par LibreOffice puis renvoi de sa copie (change la mise en forme du fichier officiel) ; heures estimées par l'IA (règle 1 : l'IA n'invente pas les moyens de l'entreprise ; estimation par surfaces × cadences prévue, P4-14).
 - **Statut** : validé par Faycal (« tu fonces ») ; à relire avec Abdraouf sur le DQE de Rillieux.
+- **Complément (2026-11-16, options)** : le DPGF « nettoyage de livraison » rempli par Abdraouf (Lot 20, Bat E) se chiffre au m² et porte une ligne « OPTION : Shampouinage moquette » chiffrée mais notée « PM » (pour mémoire), hors du total de 20 868,70 € HT. Pilao la comptait dans son total (21 924,70 €). Une ligne est maintenant une **option** quand la lecture le dit (`option`, prompt 0.4.0) ou quand son libellé ou sa rubrique commence par « option », « PSE », « variante » ou « prestation supplémentaire éventuelle » (règle du serveur, si la lecture l'oublie). Son prix est écrit dans le fichier ; le total affiché est celui de l'offre de base, celui des options est à part ; ses heures ne vont pas au mémoire. Les formules de l'acheteur décident seules de ce que son propre total compte.
 
 
 ## ADR-050 — Mise en page professionnelle du mémoire

@@ -24,6 +24,7 @@ import {
   hoursInput,
   lineHint,
   missingText,
+  totalLabel,
   quantityText,
   ratesSummary,
   sourceText,
@@ -267,7 +268,7 @@ function SheetEditor({
           <tfoot>
             <tr className="border-t-2 border-slate-300 font-bold">
               <td className="px-2 py-2" colSpan={4}>
-                Total HT
+                {totalLabel(current.lines)}
                 <span className="ml-3 text-xs font-normal text-amber-800">
                   {current.missing_count > 0
                     ? missingText(current.missing_count)
@@ -278,6 +279,16 @@ function SheetEditor({
                 {formatCents(current.total_cents)}
               </td>
             </tr>
+            {current.lines.some((l) => l.option) && (
+              <tr className="text-slate-700">
+                <td className="px-2 py-1" colSpan={4}>
+                  Options, chiffrées à part (hors total)
+                </td>
+                <td className="px-2 py-1 text-right">
+                  {formatCents(current.options_total_cents)}
+                </td>
+              </tr>
+            )}
           </tfoot>
         </table>
       </div>
@@ -442,6 +453,14 @@ function LineRow({
     <tr className={tableRow}>
       <td className="px-2 py-2 align-top">
         <span className="font-medium text-slate-900">{line.label}</span>
+        {line.option && (
+          <span
+            className="ml-2 rounded bg-sky-100 px-1.5 py-0.5 text-xs font-medium text-sky-800"
+            title="Chiffrée, mais hors du total de l'offre de base"
+          >
+            Option
+          </span>
+        )}
         {(bad || hint) && (
           <span
             className={`block text-xs ${bad ? "text-red-700" : "text-amber-800"}`}

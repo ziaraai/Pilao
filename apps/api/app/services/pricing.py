@@ -191,6 +191,7 @@ def sheet_out(db: Session, sheet: PriceSheet) -> PriceSheetOut:
                 quantity=None if ln.quantity is None else format(ln.quantity.normalize(), "f"),
                 hourly=ln.hourly,
                 surcharge=ln.surcharge,
+                option=ln.option,
                 hours=None if by_id[ln.id].hours is None else str(sheet.entries[ln.id]["hours"]),
                 price_cents=by_id[ln.id].price_cents,
                 total_cents=by_id[ln.id].total_cents,
@@ -199,6 +200,7 @@ def sheet_out(db: Session, sheet: PriceSheet) -> PriceSheetOut:
             for ln in lines
         ],
         total_cents=priced.total_cents,
+        options_total_cents=priced.options_cents,
         missing_count=priced.missing_count,
     )
 
