@@ -108,6 +108,7 @@ def test_labels() -> None:
         "compliance_reading",
         "marker_fill",
         "price_read",
+        "quote_draft",
         "embedding",
     }
     assert TASK_LABELS["settings_check"] == "Essai d'un modèle"  # lot 5

@@ -70,6 +70,7 @@ def upgrade() -> None:
         sa.Column("vat_bp", sa.Integer(), nullable=False),
         sa.Column("file_id", sa.UUID(), nullable=True),
         sa.Column("docx_file_id", sa.UUID(), nullable=True),
+        sa.Column("zip_file_id", sa.UUID(), nullable=True),
         sa.Column("created_by", sa.UUID(), nullable=True),
         sa.Column("id", sa.UUID(), server_default=sa.text("gen_random_uuid()"), nullable=False),
         sa.Column(
@@ -105,6 +106,12 @@ def upgrade() -> None:
         ),
         sa.ForeignKeyConstraint(
             ["file_id"], ["files.id"], name=op.f("fk_quotes_file_id_files"), ondelete="SET NULL"
+        ),
+        sa.ForeignKeyConstraint(
+            ["zip_file_id"],
+            ["files.id"],
+            name=op.f("fk_quotes_zip_file_id_files"),
+            ondelete="SET NULL",
         ),
         sa.ForeignKeyConstraint(
             ["org_id"],

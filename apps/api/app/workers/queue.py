@@ -36,6 +36,7 @@ class JobQueue(Protocol):
     def enqueue_fetch_dce(self, fetch_id: uuid.UUID, delay_seconds: int = 0) -> None: ...
     def enqueue_fill_marker(self, fill_id: uuid.UUID) -> None: ...
     def enqueue_read_prices(self, sheet_id: uuid.UUID) -> None: ...
+    def enqueue_draft_quote(self, quote_id: uuid.UUID, summarize: bool) -> None: ...
 
 
 class RqJobQueue:
@@ -169,6 +170,17 @@ class RqJobQueue:
         self._q.enqueue(
             "app.workers.jobs.read_prices_job",
             str(sheet_id),
+            job_timeout=600,
+            result_ttl=3600,
+            failure_ttl=7 * 24 * 3600,
+        )
+
+    def enqueue_draft_quote(self, quote_id: uuid.UUID, summarize: bool) -> None:
+        # Consultations (ADR-052): at most one model call, then Word, PDF and the bundle.
+        self._q.enqueue(
+            "app.workers.jobs.draft_quote_job",
+            str(quote_id),
+            summarize,
             job_timeout=600,
             result_ttl=3600,
             failure_ttl=7 * 24 * 3600,

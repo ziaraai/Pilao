@@ -23,6 +23,7 @@ from app.services.memoir_drafting import run_conformity, run_draft_section
 from app.services.org_data import run_org_export
 from app.services.pricing import run_read_prices
 from app.services.profile_prefill import run_profile_prefill
+from app.services.quotes import run_draft_quote
 from app.services.stale_works import sweep_stale_works
 from app.services.tender_import import ALL_READERS, Source, run_import
 from app.services.tender_import import run_all as import_tenders
@@ -134,6 +135,11 @@ def org_export_job(request_id: str) -> None:
 def read_prices_job(sheet_id: str) -> None:
     with get_sessionmaker()() as db:
         run_read_prices(db, uuid.UUID(sheet_id), get_storage())
+
+
+def draft_quote_job(quote_id: str, summarize: bool) -> None:
+    with get_sessionmaker()() as db:
+        run_draft_quote(db, uuid.UUID(quote_id), get_storage(), get_pdf_converter(), summarize)
 
 
 def fill_marker_job(fill_id: str) -> None:

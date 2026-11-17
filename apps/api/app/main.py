@@ -32,6 +32,7 @@ from app.routers import (
     organization,
     pricing,
     profile,
+    quotes,
     tenders,
     vault,
 )
@@ -74,6 +75,7 @@ app.include_router(dashboard.router)
 app.include_router(credits.router)
 app.include_router(missing.router)
 app.include_router(pricing.router)
+app.include_router(quotes.router)
 app.include_router(organization.router)
 app.include_router(members.router)
 app.include_router(feedback.router)

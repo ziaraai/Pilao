@@ -30,6 +30,7 @@ JOB_LABELS = {
     "profile_prefill": "Lecture des documents du profil",
     "fill_marker": "Complétion d'une information",
     "read_prices": "Lecture d'un fichier de prix",
+    "draft_quote": "Préparation d'un devis",
 }
 
 # ``ai_calls.task`` -> the same, for the AI costs.
@@ -43,6 +44,7 @@ TASK_LABELS = {
     "compliance_reading": "Lecture des attestations",
     "marker_fill": "Complétion d'une information",
     "price_read": "Lecture d'un fichier de prix",
+    "quote_draft": "Prestations d'un devis",
     "embedding": "Indexation",
 }
 

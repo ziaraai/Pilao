@@ -73,6 +73,8 @@ MODULES: tuple[Module, ...] = (
             PaidAction("marker_fill", "Compléter une information", 0, "marker_fill"),
             # Chiffrage (ADR-049): the AI finds the cells to price in the buyer's file
             PaidAction("price_read", "Lire un fichier de prix", 1, "price_read"),
+            # Consultations (ADR-052): « Prestations comprises » read in the CCTP
+            PaidAction("quote_draft", "Préparer un devis", 1, "quote_draft"),
         ),
     ),
 )

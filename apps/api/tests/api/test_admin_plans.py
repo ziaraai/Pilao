@@ -143,6 +143,7 @@ def test_action_prices_and_their_real_cost(
         "profile_prefill",
         "marker_fill",
         "price_read",
+        "quote_draft",
     ]
     analysis = rows["dce_analysis"]
     assert (

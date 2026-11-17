@@ -214,6 +214,7 @@ class FakeQueue:
         self.pending_prefill: list[uuid.UUID] = []
         self.pending_fills: list[uuid.UUID] = []
         self.pending_price_reads: list[uuid.UUID] = []
+        self.pending_quotes: list[tuple[uuid.UUID, bool]] = []
         self.pending_imports: list[str] = []
         self.pending_fetches: list[tuple[uuid.UUID, int]] = []  # (fetch, delay in seconds)
         self.ocr = None  # set to an OCR engine to exercise scanned pages
@@ -388,6 +389,19 @@ class FakeQueue:
         if self.down:
             raise ConnectionError("redis down")
         self.pending_price_reads.append(sheet_id)
+
+    def enqueue_draft_quote(self, quote_id: uuid.UUID, summarize: bool) -> None:
+        if self.down:
+            raise ConnectionError("redis down")
+        self.pending_quotes.append((quote_id, summarize))
+
+    def drain_quotes(self, converter) -> None:  # type: ignore[no-untyped-def]
+        from app.services.quotes import run_draft_quote
+
+        while self.pending_quotes:
+            quote_id, summarize = self.pending_quotes.pop(0)
+            with _new_session(self._conn) as session:
+                run_draft_quote(session, quote_id, self._storage, converter, summarize)
 
     def drain_price_reads(self) -> None:
         from app.services.pricing import run_read_prices

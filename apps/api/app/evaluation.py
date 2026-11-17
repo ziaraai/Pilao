@@ -180,6 +180,9 @@ class InlineQueue:
     def enqueue_read_prices(self, sheet_id: uuid.UUID) -> None:
         pass  # nor price files
 
+    def enqueue_draft_quote(self, quote_id: uuid.UUID, summarize: bool) -> None:
+        pass  # nor quotes
+
     def enqueue_profile_prefill(self, org_id: uuid.UUID) -> None:
         pass  # the model comparison does not pre-fill profiles
 

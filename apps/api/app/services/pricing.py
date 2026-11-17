@@ -179,7 +179,7 @@ def _lines(sheet: PriceSheet) -> list[PriceLine]:
     return [PriceLine.from_dict(d) for d in sheet.lines]
 
 
-def _priced(db: Session, sheet: PriceSheet) -> tuple[list[PriceLine], Priced]:
+def priced_sheet(db: Session, sheet: PriceSheet) -> tuple[list[PriceLine], Priced]:
     lines = _lines(sheet)
     rates = rates_of(db, sheet.org_id)
     excluded = set(sheet.excluded_sections or [])
@@ -187,7 +187,7 @@ def _priced(db: Session, sheet: PriceSheet) -> tuple[list[PriceLine], Priced]:
 
 
 def sheet_out(db: Session, sheet: PriceSheet) -> PriceSheetOut:
-    lines, priced = _priced(db, sheet)
+    lines, priced = priced_sheet(db, sheet)
     by_id = {p.id: p for p in priced.lines}
     names = {str(s.id): s.name for s in services_of(db, sheet.org_id)}
 
@@ -565,20 +565,25 @@ def update_sheet(db: Session, user: User, sheet: PriceSheet, data: SheetUpdateIn
     return sheet_out(db, locked)
 
 
-def export_filled(
-    db: Session, org: Organization, user: User, sheet: PriceSheet, storage: ObjectStorage
-) -> DownloadUrlOut:
-    """The buyer's file with the company's prices, as a short-lived download link."""
+def filled_file(db: Session, sheet: PriceSheet, storage: ObjectStorage) -> tuple[bytes, str]:
+    """The buyer's .xlsx with the company's prices, and its name without extension."""
     if sheet.status != "ready":
         raise ApiError(409, "not_ready", NOT_READY)
     dce_file = db.get_one(DceFile, sheet.dce_file_id)
     data, _ = _source_bytes(db, sheet, dce_file, storage)
-    lines, priced = _priced(db, sheet)
+    lines, priced = priced_sheet(db, sheet)
     try:
         filled = fill_xlsx(data, fill_writes(lines, priced, sheet.mirrors))
     except XlsxFillError as exc:
         raise ApiError(422, "fill_failed", f"Le fichier n'a pas pu être rempli : {exc}") from exc
-    name = dce_file.path.rsplit("/", 1)[-1].rsplit(".", 1)[0]
+    return filled, dce_file.path.rsplit("/", 1)[-1].rsplit(".", 1)[0]
+
+
+def export_filled(
+    db: Session, org: Organization, user: User, sheet: PriceSheet, storage: ObjectStorage
+) -> DownloadUrlOut:
+    """The buyer's file with the company's prices, as a short-lived download link."""
+    filled, name = filled_file(db, sheet, storage)
     record = store_generated(
         db, org, user.id, filled, f"{name} - rempli", XLSX_MIME, "xlsx", storage
     )
@@ -609,7 +614,7 @@ def bid_hours(db: Session, bid: Bid) -> dict[str, Any] | None:
         .where(PriceSheet.bid_id == bid.id, PriceSheet.status == "ready")
         .order_by(PriceSheet.created_at)
     ):
-        lines, priced = _priced(db, sheet)
+        lines, priced = priced_sheet(db, sheet)
         summary = hours_summary(lines, priced)
         if summary is not None:
             rows.extend(summary["lignes"])
