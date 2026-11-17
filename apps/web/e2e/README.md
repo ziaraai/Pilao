@@ -48,3 +48,5 @@ passer en deuxième page.
 `fixtures.py` fait de « Pilote » (100 crédits par mois) la formule par défaut de la base locale :
 l'entreprise inscrite par le parcours a de quoi payer ses actions. Videz aussi les formules
 d'essai des parcours précédents (`delete from plans where name like 'Parcours %';`).
+Videz enfin les réglages de la plateforme (`delete from platform_settings;`) : la clé OpenRouter
+enregistrée par un parcours précédent s'afficherait avant l'enregistrement du suivant.
