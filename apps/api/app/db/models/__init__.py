@@ -21,7 +21,7 @@ from app.db.models.memoir import (
 from app.db.models.organization import Organization
 from app.db.models.platform import PlatformAdmin, PlatformAdminSession, PlatformAuditLog
 from app.db.models.platform_setting import PlatformSetting
-from app.db.models.pricing import PriceSheet, PricingRates
+from app.db.models.pricing import PriceService, PriceSheet, PricingRates
 from app.db.models.profile import (
     Certification,
     CompanyProfile,
@@ -30,6 +30,7 @@ from app.db.models.profile import (
     HumanResource,
 )
 from app.db.models.profile_suggestion import ProfileSuggestion
+from app.db.models.quote import Quote
 from app.db.models.tender import (
     NOTICE_TYPES,
     Notification,
@@ -81,10 +82,12 @@ __all__ = [
     "PlatformAdminSession",
     "PlatformAuditLog",
     "PlatformSetting",
+    "PriceService",
     "PriceSheet",
     "PricingRates",
     "ProfileSuggestion",
     "PurgeLog",
+    "Quote",
     "Requirement",
     "Tender",
     "TenderImport",

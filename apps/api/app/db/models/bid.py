@@ -29,7 +29,15 @@ class Bid(IdMixin, TimestampMixin, OrgScoped, Base):
             "status in ('to_review','in_progress','submitted','won','lost','dropped')",
             name="status",
         ),
+        CheckConstraint("kind in ('tender','consultation')", name="kind"),
     )
+
+    # a public tender, or a consultation: a company asking for a quote (ADR-052)
+    kind: Mapped[str] = mapped_column(
+        Text, nullable=False, default="tender", server_default="tender"
+    )
+    contact_name: Mapped[str | None] = mapped_column(Text)
+    contact_email: Mapped[str | None] = mapped_column(Text)
 
     tender_id: Mapped[uuid.UUID | None] = mapped_column(
         UUID(as_uuid=True), ForeignKey("tenders.id", ondelete="SET NULL")

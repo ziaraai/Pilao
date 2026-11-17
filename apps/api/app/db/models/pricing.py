@@ -55,7 +55,32 @@ class PriceSheet(IdMixin, TimestampMixin, OrgScoped, Base):
     warnings: Mapped[list[str]] = mapped_column(JSONB, nullable=False, default=list)
     notes: Mapped[list[str]] = mapped_column(JSONB, nullable=False, default=list)
     entries: Mapped[dict[str, dict[str, Any]]] = mapped_column(JSONB, nullable=False, default=dict)
+    # rubriques the company does not price (a consultation on a whole lot, ADR-052)
+    excluded_sections: Mapped[list[str]] = mapped_column(
+        JSONB, nullable=False, default=list, server_default="[]"
+    )
     rate_cents: Mapped[int | None] = mapped_column(Integer)  # this dossier's hourly rate
     created_by: Mapped[uuid.UUID | None] = mapped_column(
         UUID(as_uuid=True), ForeignKey("users.id", ondelete="SET NULL")
     )
+
+
+PRICE_UNITS = ("m²", "ml", "m³", "heure", "jour", "forfait", "u", "passage", "mois")
+
+
+class PriceService(IdMixin, TimestampMixin, OrgScoped, Base):
+    """One service of « Ma liste de prix » (Profil): its unit and its price HT (ADR-052)."""
+
+    __tablename__ = "price_services"
+    __table_args__ = (
+        CheckConstraint("price_cents >= 0", name="price"),
+        CheckConstraint(
+            "unit in ('m²','ml','m³','heure','jour','forfait','u','passage','mois')", name="unit"
+        ),
+    )
+
+    name: Mapped[str] = mapped_column(Text, nullable=False)
+    unit: Mapped[str] = mapped_column(Text, nullable=False)
+    price_cents: Mapped[int] = mapped_column(Integer, nullable=False)
+    description: Mapped[str | None] = mapped_column(Text)
+    position: Mapped[int] = mapped_column(Integer, nullable=False, default=0)

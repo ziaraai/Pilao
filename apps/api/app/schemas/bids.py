@@ -2,20 +2,25 @@ import uuid
 from datetime import datetime
 from typing import Annotated, Any, Literal
 
-from pydantic import BaseModel, ConfigDict, Field, StringConstraints
+from pydantic import BaseModel, ConfigDict, EmailStr, Field, StringConstraints
 
 BidStatus = Literal["to_review", "in_progress", "submitted", "won", "lost", "dropped"]
+# a public tender, or a company asking for a quote on part of a lot (ADR-052)
+BidKind = Literal["tender", "consultation"]
 DceKind = Literal["rc", "ccap", "cctp", "ae", "bpu", "dpgf", "dqe", "annex", "other"]
 Text = Annotated[str, StringConstraints(strip_whitespace=True, min_length=1, max_length=300)]
 LongText = Annotated[str, StringConstraints(strip_whitespace=True, max_length=5000)]
 
 
 class BidIn(BaseModel):
+    kind: BidKind = "tender"
     title: Text
     buyer_name: Text | None = None
     reference: Text | None = None
     deadline_at: datetime | None = None
     lot_label: Text | None = None
+    contact_name: Text | None = None
+    contact_email: EmailStr | None = None
 
 
 class BidPatch(BaseModel):
@@ -26,6 +31,8 @@ class BidPatch(BaseModel):
     reference: Text | None = None
     deadline_at: datetime | None = None
     lot_label: Text | None = None
+    contact_name: Text | None = None
+    contact_email: EmailStr | None = None
     status: BidStatus | None = None
     submitted_amount_cents: Annotated[int, Field(ge=0, le=10**13)] | None = None
     result_rank: Annotated[int, Field(ge=1, le=1000)] | None = None
@@ -49,8 +56,11 @@ class BidProgressOut(BaseModel):
 class BidOut(BaseModel):
     model_config = ConfigDict(from_attributes=True)
     id: uuid.UUID
+    kind: BidKind = "tender"
     title: str
     buyer_name: str | None
+    contact_name: str | None = None
+    contact_email: str | None = None
     reference: str | None
     deadline_at: datetime | None
     status: BidStatus
