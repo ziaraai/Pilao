@@ -312,11 +312,11 @@ class LinePrice:
     rate_cents: int | None  # the rate used (hours × rate)
     price_cents: int | None
     total_cents: int | None
-    source: Literal["hours", "price", "hourly", "none"]
+    source: Literal["hours", "price", "hourly", "none", "excluded"]
 
     @property
     def missing(self) -> bool:
-        return self.price_cents is None
+        return self.price_cents is None and self.source != "excluded"
 
 
 @dataclass(frozen=True)
@@ -343,17 +343,23 @@ def compute(
     entries: dict[str, dict[str, Any]],
     rates: Rates,
     rate_cents: int | None,
+    excluded: set[str] | frozenset[str] = frozenset(),
 ) -> Priced:
-    """``rate_cents``: this dossier's hourly rate, else the company's."""
+    """``rate_cents``: this dossier's hourly rate, else the company's. ``excluded``: the
+    rubriques the company does not price (ADR-052): their lines are left as the buyer gave
+    them, neither priced, nor counted, nor missing."""
     rate = rate_cents if rate_cents is not None else rates.hourly_rate_cents
     out: list[LinePrice] = []
     total = options = 0
     for ln in lines:
+        if ln.section in excluded:
+            out.append(LinePrice(ln.id, None, None, None, None, "excluded"))
+            continue
         entry = entries.get(ln.id) or {}
         typed = entry.get("price_cents")
         hours = parse_hours(entry.get("hours"))
         price: int | None = None
-        source: Literal["hours", "price", "hourly", "none"] = "none"
+        source: Literal["hours", "price", "hourly", "none", "excluded"] = "none"
         used_rate: int | None = None
         if isinstance(typed, int) and not isinstance(typed, bool) and typed >= 0:
             price, source = typed, "price"
@@ -427,3 +433,81 @@ def hours_summary(lines: list[PriceLine], priced: Priced) -> dict[str, Any] | No
     if not rows:
         return None
     return {"lignes": rows, "heures_totales": _text(total)}
+
+
+# ---------- « Ma liste de prix » (ADR-052) ---------------------------------------------------
+
+_UNITS = [
+    (r"m\s*(2|²)", "m²"),
+    (r"m\s*(3|³)", "m³"),
+    (r"ml|m\.?l\.?|m[eè]tres?\s+lin[ée]aires?", "ml"),
+    (r"h|hr?s?|heures?", "heure"),
+    (r"j|jours?", "jour"),
+    (r"ff|forfaits?|ens(emble)?|fft", "forfait"),
+    (r"u|un|unit[ée]s?|pce|pi[eè]ces?|nb|nombre", "u"),
+    (r"passages?", "passage"),
+    (r"mois", "mois"),
+]
+
+
+def normalize_unit(unit: str) -> str:
+    """« M2 », « m 2 », « m² » → « m² » ; « h », « Heures » → « heure » ; « ens », « ff » →
+    « forfait »… so a line and a service can be compared whatever the spelling."""
+    value = re.sub(r"\s+", " ", (unit or "").strip().lower())
+    for pattern, name in _UNITS:
+        if re.fullmatch(pattern, value):
+            return name
+    return value
+
+
+@dataclass(frozen=True)
+class ServiceRef:
+    """A service of the company's price list, as matching needs it."""
+
+    id: str
+    name: str
+    unit: str
+    price_cents: int
+
+
+class MatchIn(BaseModel):
+    """One line the model recognised as a service of the list (prompt
+    ``rapprochement_prestations``)."""
+
+    line: str = Field(max_length=80)
+    service: str = Field(max_length=80)
+
+
+class MatchOut(BaseModel):
+    matches: list[MatchIn] = Field(default_factory=list, max_length=MAX_LINES)
+
+
+def validate_matches(
+    proposed: list[MatchIn], lines: list[PriceLine], services: list[ServiceRef]
+) -> dict[str, str]:
+    """Line id → service id, kept only for known lines and services of the same unit: a
+    price per m² never fills an hourly line."""
+    by_line = {ln.id: ln for ln in lines}
+    by_service = {s.id: s for s in services}
+    out: dict[str, str] = {}
+    for m in proposed:
+        line, service = by_line.get(m.line), by_service.get(m.service)
+        if line is None or service is None or m.line in out:
+            continue
+        if normalize_unit(line.unit) != normalize_unit(service.unit):
+            continue
+        out[m.line] = m.service
+    return out
+
+
+def default_excluded(lines: list[PriceLine], matched: dict[str, str]) -> list[str]:
+    """The rubriques set aside in a consultation: those where no line matched a service.
+    Nothing is set aside when nothing matched at all (the company decides by hand)."""
+    if not matched:
+        return []
+    kept = {ln.section for ln in lines if ln.id in matched}
+    out: list[str] = []
+    for ln in lines:
+        if ln.section not in kept and ln.section not in out:
+            out.append(ln.section)
+    return out

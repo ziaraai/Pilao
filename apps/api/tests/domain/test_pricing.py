@@ -9,13 +9,18 @@ from openpyxl import Workbook
 from app.domain.price_grid import PriceFileError, grid_text, read_workbook
 from app.domain.pricing import (
     LineIn,
+    MatchIn,
     PriceLine,
     Rates,
+    ServiceRef,
     broken_links,
     compute,
+    default_excluded,
     fill_writes,
     hours_summary,
+    normalize_unit,
     validate_lines,
+    validate_matches,
 )
 
 
@@ -329,3 +334,88 @@ def test_option_hours_stay_out_of_the_memoir() -> None:
     assert [r["libelle"] for r in summary["lignes"]] == [
         "Du niveau SS-1 au niveau R+7 surface noble"
     ]
+
+
+# ---- Consultations (ADR-052): « Ma liste de prix » and rubriques set aside ----------------
+
+
+def recamier_lines() -> list[PriceLine]:
+    """The shape of the Récamier DPGF (lot 16): paint and cleaning in one file."""
+
+    def ln(cell: str, section: str, label: str, unit: str = "M2") -> PriceLine:
+        return PriceLine(
+            f"DPGF!{cell}",
+            "DPGF",
+            section,
+            label,
+            unit,
+            Decimal(100),
+            cell,
+            None,
+            None,
+            False,
+            "none",
+        )
+
+    return [
+        ln("F173", "10 PEINTURE", "Peinture de propreté mate en sous-face de plafond"),
+        ln("F175", "10 PEINTURE", "Peinture de propreté mate sur parois verticales"),
+        ln("F234", "12 NETTOYAGES", "Nettoyage général avant OPR de l'ensemble des locaux"),
+        ln("F235", "12 NETTOYAGES", "Nettoyage général avant réception de travaux"),
+        ln("F236", "12 NETTOYAGES", "Nettoyage général avant OPR - Logement T4"),
+    ]
+
+
+SERVICES = [
+    ServiceRef("s-opr", "Nettoyage de fin de chantier avant OPR", "m²", 170),
+    ServiceRef("s-rec", "Nettoyage avant réception", "m²", 68),
+    ServiceRef("s-vit", "Vitrerie", "heure", 3000),
+]
+
+
+def test_units_are_compared_whatever_their_spelling() -> None:
+    for unit in ("m2", "M2", "m²", " m 2 ", "M²"):
+        assert normalize_unit(unit) == "m²", unit
+    assert normalize_unit("h") == normalize_unit("Heures") == "heure"
+    assert normalize_unit("ens") == normalize_unit("Forfait") == normalize_unit("ff") == "forfait"
+    assert normalize_unit("ML") == "ml"
+    assert normalize_unit("U") == normalize_unit("unité") == "u"
+
+
+def test_only_known_lines_and_services_of_the_same_unit_are_kept() -> None:
+    lines = recamier_lines()
+    proposed = [
+        MatchIn(line="DPGF!F234", service="s-opr"),
+        MatchIn(line="DPGF!F235", service="s-rec"),
+        MatchIn(line="DPGF!F236", service="s-opr"),
+        MatchIn(line="DPGF!F173", service="s-vit"),  # an hourly price on a m² line: refused
+        MatchIn(line="DPGF!X999", service="s-opr"),  # no such line
+        MatchIn(line="DPGF!F175", service="s-unknown"),  # no such service
+    ]
+    assert validate_matches(proposed, lines, SERVICES) == {
+        "DPGF!F234": "s-opr",
+        "DPGF!F235": "s-rec",
+        "DPGF!F236": "s-opr",
+    }
+
+
+def test_rubriques_without_any_matched_line_are_set_aside() -> None:
+    lines = recamier_lines()
+    assert default_excluded(lines, {"DPGF!F234": "s-opr"}) == ["10 PEINTURE"]
+    assert default_excluded(lines, {}) == []  # nothing recognised: set nothing aside
+
+
+def test_set_aside_lines_are_neither_priced_nor_counted_nor_written() -> None:
+    lines = recamier_lines()
+    entries = {
+        "DPGF!F173": {"price_cents": 1200},  # typed earlier, then the rubrique set aside
+        "DPGF!F234": {"price_cents": 170, "service_id": "s-opr"},
+    }
+    out = compute(lines, entries, RATES, rate_cents=None, excluded={"10 PEINTURE"})
+    by_id = {p.id: p for p in out.lines}
+    assert by_id["DPGF!F173"].source == "excluded" and by_id["DPGF!F173"].price_cents is None
+    assert not by_id["DPGF!F173"].missing
+    assert out.total_cents == 100 * 170
+    assert out.missing_count == 2  # F235 and F236 still to price
+    writes = fill_writes(lines, out, {})
+    assert "F173" not in writes["DPGF"] and writes["DPGF"]["F234"] == 1.7

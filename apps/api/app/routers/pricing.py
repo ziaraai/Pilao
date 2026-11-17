@@ -9,7 +9,15 @@ from app.core.deps import CurrentAuth, ScopedDb, require_module
 from app.core.errors import ApiError
 from app.db.models import Bid
 from app.schemas.files import DownloadUrlOut
-from app.schemas.pricing import PriceSheetOut, PricesOut, RatesIn, RatesOut, SheetUpdateIn
+from app.schemas.pricing import (
+    PriceSheetOut,
+    PricesOut,
+    RatesIn,
+    RatesOut,
+    ServiceOut,
+    ServicesIn,
+    SheetUpdateIn,
+)
 from app.services import pricing as svc
 from app.storage.objects import ObjectStorage, get_storage
 from app.workers.queue import JobQueue, get_job_queue
@@ -34,6 +42,16 @@ def get_rates(ctx: CurrentAuth, db: ScopedDb) -> RatesOut:
 @router.put("/profile/rates")
 def put_rates(data: RatesIn, ctx: CurrentAuth, db: ScopedDb) -> RatesOut:
     return svc.save_rates(db, ctx.user, ctx.org.id, data)
+
+
+@router.get("/profile/services")
+def get_services(ctx: CurrentAuth, db: ScopedDb) -> list[ServiceOut]:
+    return svc.services_out(db, ctx.org.id)
+
+
+@router.put("/profile/services")
+def put_services(data: ServicesIn, ctx: CurrentAuth, db: ScopedDb) -> list[ServiceOut]:
+    return svc.save_services(db, ctx.user, ctx.org.id, data)
 
 
 @router.get("/bids/{bid_id}/prices")

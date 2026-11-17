@@ -58,11 +58,13 @@ def reader(monkeypatch: pytest.MonkeyPatch) -> PriceModel:
     return fake
 
 
-def bid_with_prices(c: TestClient, queue: FakeQueue, *, pdf_twin: bool = True) -> str:
+def bid_with_prices(
+    c: TestClient, queue: FakeQueue, *, pdf_twin: bool = True, kind: str = "tender"
+) -> str:
     files = {"DCE/RC.pdf": RC, "DCE/26020M_DQE.xlsx": rillieux_like()}
     if pdf_twin:
         files["DCE/26020M_DQE.pdf"] = RC  # the same table printed: hidden behind the Excel
-    bid = new_bid(c)
+    bid = new_bid(c, kind=kind)
     assert deposit(c, bid, ("DCE.zip", zipped(files))).status_code == 202
     queue.drain_dce()
     return bid

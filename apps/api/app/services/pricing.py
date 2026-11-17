@@ -28,6 +28,7 @@ from app.db.models import (
     File,
     Job,
     Organization,
+    PriceService,
     PriceSheet,
     PricingRates,
     User,
@@ -36,16 +37,20 @@ from app.documents.convert import ConversionUnavailable, soffice_convert
 from app.domain.price_grid import PriceFileError, grid_text, read_workbook
 from app.domain.pricing import (
     LineIn,
+    MatchOut,
     Priced,
     PriceLine,
     PriceReadOut,
     Rates,
+    ServiceRef,
     broken_links,
     compute,
+    default_excluded,
     fill_writes,
     hours_summary,
     parse_hours,
     validate_lines,
+    validate_matches,
 )
 from app.exports.xlsx_fill import XlsxFillError, fill_xlsx
 from app.schemas.files import DownloadUrlOut
@@ -56,6 +61,8 @@ from app.schemas.pricing import (
     PricesOut,
     RatesIn,
     RatesOut,
+    ServiceOut,
+    ServicesIn,
     SheetUpdateIn,
 )
 from app.services import credits
@@ -70,6 +77,11 @@ logger = logging.getLogger("pilao.pricing")
 JOB_READ = "read_prices"
 TASK = "price_read"
 PROMPT = "lecture_bordereau_prix"
+MATCH_PROMPT = "rapprochement_prestations"  # ADR-052
+MATCH_FAILED = (
+    "Le rapprochement avec votre liste de prix n'a pas abouti : saisissez les prix ou relisez "
+    "le fichier."
+)
 MAX_OUTPUT_TOKENS = 32_000  # a 300-line DPGF answers with short lines (cells only)
 STALE_AFTER = timedelta(minutes=15)  # past the queue's timeout (600 s): the reading is dead
 FILLABLE = ("xlsx", "xlsm")
@@ -169,12 +181,22 @@ def _lines(sheet: PriceSheet) -> list[PriceLine]:
 
 def _priced(db: Session, sheet: PriceSheet) -> tuple[list[PriceLine], Priced]:
     lines = _lines(sheet)
-    return lines, compute(lines, sheet.entries, rates_of(db, sheet.org_id), sheet.rate_cents)
+    rates = rates_of(db, sheet.org_id)
+    excluded = set(sheet.excluded_sections or [])
+    return lines, compute(lines, sheet.entries, rates, sheet.rate_cents, excluded)
 
 
 def sheet_out(db: Session, sheet: PriceSheet) -> PriceSheetOut:
     lines, priced = _priced(db, sheet)
     by_id = {p.id: p for p in priced.lines}
+    names = {str(s.id): s.name for s in services_of(db, sheet.org_id)}
+
+    def service_name(line_id: str) -> str | None:
+        entry = sheet.entries.get(line_id) or {}
+        if by_id[line_id].source != "price":
+            return None
+        return names.get(str(entry.get("service_id") or ""))
+
     return PriceSheetOut(
         id=sheet.id,
         status=sheet.status,
@@ -196,10 +218,13 @@ def sheet_out(db: Session, sheet: PriceSheet) -> PriceSheetOut:
                 price_cents=by_id[ln.id].price_cents,
                 total_cents=by_id[ln.id].total_cents,
                 source=by_id[ln.id].source,
+                excluded=by_id[ln.id].source == "excluded",
+                service_name=service_name(ln.id),
             )
             for ln in lines
         ],
         total_cents=priced.total_cents,
+        excluded_sections=list(sheet.excluded_sections or []),
         options_total_cents=priced.options_cents,
         missing_count=priced.missing_count,
     )
@@ -429,6 +454,29 @@ def run_read_prices(db: Session, sheet_id: uuid.UUID, storage: ObjectStorage) ->
                     f"Heures et prix repris de « {_file_name(db, other)} » pour "
                     f"{_plural(copied, 'ligne')} identique{'s' if copied > 1 else ''}."
                 )
+        matched: dict[str, str] = {}
+        services = services_of(db, sheet.org_id)
+        if services:
+            try:
+                matched = _match(db, sheet, lines, services)
+            except llm.LlmError:
+                warnings.append(MATCH_FAILED)
+            prices_of = {str(s.id): s.price_cents for s in services}
+            prefilled = 0
+            for line_id, service_id in matched.items():
+                if line_id not in entries:
+                    entries[line_id] = {
+                        "price_cents": prices_of[service_id],
+                        "service_id": service_id,
+                    }
+                    prefilled += 1
+            if prefilled:
+                warnings.append(
+                    f"{_plural(prefilled, 'prix')} repris de votre liste de prix : vérifiez-les."
+                )
+        bid = db.get_one(Bid, sheet.bid_id)
+        consultation = bid.kind == "consultation"
+        sheet.excluded_sections = default_excluded(lines, matched) if consultation else []
         sheet.entries = entries  # a new object: an in-place change of JSONB is not saved
         sheet.warnings = list(warnings)
         sheet.status, sheet.error = "ready", None
@@ -497,6 +545,13 @@ def update_sheet(db: Session, user: User, sheet: PriceSheet, data: SheetUpdateIn
         other.entries = synced
     if data.set_rate:
         locked.rate_cents = data.rate_cents
+    if data.excluded_sections is not None:
+        sections = {d.get("section") or "" for d in locked.lines}
+        if any(s not in sections for s in data.excluded_sections):
+            raise ApiError(
+                422, "unknown_section", "Cette rubrique n'existe plus : rechargez la page."
+            )
+        locked.excluded_sections = list(dict.fromkeys(data.excluded_sections))
     db.add(
         AuditLog(
             user_id=user.id,
@@ -562,3 +617,85 @@ def bid_hours(db: Session, bid: Bid) -> dict[str, Any] | None:
     if not rows:
         return None
     return {"lignes": rows, "heures_totales": format(total, "g")}
+
+
+# ---------- « Ma liste de prix » (ADR-052) -------------------------------------------------
+
+
+def services_of(db: Session, org_id: uuid.UUID) -> list[PriceService]:
+    return list(
+        db.scalars(
+            select(PriceService)
+            .where(PriceService.org_id == org_id)
+            .order_by(PriceService.position, PriceService.created_at)
+        )
+    )
+
+
+def services_out(db: Session, org_id: uuid.UUID) -> list[ServiceOut]:
+    return [
+        ServiceOut(
+            id=s.id, name=s.name, unit=s.unit, price_cents=s.price_cents, description=s.description
+        )
+        for s in services_of(db, org_id)
+    ]
+
+
+def save_services(db: Session, user: User, org_id: uuid.UUID, data: ServicesIn) -> list[ServiceOut]:
+    """The whole list is replaced: what the screen shows is what is saved."""
+    for row in services_of(db, org_id):
+        db.delete(row)
+    db.flush()
+    for position, item in enumerate(data.services):
+        db.add(
+            PriceService(
+                org_id=org_id,
+                name=item.name.strip(),
+                unit=item.unit,
+                price_cents=item.price_cents,
+                description=(item.description or "").strip() or None,
+                position=position,
+            )
+        )
+    db.add(
+        AuditLog(
+            user_id=user.id,
+            action="update",
+            entity="price_services",
+            meta={"count": len(data.services)},
+        )
+    )
+    db.commit()
+    return services_out(db, org_id)
+
+
+def _match(
+    db: Session, sheet: PriceSheet, lines: list[PriceLine], services: list[PriceService]
+) -> dict[str, str]:
+    """Line id → service id: the model proposes, the server keeps known ids of the same unit."""
+    short = {f"S{i}": str(s.id) for i, s in enumerate(services, start=1)}
+    listed = "\n".join(
+        f"S{i} · {s.name} · {s.unit}" + (f" · {s.description}" if s.description else "")
+        for i, s in enumerate(services, start=1)
+    )
+    rows = "\n".join(f"{ln.id} · {ln.section} · {ln.label} · {ln.unit}" for ln in lines)
+    prompt = load_prompt(MATCH_PROMPT)
+    system, user_msg = prompt.render(
+        services=listed.replace("</services", "‹/services"),
+        lines=rows.replace("</lines", "‹/lines"),
+    )
+    result = llm.complete(
+        db,
+        org_id=sheet.org_id,
+        task=TASK,
+        messages=[{"role": "system", "content": system}, {"role": "user", "content": user_msg}],
+        response_model=MatchOut,
+        prompt_version=prompt.version,
+        bid_id=sheet.bid_id,
+        max_tokens=8_000,
+    )
+    proposals = [
+        m.model_copy(update={"service": short.get(m.service, "")}) for m in result.data.matches
+    ]
+    refs = [ServiceRef(str(s.id), s.name, s.unit, s.price_cents) for s in services]
+    return validate_matches(proposals, lines, refs)
