@@ -43,6 +43,8 @@ class Quote(IdMixin, TimestampMixin, OrgScoped, Base):
     zip_file_id: Mapped[uuid.UUID | None] = mapped_column(
         UUID(as_uuid=True), ForeignKey("files.id", ondelete="SET NULL")
     )
+    # the fingerprint of the priced table the files were made from (domain/quote.fingerprint)
+    priced_hash: Mapped[str | None] = mapped_column(Text)
     created_by: Mapped[uuid.UUID | None] = mapped_column(
         UUID(as_uuid=True), ForeignKey("users.id", ondelete="SET NULL")
     )

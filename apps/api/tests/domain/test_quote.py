@@ -130,3 +130,14 @@ def test_the_table_keeps_the_rubriques_priced_and_puts_options_apart() -> None:
     assert [r.label for r in table.options] == ["Vitrerie haute"]
     assert (table.total_ht_cents, table.options_cents) == (307_500, 30_000)
     assert table.has_totals
+
+
+def test_the_fingerprint_changes_with_any_price_or_quantity() -> None:
+    from app.domain.quote import QuoteRow, QuoteTable, fingerprint
+
+    row = QuoteRow("12 Nettoyages", "Avant OPR", "m²", Decimal(2500), 150, 375_000)
+    base = fingerprint(QuoteTable([row], [], 375_000, 0))
+    assert base == fingerprint(QuoteTable([row], [], 375_000, 0))
+    other = QuoteRow("12 Nettoyages", "Avant OPR", "m²", Decimal(2500), 160, 400_000)
+    assert base != fingerprint(QuoteTable([other], [], 400_000, 0))
+    assert base != fingerprint(QuoteTable([row], [row], 375_000, 375_000))

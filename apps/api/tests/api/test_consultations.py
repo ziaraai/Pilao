@@ -127,6 +127,7 @@ def test_a_consultation_reads_prefills_and_sets_other_rubriques_aside(
     by_id = {ln["id"]: ln for ln in sheet["lines"]}
     assert by_id["DQE!B5"]["price_cents"] == 9000 and by_id["DQE!B5"]["source"] == "price"
     assert by_id["DQE!B5"]["service_name"] == "Nettoyage quotidien de locaux"
+    assert "2 prix repris de votre liste de prix : vérifiez-les." in sheet["warnings"]
     assert by_id["DQE!B42"]["service_name"] is None  # an hourly line: never a « jour » price
     assert sheet["excluded_sections"] == ["prestation annuelle", "interventions"]
     assert by_id["DQE!B32"]["excluded"] and by_id["DQE!B42"]["excluded"]

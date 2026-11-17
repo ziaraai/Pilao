@@ -256,8 +256,30 @@ price_sheets (             -- un fichier de prix (BPU, DPGF, DQE) d'un dossier
   lines jsonb,             -- [{id « Feuille!B5 », sheet, section, label, unit, quantity, price_cell, hours_cell, rate_cell, hourly, surcharge}]
   mirrors jsonb,           -- {ligne: [cases du lien rompu]}
   warnings jsonb, notes jsonb,
-  entries jsonb,           -- {ligne: {hours | price_cents}} saisis par l'entreprise
+  entries jsonb,           -- {ligne: {hours | price_cents | service_id}} saisis ou repris de la liste de prix
   rate_cents int null,     -- taux du dossier (sinon celui du profil)
+  excluded_sections jsonb, -- consultations (ADR-052) : rubriques mises de côté, ni remplies ni comptées
+  created_by null
+)
+```
+
+## Consultations (ADR-052)
+
+```sql
+bids.kind text default 'tender' check (kind in ('tender','consultation'))
+bids.contact_name text null, bids.contact_email text null   -- le contact de l'entreprise qui consulte
+
+price_services (           -- « Ma liste de prix » : les prestations de l'entreprise
+  id, org_id, name, unit check (m², ml, m³, heure, jour, forfait, u, passage, mois),
+  price_cents int check (>= 0), description null, position int
+)
+
+quotes (                   -- le devis de l'entreprise, un par dossier
+  id, org_id, bid_id unique, year int, seq int, unique (org_id, year, seq),  -- « D-2026-0001 »
+  status text check (status in ('drafting','ready','error')), error null,
+  inclusions jsonb,        -- [{text, file, page}] : « Prestations comprises », chacune avec sa page du CCTP (ou ajoutée par l'entreprise : file et page nuls)
+  validity_days int check (1..365) default 30, vat_bp int check (0..10000) default 2000,
+  file_id null, docx_file_id null, zip_file_id null,   -- PDF, Word, ZIP (devis + fichier du client rempli)
   created_by null
 )
 ```

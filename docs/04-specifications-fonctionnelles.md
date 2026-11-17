@@ -194,6 +194,17 @@ En tant qu'entreprise, quand le DCE fournit un cadre de mémoire à compléter (
 - CA4 : le dossier complet (.zip) contient le mémoire rempli dans le cadre quand le DCE en fournit un.
 - CA5 : pour un nouveau dossier, l'analyse reprend les rubriques du cadre comme plan imposé, mot pour mot.
 
+**US-4.10 Consultation d'une entreprise : le devis** (ADR-052)
+En tant qu'entreprise consultée par une entreprise générale (CCTP et DPGF de tout un lot reçus par e-mail), je veux chiffrer seulement ma partie avec mes prix et envoyer un devis propre en quelques minutes.
+- CA1 : « Nouveau dossier » propose « Appel d'offres public » ou « Consultation d'une entreprise (devis) » ; une consultation garde le client, le contact (nom, e-mail), le lot et la date de remise ; la liste des dossiers la marque « Consultation (devis) ».
+- CA2 : une consultation a les onglets Aperçu (client, contact, trois étapes), Documents reçus (pièces déposées à la main, une par une ou en ZIP, sans robot), Prix et Devis ; elle n'est jamais analysée (aucun crédit d'analyse).
+- CA3 : Profil > Chiffre d'affaires : « Ma liste de prix » (prestation, unité, prix HT, description), enregistrée en entier, 100 prestations au plus.
+- CA4 : à la lecture d'un fichier de prix, une ligne qui fait le même travail qu'une prestation de la liste, **dans la même unité**, reçoit son prix (« prix de votre liste : … »), toujours modifiable ; jamais un prix d'une autre unité. C'est vrai aussi dans un appel d'offres.
+- CA5 : dans une consultation, une rubrique sans ligne rapprochée est mise de côté : ni remplie ni comptée ; une case par rubrique (« Chiffrée par vous » / « Mise de côté ») la reprend ou l'écarte. Dans un appel d'offres rien n'est mis de côté d'office.
+- CA6 : « Préparer le devis » attend que tous les prix des rubriques retenues soient saisis ; avec un CCTP, il coûte 1 crédit (remboursé en cas d'échec) : l'IA lit les pages du CCTP qui nomment les rubriques chiffrées et écrit « Prestations comprises », chaque point avec son fichier et sa page ; sans CCTP, il est gratuit et sans ces points.
+- CA7 : le devis (Word et PDF) porte le logo, l'entreprise (adresse, SIRET), le client et le contact, l'objet et le lot, un numéro par entreprise et par année (« D-2026-0001 »), la date et la validité (30 jours par défaut), le tableau des lignes retenues par rubrique, le total HT, la TVA (20 % par défaut) et le TTC, les options à part et « Bon pour accord » ; une donnée de l'entreprise qui manque est écrite « [À COMPLÉTER : …] ».
+- CA8 : validité, TVA et points de « Prestations comprises » se modifient (un point ajouté est marqué « ajoutée par vous ») ; le devis est refait sans frais ; quand les prix changent, l'onglet le signale ; « Devis et fichier du client (ZIP) » donne le devis et le DPGF rempli des seules lignes retenues.
+
 ---
 
 ## Module 5 — Coffre-fort et tableau de bord

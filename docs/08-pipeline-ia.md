@@ -18,6 +18,8 @@
 | Rédaction d'un chapitre | `prompts/generation_memoire_chapitre.md` (0.4.0) | **Meilleur modèle en français** | Markdown + sources + flags ; `to_complete` en `{text, kind}` (tiroir du profil, ADR-048) |
 | Compléter une information | `prompts/completion_repere.md` | Modèle de rédaction (tâche `marker_fill`) | `{sentence, filled}` : la seule phrase qui contenait le repère, recollée par le serveur (ADR-048) |
 | (Analyse du DCE, 0.5.0) | `prompts/extraction_dce.md` | — | Quand le DCE fournit un cadre de mémoire, le plan imposé reprend ses rubriques (ADR-051) |
+| Rapprocher les lignes de « Ma liste de prix » | `prompts/rapprochement_prestations.md` | Modèle d'extraction (tâche `price_read`, dans la même lecture) | `{matches}` : ligne → prestation ; le serveur ne garde que les identifiants connus de même unité ; jamais un prix (ADR-052, version 0.1.0) |
+| Prestations comprises d'un devis | `prompts/devis_prestations.md` | Modèle de génération (tâche `quote_draft`) | `{inclusions}` : ce que le CCTP demande pour les rubriques chiffrées, chaque puce avec son fichier et sa page ; le serveur écarte toute puce citant une page non envoyée (ADR-052, version 0.1.0) |
 | Lire un fichier de prix | `prompts/lecture_bordereau_prix.md` | Modèle d'extraction (tâche `price_read`) | `{lines, notes}` : les cases à remplir du BPU / DPGF / DQE (une option ou une PSE marquée `option`, hors total), vérifiées par le serveur sur le fichier ; jamais un prix (ADR-049, version 0.4.0) |
 | Matrice de conformité | `prompts/matrice_conformite.md` | Modèle intermédiaire | liste `{requirement_ref, status, excerpt}` |
 | Lecture d'une attestation | `prompts/lecture_attestation.md` | Petit modèle avec vision | `{kind, siren, issued_at, valid_until}` |

@@ -35,11 +35,8 @@ export function PriceListCard() {
   if (!services.data) return null;
   return (
     <Card title="Ma liste de prix" color="brand" icon="profile">
-      <PriceListForm
-        key={services.data.map((s) => s.id).join()}
-        services={services.data}
-        onSaved={services.setData}
-      />
+      {/* built once from the list read: saving must not remount it (its « Liste enregistrée. ») */}
+      <PriceListForm services={services.data} onSaved={services.setData} />
     </Card>
   );
 }

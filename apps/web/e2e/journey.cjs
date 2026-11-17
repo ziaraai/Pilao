@@ -694,6 +694,104 @@ let current; // the page, for a screenshot when a step fails
     throw new Error("bid not pre-filled: " + subtitle);
   step("bid pre-filled from the DCE: " + subtitle);
 
+  // 6g. Consultations (ADR-052): « Ma liste de prix », a general contractor's request for
+  // a quote on the cleaning of a lot, its other rubriques set aside, the quote in PDF
+  await page.goto(`${WEB}/profil?onglet=chiffre-affaires`);
+  await page.getByRole("heading", { name: "Ma liste de prix" }).waitFor();
+  await page
+    .getByLabel("Prestation 1", { exact: true })
+    .fill("Nettoyage de fin de chantier avant OPR");
+  await page.getByLabel("Unité de la prestation 1").selectOption("m²");
+  await page.getByLabel("Prix HT de la prestation 1").fill("1,50");
+  await page.getByRole("button", { name: "Enregistrer la liste" }).click();
+  await page.getByText("Liste enregistrée.").waitFor();
+  await page.goto(`${WEB}/dossiers`);
+  await page.getByLabel("Consultation d'une entreprise (devis)").check();
+  await page.fill("#bid-title", "Annexe du lycée — nettoyage");
+  await page.fill("#bid-buyer", "Entreprise générale Exemple");
+  await page.fill("#bid-contact", "Mme Exemple");
+  await page.fill("#bid-contact-email", "contact@eg-exemple.fr");
+  await page.fill("#bid-lot", "Lot 16");
+  await page.getByRole("button", { name: "Créer", exact: true }).click();
+  await page.waitForURL(/\/dossiers\/[0-9a-f-]+$/);
+  await page.getByRole("tab", { name: "Devis" }).waitFor(); // the page has loaded
+  const consultTabs = await page.getByRole("tab").allTextContents();
+  for (const name of ["Aperçu", "Documents reçus", "Prix", "Devis"])
+    if (!consultTabs.some((t) => t.includes(name)))
+      throw new Error(
+        `the consultation has no « ${name} » tab: ${consultTabs}`,
+      );
+  if (consultTabs.some((t) => /Analyse|Mémoire/.test(t)))
+    throw new Error("a consultation shows the tender's tabs: " + consultTabs);
+  await page.getByRole("tab", { name: "Documents reçus" }).click();
+  await page.setInputFiles("#dce-upload", `${S}/consultation.zip`);
+  await page
+    .getByRole("button", { name: "Déposer les documents", exact: true })
+    .click();
+  await page
+    .getByRole("cell", { name: "DPGF lot 16.xlsx", exact: true })
+    .waitFor({ timeout: 60000 });
+  await page.getByRole("tab", { name: "Prix" }).click();
+  await page.getByRole("button", { name: /^Lire le fichier/ }).click();
+  await page
+    .getByText("prix de votre liste : Nettoyage de fin de chantier avant OPR")
+    .first()
+    .waitFor({ timeout: 60000 });
+  // the plasterwork is not the company's: set aside, neither priced nor counted
+  const plaster = page.getByRole("checkbox", {
+    name: "Mise de côté (pas chiffrée par vous)",
+  });
+  if ((await plaster.count()) !== 1)
+    throw new Error("the plasterwork rubrique was not set aside");
+  await page.getByRole("cell", { name: "7 500,00 €" }).last().waitFor(); // 1,50 × 2 × 2 500
+  await page.screenshot({ path: `${S}/consultation-prix.png`, fullPage: true });
+  await page.getByRole("tab", { name: "Devis" }).click();
+  await page.getByRole("button", { name: /^Préparer le devis/ }).click();
+  const year = new Date().getFullYear();
+  await page
+    .getByRole("heading", { name: `Devis n° D-${year}-0001` })
+    .waitFor({ timeout: 90000 });
+  await page.getByText("9 000,00 €").waitFor(); // 7 500 € HT + 20 %
+  await page.getByText("(CCTP lot 16.pdf, p. 2)").waitFor();
+  if (await page.getByText("Peinture des plafonds").count())
+    throw new Error("a bullet citing a page not sent reached the quote");
+  const [quotePdf] = await Promise.all([
+    page.waitForEvent("download"),
+    page.getByRole("button", { name: "Télécharger le PDF" }).click(),
+  ]);
+  await quotePdf.saveAs(`${S}/devis.pdf`);
+  if (
+    !fs
+      .readFileSync(`${S}/devis.pdf`)
+      .subarray(0, 5)
+      .equals(Buffer.from("%PDF-"))
+  )
+    throw new Error("the quote is not a PDF");
+  const [quoteWord] = await Promise.all([
+    page.waitForEvent("download"),
+    page.getByRole("button", { name: "Télécharger le Word" }).click(),
+  ]);
+  await quoteWord.saveAs(`${S}/devis.docx`);
+  const quoteText = docxText(`${S}/devis.docx`);
+  for (const expected of [
+    `Devis n° D-${year}-0001`,
+    "Entreprise générale Exemple",
+    "Mme Exemple — contact@eg-exemple.fr",
+    "Nettoyage avant OPR",
+    "Total TTC",
+  ])
+    if (!quoteText.includes(expected))
+      throw new Error(`the quote lacks « ${expected} »`);
+  if (quoteText.includes("Cloisons"))
+    throw new Error("a line set aside reached the quote");
+  await page.screenshot({
+    path: `${S}/consultation-devis.png`,
+    fullPage: true,
+  });
+  step(
+    "consultation: price list, plasterwork set aside, cleaning prefilled, quote D-…-0001 in PDF and Word",
+  );
+
   // 7. Knowledge base: upload, indexing, search
   await page
     .getByRole("link", { name: "Base documentaire", exact: true })

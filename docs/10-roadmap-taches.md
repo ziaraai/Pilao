@@ -97,6 +97,8 @@ Reste à faire :
 - [x] P4-11 « Ce qu'il manque » (US-4.7, ADR-048) : la liste des informations à compléter du dossier, chaque manque relié à son tiroir du profil (ajout depuis le dossier puis phrase complétée par l'IA), réponse sur place, phrase retirée, profil vide signalé avant la rédaction
 - [x] P4-12 Remplir le cadre de réponse fourni par l'acheteur (Q19, US-4.9, ADR-051) : le Word de l'acheteur rendu rempli, chaque chapitre sous son encadré, le plan qui suit le cadre
 - [x] P4-13 Chiffrage (US-4.8, ADR-049) : onglet « Prix », lecture du BPU / DPGF / DQE par l'IA, heures ou prix saisis, taux et majorations du profil, fichier de l'acheteur rempli case par case, heures données au mémoire
+- [x] P4-15 Consultations d'entreprises (US-4.10, ADR-052) : type de dossier « Consultation (devis) », « Ma liste de prix » rapprochée des lignes, rubriques des autres corps d'état mises de côté, devis numéroté en Word et PDF avec « Prestations comprises » sourcées du CCTP
+- [ ] P4-16 Consultations, suite : devis sans fichier de prix (lignes saisies), import Excel de la liste de prix, suivi des devis envoyés (CRM)
 - [ ] P4-14 Estimer les heures depuis les surfaces du CCTP et les cadences de l'entreprise (proposition à valider, jamais imposée)
 
 ## V2 (après validation)

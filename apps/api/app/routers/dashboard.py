@@ -40,7 +40,9 @@ class BidProgressOut(BaseModel):
     buyer_name: str | None
     deadline_at: datetime | None
     status: str
-    done: list[Literal["dce", "analysis", "memoir", "submitted"]]
+    kind: Literal["tender", "consultation"] = "tender"
+    # a consultation's stages are dce, prices, quote, submitted (ADR-052)
+    done: list[Literal["dce", "analysis", "memoir", "prices", "quote", "submitted"]]
     next_step: str | None
     waiting: bool  # Pilao is working on it (DCE read, analysis, drafting)
 
@@ -105,6 +107,7 @@ def dashboard(ctx: CurrentAuth, db: ScopedDb) -> DashboardOut:
                 buyer_name=f.buyer_name,
                 deadline_at=f.deadline_at,
                 status=f.status,
+                kind=f.kind,
                 done=list(p.done),
                 next_step=p.next_step,
                 waiting=p.waiting,

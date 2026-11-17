@@ -71,6 +71,7 @@ def upgrade() -> None:
         sa.Column("file_id", sa.UUID(), nullable=True),
         sa.Column("docx_file_id", sa.UUID(), nullable=True),
         sa.Column("zip_file_id", sa.UUID(), nullable=True),
+        sa.Column("priced_hash", sa.Text(), nullable=True),
         sa.Column("created_by", sa.UUID(), nullable=True),
         sa.Column("id", sa.UUID(), server_default=sa.text("gen_random_uuid()"), nullable=False),
         sa.Column(

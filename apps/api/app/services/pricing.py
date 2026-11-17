@@ -471,9 +471,8 @@ def run_read_prices(db: Session, sheet_id: uuid.UUID, storage: ObjectStorage) ->
                     }
                     prefilled += 1
             if prefilled:
-                warnings.append(
-                    f"{_plural(prefilled, 'prix')} repris de votre liste de prix : vérifiez-les."
-                )
+                check = "vérifiez-les" if prefilled > 1 else "vérifiez-le"
+                warnings.append(f"{prefilled} prix repris de votre liste de prix : {check}.")
         bid = db.get_one(Bid, sheet.bid_id)
         consultation = bid.kind == "consultation"
         sheet.excluded_sections = default_excluded(lines, matched) if consultation else []

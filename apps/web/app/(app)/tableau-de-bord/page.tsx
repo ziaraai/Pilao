@@ -36,6 +36,13 @@ const STAGES: { key: BidStage; label: string }[] = [
   { key: "memoir", label: "Mémoire" },
   { key: "submitted", label: "Déposé" },
 ];
+// a consultation (ADR-052): documents received, prices, quote, sent
+const CONSULTATION_STAGES: { key: BidStage; label: string }[] = [
+  { key: "dce", label: "Documents" },
+  { key: "prices", label: "Prix" },
+  { key: "quote", label: "Devis" },
+  { key: "submitted", label: "Envoyé" },
+];
 const LEVEL = {
   urgent: { dot: "bg-red-500", label: "Urgent" },
   soon: { dot: "bg-amber-400", label: "Bientôt" },
@@ -550,9 +557,10 @@ function Countdown({ bid }: { bid: BidProgress }) {
 
 function BidRow({ bid }: { bid: BidProgress }) {
   const submitted = bid.status === "submitted";
+  const stages = bid.kind === "consultation" ? CONSULTATION_STAGES : STAGES;
   const current = submitted
     ? null
-    : STAGES.find((s) => !bid.done.includes(s.key))?.key;
+    : stages.find((s) => !bid.done.includes(s.key))?.key;
   return (
     <li className={`grid gap-x-4 gap-y-2 xl:items-center ${BID_GRID} ${ROW}`}>
       <div className="min-w-0">
@@ -585,7 +593,7 @@ function BidRow({ bid }: { bid: BidProgress }) {
         className="flex flex-wrap items-center gap-1.5 text-xs"
         aria-label="Étapes du dossier"
       >
-        {STAGES.map((s, i) => {
+        {stages.map((s, i) => {
           const done = bid.done.includes(s.key);
           const next = s.key === current;
           return (

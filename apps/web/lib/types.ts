@@ -577,13 +577,16 @@ export type DashboardStep = {
   href: string;
   done: boolean;
 };
-export type BidStage = "dce" | "analysis" | "memoir" | "submitted";
+export type BidStage =
+  "dce" | "analysis" | "memoir" | "prices" | "quote" | "submitted";
 export type BidProgress = {
   id: string;
   title: string;
   buyer_name: string | null;
   deadline_at: string | null;
   status: string;
+  /** A consultation shows its own steps (ADR-052). */
+  kind?: BidKind;
   done: BidStage[];
   next_step: string | null;
   waiting: boolean;

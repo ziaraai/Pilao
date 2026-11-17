@@ -38,6 +38,7 @@ from app.domain.quote import (
     InclusionsOut,
     Page,
     QuoteTable,
+    fingerprint,
     keep_sourced,
     pick_pages,
     quote_table,
@@ -96,7 +97,7 @@ def _sheet(db: Session, bid: Bid) -> tuple[PriceSheet, list[PriceLine], Priced] 
     return best
 
 
-def _blocking(db: Session, bid: Bid) -> tuple[str, str] | None:
+def blocking(db: Session, bid: Bid) -> tuple[str, str] | None:
     """(code, message) when no quote can be prepared now."""
     if bid.kind != "consultation":
         return "not_consultation", NOT_CONSULTATION
@@ -146,14 +147,8 @@ def quote_out(db: Session, bid: Bid, quote: Quote) -> QuoteOut:
     table = quote_table(found[1], found[2]) if found else None
     ht = table.total_ht_cents if table and table.has_totals else None
     vat = vat_of(ht, quote.vat_bp) if ht is not None else None
-    stale = bool(
-        found
-        and quote.status == "ready"
-        and db.scalar(
-            select(func.count())
-            .select_from(PriceSheet)
-            .where(PriceSheet.bid_id == bid.id, PriceSheet.updated_at > quote.updated_at)
-        )
+    stale = (
+        table is not None and quote.status == "ready" and quote.priced_hash != fingerprint(table)
     )
     return QuoteOut(
         id=quote.id,
@@ -176,7 +171,7 @@ def quote_out(db: Session, bid: Bid, quote: Quote) -> QuoteOut:
 
 def quote_state(db: Session, bid: Bid) -> QuoteStateOut:
     quote = get_quote(db, bid)
-    blocked = _blocking(db, bid)
+    blocked = blocking(db, bid)
     return QuoteStateOut(
         quote=quote_out(db, bid, quote) if quote is not None else None,
         blocking=blocked[1] if blocked else None,
@@ -200,7 +195,7 @@ def _next_seq(db: Session, org_id: uuid.UUID, year: int) -> int:
 
 def start_quote(db: Session, user: User, bid: Bid, summarize: bool, queue: JobQueue) -> QuoteOut:
     credits.lock_org(db, bid.org_id)  # a second click waits here; numbers never collide
-    blocked = _blocking(db, bid)
+    blocked = blocking(db, bid)
     if blocked is not None:
         code, message = blocked
         raise ApiError(422 if code == "not_consultation" else 409, code, message)
@@ -254,7 +249,7 @@ def update_quote(
         raise ApiError(404, "not_found", "Aucun devis pour ce dossier.")
     if quote.status == "drafting" and quote.updated_at >= datetime.now(UTC) - STALE_AFTER:
         raise ApiError(409, "busy", "Le devis est en cours de préparation : réessayez.")
-    blocked = _blocking(db, bid)
+    blocked = blocking(db, bid)
     if blocked is not None:
         raise ApiError(409, blocked[0], blocked[1])
     if data.validity_days is not None:
@@ -408,6 +403,7 @@ def run_draft_quote(
         )
         stored.append(bundle.storage_key)
         quote.docx_file_id, quote.zip_file_id = word.id, bundle.id
+        quote.priced_hash = fingerprint(table)
         quote.file_id = pdf_record.id if pdf_record else None
         quote.status, quote.error = "ready", None
         set_job_status(db, JOB_DRAFT, quote.id, "done")

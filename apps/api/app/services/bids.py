@@ -13,6 +13,7 @@ from app.db.models import (
     File,
     GeneratedDocument,
     Memoir,
+    Quote,
     User,
 )
 from app.schemas.bids import BidIn, BidPatch, BidProgressOut
@@ -59,6 +60,9 @@ def delete_bid(db: Session, user: User, bid: Bid, storage: ObjectStorage) -> Non
             select(DceFile.file_id).where(DceFile.dce_version_id.in_([v.id for v in versions]))
         )
     )
+    quote = db.scalar(select(Quote).where(Quote.bid_id == bid.id))  # ADR-052
+    if quote is not None:
+        file_ids |= {f for f in (quote.file_id, quote.docx_file_id, quote.zip_file_id) if f}
     db.add(AuditLog(user_id=user.id, action="delete", entity="bid", entity_id=bid.id))
     release_matches(db, bid.id)  # its notice goes back to the watch list
     db.delete(bid)  # cascades to dce_versions and dce_files

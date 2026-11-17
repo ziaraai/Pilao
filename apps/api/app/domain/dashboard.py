@@ -41,6 +41,11 @@ class BidFacts:
     dce: str | None  # status of the latest DCE version, None before the first deposit
     analysis: str | None  # status of the latest analysis
     chapters: tuple[int, int, int] | None  # latest memoir: (drafted, drafting, total)
+    # a consultation (ADR-052): its prices complete, its quote's status
+    kind: str = "tender"
+    priced: bool = False
+    prices_read: bool = True  # a price file read (else: read it first)
+    quote: str | None = None
 
 
 @dataclass(frozen=True)
@@ -76,7 +81,41 @@ class Step:
     done: bool
 
 
+CONSULTATION_STAGES = ("dce", "prices", "quote", "submitted")
+
+
+def _consultation(b: BidFacts) -> Progress:
+    stages = {
+        "dce": b.dce == "ready",
+        "prices": b.priced,
+        "quote": b.quote == "ready",
+        "submitted": b.status in ("submitted", "won", "lost"),
+    }
+    done = tuple(s for s in CONSULTATION_STAGES if stages[s])
+    if b.status not in OPEN:
+        return Progress(done, None, False)
+    if b.dce is None:
+        return Progress(done, "Déposer les documents reçus", False)
+    if b.dce in ("pending", "processing"):
+        return Progress(done, "Lecture des documents en cours", True)
+    if b.dce == "error":
+        return Progress(done, "Déposer à nouveau les documents (lecture impossible)", False)
+    if b.quote == "drafting":
+        return Progress(done, "Préparation du devis en cours", True)
+    if not b.prices_read:
+        return Progress(done, "Lire le fichier de prix (onglet Prix)", False)
+    if not b.priced:
+        return Progress(done, "Saisir les prix (onglet Prix)", False)
+    if b.quote == "error":
+        return Progress(done, "Préparer à nouveau le devis", False)
+    if b.quote != "ready":
+        return Progress(done, "Préparer le devis", False)
+    return Progress(done, "Relire puis envoyer le devis", False)
+
+
 def progress(b: BidFacts) -> Progress:
+    if b.kind == "consultation":
+        return _consultation(b)
     drafted, drafting, total = b.chapters or (0, 0, 0)
     stages = {
         "dce": b.dce == "ready",

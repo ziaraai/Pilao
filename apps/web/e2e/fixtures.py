@@ -36,6 +36,22 @@ with zipfile.ZipFile(buf, "w") as zf:
     frame_buf = io.BytesIO(); frame.save(frame_buf)
     zf.writestr("DCE/Cadre de memoire technique.docx", frame_buf.getvalue())
 open(f"{out}/DCE_mairie.zip", "wb").write(buf.getvalue())
+# Consultations (ADR-052): a general contractor sends the whole lot; the company prices the cleaning
+lot_cctp = make_pdf([["CCTP LOT 16 - PLATRERIE PEINTURE", "4. Platrerie : cloisons et doublages"],
+                     ["12 NETTOYAGES", "Nettoyage avant OPR : sols, menuiseries, vitrages deux faces"],
+                     ["Peinture acrylique mate des plafonds"]])
+dpgf = Workbook(); ws = dpgf.active; ws.title = "DPGF"
+ws["A3"], ws["D3"], ws["E3"], ws["F3"], ws["G3"] = "Désignation", "Unité", "Quantité", "PU HT", "Total HT"
+ws["A4"] = "4 Plâtrerie"
+ws["A5"], ws["D5"], ws["E5"], ws["F5"], ws["G5"] = "Cloisons", "m²", 300, None, "=E5*F5"
+ws["A7"] = "12 Nettoyages"
+ws["A8"], ws["D8"], ws["E8"], ws["F8"], ws["G8"] = "Nettoyage avant OPR", "m²", 2500, None, "=E8*F8"
+ws["A9"], ws["D9"], ws["E9"], ws["F9"], ws["G9"] = "Nettoyage avant réception", "m²", 2500, None, "=E9*F9"
+dpgf_buf = io.BytesIO(); dpgf.save(dpgf_buf)
+buf = io.BytesIO()
+with zipfile.ZipFile(buf, "w") as zf:
+    zf.writestr("CCTP lot 16.pdf", lot_cctp); zf.writestr("DPGF lot 16.xlsx", dpgf_buf.getvalue())
+open(f"{out}/consultation.zip", "wb").write(buf.getvalue())
 open(f"{out}/attestation_urssaf.pdf", "wb").write(make_pdf([["ATTESTATION DE VIGILANCE", "URSSAF Rhone-Alpes"]]))
 open(f"{out}/memoire_2025.docx", "wb").write(make_docx([("Heading 1", "Moyens materiels"), ("Normal", "Nous utilisons des autolaveuses et des monobrosses professionnelles."), ("Normal", "Nous disposons de 3 autolaveuses Tennant T5 pour les grandes surfaces."), ("Normal", "Equipe : agents de service et 2 chefs d'equipe.")]))
 wb = Workbook(); ws = wb.active

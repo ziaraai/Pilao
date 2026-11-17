@@ -319,3 +319,59 @@ def test_a_dead_quote_is_closed_and_refunded(
     assert sweep_stale_works(db, queue) == 1
     assert quote_state(c, bid)["quote"]["status"] == "error"
     assert credits_left(c) == before
+
+
+def test_deleting_the_dossier_deletes_its_quote_files(
+    make_client: Factory,
+    outbox: Outbox,
+    queue: FakeQueue,
+    storage: MemoryStorage,
+    model: Model,
+    converter: FakeConverter,
+) -> None:
+    c = signed_in_client(make_client, outbox)
+    c.put("/profile/services", json={"services": SERVICES})
+    bid = consultation(c, queue, cctp=False)
+    read(c, queue, bid)
+    c.post(f"/bids/{bid}/quote", json={})
+    queue.drain_quotes(converter)
+    keys = []
+    for fmt in ("pdf", "docx", "zip"):
+        url = c.post(f"/bids/{bid}/quote/download", json={"format": fmt}).json()["url"]
+        keys.append(url.split("https://storage.test/")[1].split("?")[0])
+    assert all(k in storage.objects for k in keys)
+    assert c.delete(f"/bids/{bid}").status_code == 204
+    assert not any(k in storage.objects for k in keys)
+
+
+def test_a_price_changed_after_the_quote_is_signalled(
+    make_client: Factory, outbox: Outbox, queue: FakeQueue, model: Model, converter: FakeConverter
+) -> None:
+    c = signed_in_client(make_client, outbox)
+    c.put("/profile/services", json={"services": SERVICES})
+    bid = consultation(c, queue, cctp=False)
+    sheet = read(c, queue, bid)
+    c.post(f"/bids/{bid}/quote", json={})
+    queue.drain_quotes(converter)
+    assert quote_state(c, bid)["quote"]["stale"] is False
+    c.put(f"/price-sheets/{sheet['id']}", json={"entries": {"DQE!B5": {"price_cents": 9500}}})
+    assert quote_state(c, bid)["quote"]["stale"] is True
+
+
+def test_the_dashboard_follows_a_consultation(
+    make_client: Factory, outbox: Outbox, queue: FakeQueue, model: Model, converter: FakeConverter
+) -> None:
+    c = signed_in_client(make_client, outbox)
+    c.put("/profile/services", json={"services": SERVICES})
+    bid = consultation(c, queue, cctp=False)
+
+    def row() -> dict[str, Any]:
+        return next(b for b in c.get("/dashboard").json()["bids"] if b["id"] == bid)
+
+    assert row()["kind"] == "consultation"
+    assert row()["next_step"] == "Lire le fichier de prix (onglet Prix)"
+    read(c, queue, bid)
+    assert (row()["done"], row()["next_step"]) == (["dce", "prices"], "Préparer le devis")
+    c.post(f"/bids/{bid}/quote", json={})
+    queue.drain_quotes(converter)
+    assert row()["done"] == ["dce", "prices", "quote"]

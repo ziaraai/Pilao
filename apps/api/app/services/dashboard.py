@@ -7,6 +7,7 @@ import uuid
 from collections import defaultdict
 from dataclasses import dataclass
 from datetime import UTC, datetime
+from typing import Any
 
 from sqlalchemy import func, select
 from sqlalchemy.dialects.postgresql import distinct_on
@@ -34,6 +35,19 @@ class Board:
     getting_started: list[rules.Step]  # empty once every step is done
     bids: list[tuple[rules.BidFacts, rules.Progress]]  # in progress and awaiting a result
     all_bids: list[Bid]
+
+
+def _consultation(db: Session, bid: Bid) -> dict[str, Any]:
+    """A consultation's steps (ADR-052): its prices complete, its quote's status."""
+    from app.services import quotes  # avoid an import cycle
+
+    quote = quotes.get_quote(db, bid)
+    blocked = quotes.blocking(db, bid)
+    return {
+        "priced": blocked is None,
+        "prices_read": blocked is None or blocked[0] != "no_prices",
+        "quote": quote.status if quote is not None else None,
+    }
 
 
 def _latest(db: Session, model: type[DceVersion] | type[DceAnalysis]) -> dict[uuid.UUID, str]:
@@ -90,6 +104,8 @@ def build(db: Session, org: Organization) -> Board:
             dce=dce.get(b.id),
             analysis=analysis.get(b.id),
             chapters=chapters.get(b.id),
+            kind=b.kind,
+            **(_consultation(db, b) if b.kind == "consultation" else {}),
         )
         for b in bids
     ]

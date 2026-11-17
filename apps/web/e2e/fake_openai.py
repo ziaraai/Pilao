@@ -117,6 +117,35 @@ PRICES = {
 }
 
 
+# Consultations (ADR-052): the general contractor's DPGF, the price list matched, the quote
+LOT = {
+    "lines": [
+        {"sheet": "DPGF", "section": "4 Plâtrerie", "label": "Cloisons", "unit": "m²",
+         "quantity_cell": "E5", "price_cell": "F5"},
+        {"sheet": "DPGF", "section": "12 Nettoyages", "label": "Nettoyage avant OPR",
+         "unit": "m²", "quantity_cell": "E8", "price_cell": "F8"},
+        {"sheet": "DPGF", "section": "12 Nettoyages", "label": "Nettoyage avant réception",
+         "unit": "m²", "quantity_cell": "E9", "price_cell": "F9"},
+    ],
+    "notes": [],
+}
+
+
+def matches(prompt):
+    sid = next((ln.split(" · ")[0].strip() for ln in prompt.splitlines()
+                if "Nettoyage de fin de chantier" in ln), None)
+    if sid is None:
+        return {"matches": []}
+    return {"matches": [{"line": "DPGF!F8", "service": sid}, {"line": "DPGF!F9", "service": sid}]}
+
+
+INCLUSIONS = {"inclusions": [
+    {"text": "Nettoyage des sols, des menuiseries et des vitrages deux faces avant les OPR.",
+     "file": "CCTP lot 16.pdf", "page": 2},
+    {"text": "Peinture des plafonds.", "file": "CCTP lot 16.pdf", "page": 3},  # not sent
+]}
+
+
 class H(BaseHTTPRequestHandler):
     def _json(self, status, payload):
         data = json.dumps(payload).encode()
@@ -142,7 +171,9 @@ class H(BaseHTTPRequestHandler):
                   else chapter(prompt) if "Chapitre à rédiger" in prompt
                   else matrix(prompt) if "<memoir>" in prompt
                   else fill(prompt) if "<sentence>" in prompt
-                  else PRICES if "<grid>" in prompt
+                  else matches(prompt) if "<services>" in prompt
+                  else INCLUSIONS if "<passages>" in prompt
+                  else (LOT if "Plâtrerie" in prompt else PRICES) if "<grid>" in prompt
                   else score(prompt) if "<tender>" in prompt else ANSWER)
         body = {"id": "x", "object": "chat.completion", "created": 0, "model": "fake",
                 "choices": [{"index": 0, "finish_reason": "stop", "message": {"role": "assistant", "content": json.dumps(answer)}}],

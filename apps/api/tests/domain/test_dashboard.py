@@ -106,3 +106,36 @@ def test_the_first_steps_tick_themselves_off() -> None:
     assert fresh[1].detail == "À ajouter : Attestation de vigilance URSSAF, Extrait Kbis."
     later = getting_started(85, [], 2, 1)
     assert all(s.done for s in later)
+
+
+def test_a_consultation_has_its_own_steps() -> None:
+    """ADR-052: documents, prices, quote, sent; never « Lancer l'analyse »."""
+    from dataclasses import replace
+
+    def consult(**kw: object) -> BidFacts:
+        base = replace(bid(analysis=None, chapters=None), kind="consultation")
+        return replace(base, **kw)  # type: ignore[arg-type]
+
+    assert progress(consult(dce=None)).next_step == "Déposer les documents reçus"
+    assert progress(consult(dce="processing")).waiting
+    assert progress(consult(priced=False)).next_step == "Saisir les prix (onglet Prix)"
+    ready = progress(consult(priced=True))
+    assert ready.next_step == "Préparer le devis" and ready.done == ("dce", "prices")
+    assert progress(consult(priced=True, quote="drafting")).waiting
+    assert progress(consult(priced=True, quote="error")).next_step == "Préparer à nouveau le devis"
+    sent = progress(consult(priced=True, quote="ready"))
+    assert sent.next_step == "Relire puis envoyer le devis"
+    assert sent.done == ("dce", "prices", "quote")
+    assert progress(consult(priced=True, quote="ready", status="submitted")).done == (
+        "dce",
+        "prices",
+        "quote",
+        "submitted",
+    )
+
+
+def test_a_consultation_without_its_price_file_read_asks_for_it() -> None:
+    from dataclasses import replace
+
+    unread = replace(bid(analysis=None, chapters=None), kind="consultation", prices_read=False)
+    assert progress(unread).next_step == "Lire le fichier de prix (onglet Prix)"

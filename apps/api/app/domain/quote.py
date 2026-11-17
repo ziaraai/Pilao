@@ -6,6 +6,8 @@ priced: the AI reads the CCTP pages that name them, and every bullet must cite o
 it was sent (file + page); any other is dropped. Nothing else comes from the AI.
 """
 
+import hashlib
+import json
 import re
 import unicodedata
 from collections.abc import Iterable
@@ -163,3 +165,17 @@ def quote_table(lines: list[PriceLine], priced: Priced) -> QuoteTable:
         row = QuoteRow(ln.section, ln.label, ln.unit, ln.quantity, p.price_cents, p.total_cents)
         (options if ln.option else rows).append(row)
     return QuoteTable(rows, options, priced.total_cents, priced.options_cents)
+
+
+def fingerprint(table: QuoteTable) -> str:
+    """What the quote was made from: a price, a quantity, a line set aside or taken back, a
+    new rate in the profile all change it (the quote then says its prices changed)."""
+
+    def rows(items: list[QuoteRow]) -> list[list[object]]:
+        return [
+            [r.section, r.label, r.unit, str(r.quantity), r.price_cents, r.total_cents]
+            for r in items
+        ]
+
+    data = [rows(table.rows), rows(table.options), table.total_ht_cents, table.options_cents]
+    return hashlib.sha256(json.dumps(data, ensure_ascii=False).encode()).hexdigest()
