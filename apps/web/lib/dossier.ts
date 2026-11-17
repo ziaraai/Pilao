@@ -3,17 +3,26 @@
  * overview shows, the « À faire avant de répondre » list and the one-line summary of each
  * analysis block. Pure functions: the components only lay them out.
  */
+import { CONSULTATION_TABS } from "@/lib/consultation";
 import { VERDICT } from "@/lib/labels";
 import type {
   Analysis,
   Bid,
+  BidKind,
   DossierProgress,
   MemoirVersion,
 } from "@/lib/types";
 import { missingSummary } from "@/lib/missing";
 
 export type TabId =
-  "apercu" | "dce" | "analyse" | "memoire" | "prix" | "documents" | "export";
+  | "apercu"
+  | "dce"
+  | "analyse"
+  | "memoire"
+  | "prix"
+  | "documents"
+  | "export"
+  | "devis";
 
 export const TABS: { id: TabId; label: string }[] = [
   { id: "apercu", label: "Aperçu" },
@@ -35,16 +44,25 @@ export function defaultTab(
   return progress?.dce_ready ? "apercu" : "dce";
 }
 
+/** The tabs of a dossier: a consultation has the light ones (ADR-052). */
+export function tabsFor(
+  kind: BidKind = "tender",
+): { id: TabId; label: string }[] {
+  return kind === "consultation" ? CONSULTATION_TABS : TABS;
+}
+
 export function tabFromQuery(
   value: string | null,
   progress: DossierProgress | null | undefined,
+  kind: BidKind = "tender",
 ): TabId {
-  const known = TABS.find((t) => t.id === value);
+  const known = tabsFor(kind).find((t) => t.id === value);
   return known ? known.id : defaultTab(progress);
 }
 
 export function tabDone(
   progress: DossierProgress | null | undefined,
+  quoteReady = false,
 ): Record<TabId, boolean> {
   return {
     apercu: false,
@@ -54,6 +72,7 @@ export function tabDone(
     prix: false, // no « done » mark: prices are checked by the company until the deposit
     documents: !!progress?.documents_ready,
     export: !!progress?.exported,
+    devis: quoteReady,
   };
 }
 

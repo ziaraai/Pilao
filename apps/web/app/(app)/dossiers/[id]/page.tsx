@@ -6,12 +6,14 @@ import { Suspense, useEffect, useRef, useState } from "react";
 
 import { TabPanel, Tabs } from "@/components/blocks";
 import { AnalysisSection } from "@/components/dossier/analysis";
+import { ConsultationOverview } from "@/components/dossier/consultation-overview";
 import { DceSection } from "@/components/dossier/dce";
 import { DocumentsSection } from "@/components/dossier/documents";
 import { ExportTab } from "@/components/dossier/export";
 import { PricesTab } from "@/components/dossier/prices";
 import { MemoirSection } from "@/components/dossier/memoir";
 import { Overview } from "@/components/dossier/overview";
+import { QuoteTab } from "@/components/dossier/quote";
 import { ResultSection } from "@/components/dossier/result";
 import { TimeSpent } from "@/components/dossier/time-spent";
 import {
@@ -23,18 +25,19 @@ import {
   Select,
 } from "@/components/ui";
 import { api } from "@/lib/api";
+import { KIND_LABELS } from "@/lib/consultation";
 import {
-  TABS,
   type TabId,
   daysLeftText,
   defaultTab,
   tabDone,
   tabFromQuery,
+  tabsFor,
 } from "@/lib/dossier";
 import { formatDateTime } from "@/lib/format";
 import { useAction, useApi } from "@/lib/hooks";
 import { BID_STATUS } from "@/lib/labels";
-import type { Bid } from "@/lib/types";
+import type { Bid, QuoteState } from "@/lib/types";
 
 export default function BidPage() {
   // useSearchParams (the open tab) needs a Suspense boundary
@@ -50,6 +53,9 @@ function Dossier() {
   const router = useRouter();
   const params = useSearchParams();
   const bid = useApi<Bid>(`/bids/${id}`);
+  const consultation = bid.data?.kind === "consultation";
+  // a consultation's « Devis » step: its mark on the tab and the overview's steps (ADR-052)
+  const quote = useApi<QuoteState>(consultation ? `/bids/${id}/quote` : null);
   const [analysisKey, setAnalysisKey] = useState(0);
   const [memoirKey, setMemoirKey] = useState(0);
   const [anchor, setAnchor] = useState<{ id: string; n: number }>();
@@ -62,7 +68,7 @@ function Dossier() {
   const query = params.get("onglet");
   const tab: TabId | null = bid.data
     ? query
-      ? tabFromQuery(query, bid.data.progress)
+      ? tabFromQuery(query, bid.data.progress, bid.data.kind)
       : (firstTab ?? defaultTab(bid.data.progress))
     : null;
 
@@ -84,6 +90,7 @@ function Dossier() {
     // The native history API keeps useSearchParams in sync without a navigation round trip
     window.history.replaceState(null, "", `/dossiers/${id}?onglet=${next}`);
     bid.reload(); // the marks of the tabs follow the work done in the other tabs
+    if (consultation) quote.reload();
   }
 
   function open(next: TabId, target?: string) {
@@ -98,7 +105,7 @@ function Dossier() {
       </Link>
       <PageTitle
         title={b.title}
-        subtitle={`${b.buyer_name ?? "Acheteur à préciser"} · date limite : ${formatDateTime(b.deadline_at)}${b.deadline_at ? ` (${daysLeftText(b.deadline_at, new Date())})` : ""}`}
+        subtitle={`${consultation ? `${KIND_LABELS.consultation} · ` : ""}${b.buyer_name ?? (consultation ? "Client à préciser" : "Acheteur à préciser")} · date limite : ${formatDateTime(b.deadline_at)}${b.deadline_at ? ` (${daysLeftText(b.deadline_at, new Date())})` : ""}`}
         icon="bids"
         color="blue"
         actions={
@@ -148,10 +155,12 @@ function Dossier() {
       />
       {action.error && <Alert tone="danger">{action.error}</Alert>}
       <Tabs
-        tabs={TABS}
+        tabs={tabsFor(b.kind)}
         active={tab}
-        done={tabDone(b.progress)}
-        alert={{ analyse: (b.progress?.blocking_points ?? 0) > 0 }}
+        done={tabDone(b.progress, quote.data?.quote?.status === "ready")}
+        alert={{
+          analyse: !consultation && (b.progress?.blocking_points ?? 0) > 0,
+        }}
         onSelect={select}
       />
       {/* Every panel stays mounted (the background tracking keeps running); the overview
@@ -159,7 +168,16 @@ function Dossier() {
       <TabPanel id="apercu" active={tab === "apercu"}>
         {tab === "apercu" && (
           <>
-            <Overview key={`overview-${analysisKey}`} bid={b} onOpen={open} />
+            {consultation ? (
+              <ConsultationOverview
+                bid={b}
+                quote={quote.data}
+                onOpen={open}
+                onSaved={bid.setData}
+              />
+            ) : (
+              <Overview key={`overview-${analysisKey}`} bid={b} onOpen={open} />
+            )}
             <ResultSection
               key={`${b.id}:${b.status}`}
               bid={b}
@@ -176,43 +194,57 @@ function Dossier() {
       <TabPanel id="dce" active={tab === "dce"}>
         <DceSection
           bidId={id}
+          consultation={consultation}
           onProcessed={() => {
             setAnalysisKey((k) => k + 1);
             bid.reload();
           }}
         />
       </TabPanel>
-      <TabPanel id="analyse" active={tab === "analyse"}>
-        {/* Re-mounted when a DCE version finishes processing: its analysis has just started. */}
-        <AnalysisSection
-          key={analysisKey}
-          bidId={id}
-          openAnchor={anchor}
-          onReady={() => {
-            bid.reload(); // the analysis pre-fills buyer and deadline
-            setMemoirKey((k) => k + 1); // and unlocks the memoir outline
-          }}
-        />
-      </TabPanel>
-      <TabPanel id="memoire" active={tab === "memoire"}>
-        <MemoirSection
-          key={`memoir-${analysisKey}-${memoirKey}`}
-          bidId={id}
-          onChanged={() => bid.reload()}
-        />
-      </TabPanel>
-      <TabPanel id="prix" active={tab === "prix"}>
-        {tab === "prix" && <PricesTab bidId={id} />}
-      </TabPanel>
-      <TabPanel id="documents" active={tab === "documents"}>
-        <DocumentsSection
-          key={`documents-${analysisKey}-${memoirKey}`}
-          bidId={id}
-        />
-      </TabPanel>
-      <TabPanel id="export" active={tab === "export"}>
-        {tab === "export" && <ExportTab bidId={id} onOpen={open} />}
-      </TabPanel>
+      {consultation ? (
+        <>
+          <TabPanel id="prix" active={tab === "prix"}>
+            {tab === "prix" && <PricesTab bidId={id} consultation />}
+          </TabPanel>
+          <TabPanel id="devis" active={tab === "devis"}>
+            {tab === "devis" && <QuoteTab bidId={id} onOpen={open} />}
+          </TabPanel>
+        </>
+      ) : (
+        <>
+          <TabPanel id="analyse" active={tab === "analyse"}>
+            {/* Re-mounted when a DCE version finishes processing: its analysis has just started. */}
+            <AnalysisSection
+              key={analysisKey}
+              bidId={id}
+              openAnchor={anchor}
+              onReady={() => {
+                bid.reload(); // the analysis pre-fills buyer and deadline
+                setMemoirKey((k) => k + 1); // and unlocks the memoir outline
+              }}
+            />
+          </TabPanel>
+          <TabPanel id="memoire" active={tab === "memoire"}>
+            <MemoirSection
+              key={`memoir-${analysisKey}-${memoirKey}`}
+              bidId={id}
+              onChanged={() => bid.reload()}
+            />
+          </TabPanel>
+          <TabPanel id="prix" active={tab === "prix"}>
+            {tab === "prix" && <PricesTab bidId={id} />}
+          </TabPanel>
+          <TabPanel id="documents" active={tab === "documents"}>
+            <DocumentsSection
+              key={`documents-${analysisKey}-${memoirKey}`}
+              bidId={id}
+            />
+          </TabPanel>
+          <TabPanel id="export" active={tab === "export"}>
+            {tab === "export" && <ExportTab bidId={id} onOpen={open} />}
+          </TabPanel>
+        </>
+      )}
     </div>
   );
 }

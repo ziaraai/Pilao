@@ -70,7 +70,9 @@ export function sourceText(line: PriceLine, rateCents: number | null): string {
         ? "votre taux horaire"
         : `taux + majoration ${SURCHARGE_LABELS[line.surcharge]}`;
     case "price":
-      return "prix saisi";
+      return line.service_name
+        ? `prix de votre liste : ${line.service_name}`
+        : "prix saisi";
     default:
       return "";
   }

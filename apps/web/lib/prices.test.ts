@@ -34,6 +34,8 @@ function line(over: Partial<PriceLine> = {}): PriceLine {
     price_cents: null,
     total_cents: null,
     source: "none",
+    excluded: false,
+    service_name: null,
     ...over,
   };
 }
@@ -111,5 +113,15 @@ describe("totalLabel", () => {
     expect(totalLabel([line(), line({ id: "DPGF!E20", option: true })])).toBe(
       "Total HT de l'offre de base",
     );
+  });
+});
+
+describe("a price from « Ma liste de prix »", () => {
+  it("says which service it came from", () => {
+    const priced = line({ source: "price", price_cents: 9000 });
+    expect(sourceText(priced, null)).toBe("prix saisi");
+    expect(
+      sourceText({ ...priced, service_name: "Nettoyage avant OPR" }, null),
+    ).toBe("prix de votre liste : Nettoyage avant OPR");
   });
 });

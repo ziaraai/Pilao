@@ -15,6 +15,7 @@ import {
 } from "@/components/ui";
 import { api } from "@/lib/api";
 import { centsToInput, formatCents, parseEuros } from "@/lib/format";
+import { toggleSection } from "@/lib/consultation";
 import { useAction, useApi } from "@/lib/hooks";
 import { DCE_KINDS } from "@/lib/labels";
 import {
@@ -47,7 +48,14 @@ const reading = (p: Prices) =>
  * price, the company types hours or prices, Pilao computes with its rates and hands back
  * the buyer's own file, filled. Pilao never guesses an hour or a price.
  */
-export function PricesTab({ bidId }: { bidId: string }) {
+export function PricesTab({
+  bidId,
+  consultation = false,
+}: {
+  bidId: string;
+  /** A request for a quote (ADR-052): the rubriques not priced are set aside. */
+  consultation?: boolean;
+}) {
   const prices = useApi<Prices>(`/bids/${bidId}/prices`, reading);
   const [editRates, setEditRates] = useState(false);
   const data = prices.data;
@@ -80,8 +88,9 @@ export function PricesTab({ bidId }: { bidId: string }) {
       </Card>
       {data.files.length === 0 ? (
         <Empty>
-          Aucun fichier de prix (BPU, DPGF, DQE) dans le DCE. S&apos;il y en a
-          un, vérifiez son type dans l&apos;onglet DCE.
+          {consultation
+            ? "Aucun fichier de prix (BPU, DPGF, DQE) dans les documents reçus. S'il y en a un, vérifiez son type dans l'onglet Documents reçus."
+            : "Aucun fichier de prix (BPU, DPGF, DQE) dans le DCE. S'il y en a un, vérifiez son type dans l'onglet DCE."}
         </Empty>
       ) : (
         data.files.map((f) => (
@@ -90,6 +99,7 @@ export function PricesTab({ bidId }: { bidId: string }) {
             bidId={bidId}
             file={f}
             rates={data.rates}
+            consultation={consultation}
             onChanged={(next) => prices.setData(next)}
             reload={prices.reload}
           />
@@ -103,12 +113,14 @@ function PriceFileCard({
   bidId,
   file,
   rates,
+  consultation,
   onChanged,
   reload,
 }: {
   bidId: string;
   file: PriceFile;
   rates: Rates;
+  consultation: boolean;
   onChanged: (p: Prices) => void;
   reload: () => void;
 }) {
@@ -151,9 +163,10 @@ function PriceFileCard({
           ) : sheet === null ? (
             <div className="space-y-2">
               <p className="text-sm text-slate-700">
-                Pilao repère les lignes à chiffrer et les cases à remplir. Vous
-                saisissez ensuite vos heures ou vos prix ; Pilao calcule et
-                remplit le fichier de l&apos;acheteur.
+                Pilao repère les lignes à chiffrer et les cases à remplir, et y
+                met les prix de votre liste quand une ligne correspond. Vous
+                complétez vos heures ou vos prix ; Pilao calcule et remplit le
+                fichier {consultation ? "du client" : "de l'acheteur"}.
               </p>
               {readButton("Lire le fichier")}
             </div>
@@ -176,6 +189,7 @@ function PriceFileCard({
           key={`${sheet.id}:${sheet.lines.map((l) => l.id).join()}:${ratesSummary(rates)}`}
           sheet={sheet}
           rates={rates}
+          consultation={consultation}
           readAgain={readButton("Relire le fichier")}
           onSaved={reload} // the same lines of the other price files follow
         />
@@ -187,11 +201,13 @@ function PriceFileCard({
 function SheetEditor({
   sheet,
   rates,
+  consultation,
   readAgain,
   onSaved,
 }: {
   sheet: PriceSheet;
   rates: Rates;
+  consultation: boolean;
   readAgain: ReactNode;
   onSaved: () => void;
 }) {
@@ -236,6 +252,12 @@ function SheetEditor({
           {w}
         </Alert>
       ))}
+      {consultation && (
+        <p className="text-sm text-slate-700">
+          Cochez les rubriques que vous chiffrez. Celles mises de côté ne sont
+          ni remplies ni comptées dans votre total.
+        </p>
+      )}
       <DossierRate
         sheet={current}
         companyRate={rates.hourly_rate_cents}
@@ -258,6 +280,17 @@ function SheetEditor({
                 key={`${group.section}-${group.lines[0].id}`}
                 section={group.section}
                 lines={group.lines}
+                consultation={consultation}
+                excluded={current.excluded_sections.includes(group.section)}
+                onToggle={(priced) =>
+                  send({
+                    excluded_sections: toggleSection(
+                      current.excluded_sections,
+                      group.section,
+                      priced,
+                    ),
+                  })
+                }
                 rates={rates}
                 rateCents={current.rate_cents}
                 rate={rate}
@@ -361,6 +394,9 @@ function DossierRate({
 function SectionRows({
   section,
   lines,
+  consultation,
+  excluded,
+  onToggle,
   rates,
   rateCents,
   rate,
@@ -368,6 +404,9 @@ function SectionRows({
 }: {
   section: string;
   lines: PriceLine[];
+  consultation: boolean;
+  excluded: boolean;
+  onToggle: (priced: boolean) => void;
   rates: Rates;
   rateCents: number | null;
   rate: number | null;
@@ -383,23 +422,49 @@ function SectionRows({
           <th
             colSpan={5}
             scope="colgroup"
-            className="bg-amber-50 px-2 py-1.5 text-left text-xs font-semibold uppercase tracking-wide text-amber-900"
+            className={`px-2 py-1.5 text-left text-xs font-semibold uppercase tracking-wide ${excluded ? "bg-slate-100 text-slate-500" : "bg-amber-50 text-amber-900"}`}
           >
-            {section}
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <span>{section}</span>
+              {consultation && (
+                <label className="inline-flex items-center gap-1.5 font-medium normal-case tracking-normal">
+                  <input
+                    type="checkbox"
+                    checked={!excluded}
+                    onChange={(e) => onToggle(e.target.checked)}
+                  />
+                  {excluded
+                    ? "Mise de côté (pas chiffrée par vous)"
+                    : "Chiffrée par vous"}
+                </label>
+              )}
+            </div>
           </th>
         </tr>
       )}
-      {lines.map((line) => (
-        <LineRow
-          // a line changed from elsewhere (its twin in another file) shows its new figures
-          key={`${line.id}:${line.hours}:${line.source === "price" ? line.price_cents : ""}`}
-          line={line}
-          rates={rates}
-          rateCents={rateCents}
-          rate={rate}
-          onEntry={onEntry}
-        />
-      ))}
+      {lines.map((line) =>
+        line.excluded ? (
+          <tr key={line.id} className={`${tableRow} text-slate-400`}>
+            <td className="px-2 py-2">{line.label}</td>
+            <td className="whitespace-nowrap px-2 py-2 text-right">
+              {quantityText(line.quantity, line.unit)}
+            </td>
+            <td className="px-2 py-2 text-right text-xs" colSpan={3}>
+              mise de côté
+            </td>
+          </tr>
+        ) : (
+          <LineRow
+            // a line changed from elsewhere (its twin in another file) shows its new figures
+            key={`${line.id}:${line.hours}:${line.source === "price" ? line.price_cents : ""}`}
+            line={line}
+            rates={rates}
+            rateCents={rateCents}
+            rate={rate}
+            onEntry={onEntry}
+          />
+        ),
+      )}
     </>
   );
 }

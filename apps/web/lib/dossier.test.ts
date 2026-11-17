@@ -32,6 +32,9 @@ const SRC = { file: "RC.pdf", page: 1, dce_file_id: "f" };
 function bid(over: Partial<Bid> = {}): Bid {
   return {
     id: "b",
+    kind: "tender",
+    contact_name: null,
+    contact_email: null,
     title: "Entretien des gymnases",
     buyer_name: "Ville de Rillieux-la-Pape",
     reference: "26020M",
@@ -174,6 +177,7 @@ describe("tabs", () => {
       prix: false,
       documents: false,
       export: true,
+      devis: false,
     });
     expect(tabDone(null).dce).toBe(false);
   });

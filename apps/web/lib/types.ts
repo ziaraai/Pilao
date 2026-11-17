@@ -157,8 +157,13 @@ export type KnowledgeDoc = {
   created_at: string;
 };
 
+export type BidKind = "tender" | "consultation";
 export type Bid = {
   id: string;
+  /** « consultation »: a company asks for a quote on part of a lot (ADR-052). */
+  kind: BidKind;
+  contact_name: string | null;
+  contact_email: string | null;
   title: string;
   buyer_name: string | null;
   reference: string | null;
@@ -1051,7 +1056,11 @@ export type PriceLine = {
   hours: string | null;
   price_cents: number | null;
   total_cents: number | null;
-  source: "hours" | "price" | "hourly" | "none";
+  source: "hours" | "price" | "hourly" | "none" | "excluded";
+  /** In a rubrique set aside (consultations): neither priced nor counted. */
+  excluded: boolean;
+  /** « Ma liste de prix »: the service whose price was put on the line. */
+  service_name: string | null;
 };
 
 export type PriceSheet = {
@@ -1065,6 +1074,7 @@ export type PriceSheet = {
   total_cents: number; // the offer, options left out
   options_total_cents: number;
   missing_count: number;
+  excluded_sections: string[];
 };
 
 export type PriceFile = {
@@ -1076,3 +1086,44 @@ export type PriceFile = {
 };
 
 export type Prices = { rates: Rates; files: PriceFile[] };
+
+/** « Ma liste de prix » (ADR-052). */
+export type PriceUnit =
+  "m²" | "ml" | "m³" | "heure" | "jour" | "forfait" | "u" | "passage" | "mois";
+export type ServiceIn = {
+  name: string;
+  unit: string;
+  price_cents: number;
+  description: string | null;
+};
+export type Service = ServiceIn & { id: string };
+
+/** The company's quote for a consultation (ADR-052). */
+export type Inclusion = {
+  text: string;
+  file: string | null;
+  page: number | null;
+};
+export type Quote = {
+  id: string;
+  number: string;
+  status: "drafting" | "ready" | "error";
+  error: string | null;
+  inclusions: Inclusion[];
+  validity_days: number;
+  vat_bp: number;
+  total_ht_cents: number | null;
+  vat_cents: number | null;
+  total_ttc_cents: number | null;
+  options_total_cents: number;
+  has_pdf: boolean;
+  has_docx: boolean;
+  /** The prices changed since the files were made. */
+  stale: boolean;
+  updated_at: string;
+};
+export type QuoteState = {
+  quote: Quote | null;
+  blocking: string | null;
+  cctp: boolean;
+};

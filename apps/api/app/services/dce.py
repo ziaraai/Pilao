@@ -321,6 +321,8 @@ def run_process_dce(
 
             notify_update(db, fresh, mailer)
         return
+    if db.get_one(Bid, fresh.bid_id).kind == "consultation":
+        return  # no règlement to read: the documents feed the « Prix » tab (ADR-052)
     if queue is not None:
         from app.services.dce_analysis import request_analysis  # avoid an import cycle
 

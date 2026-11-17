@@ -160,3 +160,19 @@ def test_without_a_price_list_there_is_no_matching_call(
     sheet = read(c, queue, bid_with_prices(c, queue, kind="consultation"))
     assert not any("<services>" in p for p in reader.prompts)
     assert sheet["excluded_sections"] == [] and sheet["missing_count"] == 4  # no rate: all 4
+
+
+def test_a_consultation_is_never_analysed(
+    make_client: Factory, outbox: Outbox, queue: FakeQueue, reader: ReadAndMatch
+) -> None:
+    """No règlement to read in a consultation: the documents dropped cost nothing."""
+    from tests.api.test_pricing import credits_left
+
+    c = signed_in_client(make_client, outbox)
+    before = credits_left(c)
+    bid = bid_with_prices(c, queue, kind="consultation")
+    assert credits_left(c) == before
+    assert queue.pending_analyses == []
+    res = c.post(f"/bids/{bid}/analysis")
+    assert res.status_code == 422 and res.json()["error"]["code"] == "not_for_consultation"
+    assert credits_left(c) == before

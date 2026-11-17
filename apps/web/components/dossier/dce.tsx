@@ -30,9 +30,12 @@ const running = (versions: DceVersion[]) =>
 export function DceSection({
   bidId,
   onProcessed,
+  consultation = false,
 }: {
   bidId: string;
   onProcessed: () => void;
+  /** The documents a company sent with its request for a quote (ADR-052): no robot. */
+  consultation?: boolean;
 }) {
   const wasBusy = useRef(false);
   const [showOlder, setShowOlder] = useState(false);
@@ -43,15 +46,18 @@ export function DceSection({
     return busy;
   });
   const wasFetching = useRef(false);
-  const source = useApi<DceSource>(`/bids/${bidId}/dce/source`, (s) => {
-    const busy = retrievalRunning(s);
-    if (wasFetching.current && !busy) {
-      wasBusy.current = true; // the robot brought a version: it is being read
-      versions.reload();
-    }
-    wasFetching.current = busy;
-    return busy;
-  });
+  const source = useApi<DceSource>(
+    consultation ? null : `/bids/${bidId}/dce/source`,
+    (s) => {
+      const busy = retrievalRunning(s);
+      if (wasFetching.current && !busy) {
+        wasBusy.current = true; // the robot brought a version: it is being read
+        versions.reload();
+      }
+      wasFetching.current = busy;
+      return busy;
+    },
+  );
   // read only when Pilao brought an update: the banner's « analysed yet? »
   const hasUpdate = versions.data?.some((v) => v.origin === "update") ?? false;
   const analysis = useApi<Analysis>(
@@ -76,8 +82,23 @@ export function DceSection({
     ? updateBanner(versions.data, analysis.data?.dce_version ?? null)
     : null;
   return (
-    <Card title="DCE (dossier de consultation)" color="blue" icon="bids">
-      {source.data && (
+    <Card
+      title={
+        consultation
+          ? "Documents reçus du client"
+          : "DCE (dossier de consultation)"
+      }
+      color="blue"
+      icon="bids"
+    >
+      {consultation && (
+        <p className="mb-3 text-sm text-slate-700">
+          Déposez les pièces reçues par e-mail (CCTP, DPGF, BPU, plans…), une
+          par une ou en ZIP. Pilao lit le fichier de prix dans l&apos;onglet
+          Prix et le CCTP pour votre devis.
+        </p>
+      )}
+      {source.data && !consultation && (
         <DceSourcePanel
           bidId={bidId}
           source={source.data}
@@ -130,16 +151,26 @@ export function DceSection({
         label={
           versions.data?.length
             ? "Déposer une nouvelle version"
-            : "Déposer le DCE"
+            : consultation
+              ? "Déposer les documents"
+              : "Déposer le DCE"
         }
         accept=".zip,.pdf,.docx,.doc,.odt,.xlsx,.xls,.ods,.png,.jpg,.jpeg"
         multiple
         busy={deposit.busy || busy}
         onFiles={onFiles}
         title={
-          hasVersions ? "Glissez le DCE ici" : "Glissez ici le ZIP téléchargé"
+          consultation
+            ? "Glissez ici les documents reçus"
+            : hasVersions
+              ? "Glissez le DCE ici"
+              : "Glissez ici le ZIP téléchargé"
         }
-        hint="Le ZIP téléchargé sur le profil acheteur, ou les pièces une par une"
+        hint={
+          consultation
+            ? "Les pièces jointes de l'e-mail, une par une ou en ZIP"
+            : "Le ZIP téléchargé sur le profil acheteur, ou les pièces une par une"
+        }
       />
       <p className="mt-2 text-xs text-slate-500">
         PDF, Word, Excel, LibreOffice, images : 250 Mo maximum par fichier.
@@ -156,7 +187,9 @@ export function DceSection({
       )}
       {versions.data && versions.data.length === 0 && (
         <div className="mt-4">
-          <Empty>Aucun DCE déposé.</Empty>
+          <Empty>
+            {consultation ? "Aucun document déposé." : "Aucun DCE déposé."}
+          </Empty>
         </div>
       )}
       <div className="mt-4 space-y-4">

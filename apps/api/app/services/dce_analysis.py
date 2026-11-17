@@ -420,6 +420,10 @@ def close_stale(db: Session, analysis: DceAnalysis) -> None:
 
 
 def rerun(db: Session, bid: Bid, queue: JobQueue, user_id: uuid.UUID) -> DceAnalysis:
+    if bid.kind == "consultation":
+        raise ApiError(
+            422, "not_for_consultation", "Une consultation ne s'analyse pas : chiffrez-la."
+        )
     credits.lock_org(db, bid.org_id)  # a second click waits here, then finds the first one
     busy = select(DceAnalysis).where(
         DceAnalysis.bid_id == bid.id, DceAnalysis.status.in_(("pending", "processing"))
