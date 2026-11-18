@@ -15,7 +15,7 @@ import {
 } from "@/components/ui";
 import { api } from "@/lib/api";
 import { centsToInput, formatCents, parseEuros } from "@/lib/format";
-import { toggleSection } from "@/lib/consultation";
+import { chosenLabel, sectionsOf, toggleSection } from "@/lib/consultation";
 import { useAction, useApi } from "@/lib/hooks";
 import { DCE_KINDS } from "@/lib/labels";
 import {
@@ -23,6 +23,8 @@ import {
   decimalText,
   fileLabel,
   hoursInput,
+  hoursPlaceholder,
+  hoursWarning,
   lineHint,
   missingText,
   totalLabel,
@@ -253,10 +255,11 @@ function SheetEditor({
         </Alert>
       ))}
       {consultation && (
-        <p className="text-sm text-slate-700">
-          Cochez les rubriques que vous chiffrez. Celles mises de côté ne sont
-          ni remplies ni comptées dans votre total.
-        </p>
+        <RubriquePicker
+          all={sectionsOf(current.lines)}
+          excluded={current.excluded_sections}
+          onChange={(excluded) => send({ excluded_sections: excluded })}
+        />
       )}
       <DossierRate
         sheet={current}
@@ -269,34 +272,31 @@ function SheetEditor({
             <tr className={tableHead}>
               <th className="px-2 py-2 text-left">Désignation</th>
               <th className="px-2 py-2 text-right">Quantité</th>
-              <th className="px-2 py-2 text-right">Heures</th>
+              <th className="px-2 py-2 text-right">Heures par unité</th>
               <th className="px-2 py-2 text-right">Prix unitaire HT</th>
               <th className="px-2 py-2 text-right">Total HT</th>
             </tr>
           </thead>
           <tbody>
-            {bySection(current.lines).map((group) => (
-              <SectionRows
-                key={`${group.section}-${group.lines[0].id}`}
-                section={group.section}
-                lines={group.lines}
-                consultation={consultation}
-                excluded={current.excluded_sections.includes(group.section)}
-                onToggle={(priced) =>
-                  send({
-                    excluded_sections: toggleSection(
-                      current.excluded_sections,
-                      group.section,
-                      priced,
-                    ),
-                  })
-                }
-                rates={rates}
-                rateCents={current.rate_cents}
-                rate={rate}
-                onEntry={(id, entry) => send({ entries: { [id]: entry } })}
-              />
-            ))}
+            {bySection(current.lines)
+              // a consultation shows only the rubriques chosen in the list above
+              .filter(
+                (group) =>
+                  !consultation ||
+                  !current.excluded_sections.includes(group.section),
+              )
+              .map((group) => (
+                <SectionRows
+                  key={`${group.section}-${group.lines[0].id}`}
+                  section={group.section}
+                  lines={group.lines}
+                  excluded={current.excluded_sections.includes(group.section)}
+                  rates={rates}
+                  rateCents={current.rate_cents}
+                  rate={rate}
+                  onEntry={(id, entry) => send({ entries: { [id]: entry } })}
+                />
+              ))}
           </tbody>
           <tfoot>
             <tr className="border-t-2 border-slate-300 font-bold">
@@ -394,9 +394,7 @@ function DossierRate({
 function SectionRows({
   section,
   lines,
-  consultation,
   excluded,
-  onToggle,
   rates,
   rateCents,
   rate,
@@ -404,9 +402,7 @@ function SectionRows({
 }: {
   section: string;
   lines: PriceLine[];
-  consultation: boolean;
   excluded: boolean;
-  onToggle: (priced: boolean) => void;
   rates: Rates;
   rateCents: number | null;
   rate: number | null;
@@ -424,21 +420,7 @@ function SectionRows({
             scope="colgroup"
             className={`px-2 py-1.5 text-left text-xs font-semibold uppercase tracking-wide ${excluded ? "bg-slate-100 text-slate-500" : "bg-amber-50 text-amber-900"}`}
           >
-            <div className="flex flex-wrap items-center justify-between gap-2">
-              <span>{section}</span>
-              {consultation && (
-                <label className="inline-flex items-center gap-1.5 font-medium normal-case tracking-normal">
-                  <input
-                    type="checkbox"
-                    checked={!excluded}
-                    onChange={(e) => onToggle(e.target.checked)}
-                  />
-                  {excluded
-                    ? "Mise de côté (pas chiffrée par vous)"
-                    : "Chiffrée par vous"}
-                </label>
-              )}
-            </div>
+            {section}
           </th>
         </tr>
       )}
@@ -490,7 +472,7 @@ function LineRow({
     line.source === "price" ? centsToInput(line.price_cents) : "",
   );
   const [bad, setBad] = useState<string | null>(null);
-  const hint = lineHint(line, rates, rateCents);
+  const hint = lineHint(line, rates, rateCents) ?? hoursWarning(line);
 
   function saveHours() {
     const parsed = hoursInput(hours);
@@ -545,7 +527,7 @@ function LineRow({
             aria-label={`Heures : ${line.label}`}
             inputMode="decimal"
             className="ml-auto w-20 text-right"
-            placeholder="h"
+            placeholder={hoursPlaceholder(line.unit)}
             value={hours}
             onChange={(e) => setHours(e.target.value)}
             onBlur={saveHours}
@@ -576,5 +558,94 @@ function LineRow({
         {formatCents(line.total_cents)}
       </td>
     </tr>
+  );
+}
+
+/**
+ * Consultations (ADR-052): the rubriques the company prices, chosen in one list. Only those
+ * are shown and counted; the others are set aside (neither filled nor counted).
+ */
+function RubriquePicker({
+  all,
+  excluded,
+  onChange,
+}: {
+  all: string[];
+  excluded: string[];
+  onChange: (excluded: string[]) => void;
+}) {
+  const [open, setOpen] = useState(false);
+  // a click shows at once; the server's answer then becomes the truth again
+  const [draft, setDraft] = useState(excluded);
+  const [seen, setSeen] = useState(excluded);
+  if (excluded !== seen) {
+    setSeen(excluded);
+    setDraft(excluded);
+  }
+  const change = (next: string[]) => {
+    setDraft(next);
+    onChange(next);
+  };
+  const hidden = draft.filter((s) => all.includes(s)).length;
+  return (
+    <div className="relative">
+      <p className="text-sm font-medium text-slate-800">
+        Rubriques que vous chiffrez
+      </p>
+      <button
+        type="button"
+        aria-expanded={open}
+        aria-controls="rubriques-list"
+        onClick={() => setOpen(!open)}
+        className="mt-1 inline-flex min-w-64 items-center justify-between gap-3 rounded-md border border-slate-300 bg-white px-3 py-2 text-left text-sm text-slate-900 hover:border-slate-400"
+      >
+        {chosenLabel(all, draft)}
+        <span aria-hidden="true">{open ? "▴" : "▾"}</span>
+      </button>
+      {open && (
+        <div
+          id="rubriques-list"
+          role="group"
+          aria-label="Rubriques que vous chiffrez"
+          className="absolute z-10 mt-1 w-full max-w-lg rounded-md border border-slate-200 bg-white p-2 shadow-lg"
+        >
+          <div className="flex flex-wrap gap-2 border-b border-slate-100 pb-2">
+            <Button variant="secondary" onClick={() => change([])}>
+              Tout cocher
+            </Button>
+            <Button variant="secondary" onClick={() => change(all)}>
+              Tout décocher
+            </Button>
+          </div>
+          <ul className="max-h-72 overflow-y-auto py-1">
+            {all.map((section) => (
+              <li key={section}>
+                <label className="flex cursor-pointer items-start gap-2 rounded px-2 py-1.5 text-sm hover:bg-slate-50">
+                  <input
+                    type="checkbox"
+                    className="mt-0.5"
+                    checked={!draft.includes(section)}
+                    onChange={(e) =>
+                      change(toggleSection(draft, section, e.target.checked))
+                    }
+                  />
+                  <span>{section}</span>
+                </label>
+              </li>
+            ))}
+          </ul>
+          <div className="border-t border-slate-100 pt-2 text-right">
+            <Button onClick={() => setOpen(false)}>Fermer</Button>
+          </div>
+        </div>
+      )}
+      <p className="mt-1 text-xs text-slate-600">
+        {hidden === 1
+          ? "1 rubrique mise de côté n'est pas affichée : elle n'est ni remplie ni comptée dans votre total."
+          : hidden > 1
+            ? `${hidden} rubriques mises de côté ne sont pas affichées : elles ne sont ni remplies ni comptées dans votre total.`
+            : "Toutes les rubriques sont chiffrées."}
+      </p>
+    </div>
   );
 }

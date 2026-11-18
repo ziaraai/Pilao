@@ -2,6 +2,9 @@ import { describe, expect, it } from "vitest";
 
 import {
   KIND_LABELS,
+  chosenLabel,
+  excludedFromChosen,
+  sectionsOf,
   PRICE_UNITS,
   inclusionSource,
   quoteAction,
@@ -169,5 +172,42 @@ describe("the quote", () => {
     expect(
       quoteAction(state({ quote: { ...quote, status: "drafting" } })),
     ).toBe("drafting");
+  });
+});
+
+describe("the rubriques you price, chosen in one list", () => {
+  const lines = [
+    { section: "Travaux sur ouvrages existants" },
+    { section: "Travaux sur ouvrages existants" },
+    { section: "" },
+    { section: "Nettoyages" },
+    { section: "Peintures" },
+  ];
+
+  it("lists each rubrique once, in the file's order", () => {
+    expect(sectionsOf(lines)).toEqual([
+      "Travaux sur ouvrages existants",
+      "Nettoyages",
+      "Peintures",
+    ]);
+  });
+
+  it("sets aside every rubrique not chosen", () => {
+    const all = sectionsOf(lines);
+    expect(excludedFromChosen(all, ["Nettoyages"])).toEqual([
+      "Travaux sur ouvrages existants",
+      "Peintures",
+    ]);
+    expect(excludedFromChosen(all, all)).toEqual([]);
+  });
+
+  it("says how many are priced on the button", () => {
+    expect(chosenLabel(["a", "b", "c"], ["a", "c"])).toBe(
+      "1 rubrique chiffrée sur 3",
+    );
+    expect(chosenLabel(["a", "b", "c"], [])).toBe("Toutes les rubriques (3)");
+    expect(chosenLabel(["a", "b", "c"], ["a"])).toBe(
+      "2 rubriques chiffrées sur 3",
+    );
   });
 });

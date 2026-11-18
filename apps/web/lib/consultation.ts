@@ -99,3 +99,26 @@ export function quoteAction(state: QuoteState): QuoteAction {
   if (q?.status === "error") return "error";
   return state.cctp ? "prepare_paid" : "prepare_free";
 }
+
+/** The rubriques of a price file, each once, in the file's order (a line without one aside). */
+export function sectionsOf(lines: { section: string }[]): string[] {
+  const out: string[] = [];
+  for (const { section } of lines)
+    if (section && !out.includes(section)) out.push(section);
+  return out;
+}
+
+/** The rubriques set aside when only ``chosen`` are priced. */
+export function excludedFromChosen(all: string[], chosen: string[]): string[] {
+  return all.filter((s) => !chosen.includes(s));
+}
+
+/** The picker's button: « 1 rubrique chiffrée sur 13 ». */
+export function chosenLabel(all: string[], excluded: string[]): string {
+  const n = all.filter((s) => !excluded.includes(s)).length;
+  if (n === all.length) return `Toutes les rubriques (${all.length})`;
+  if (n === 0) return `Aucune rubrique chiffrée (${all.length})`;
+  return n === 1
+    ? `1 rubrique chiffrée sur ${all.length}`
+    : `${n} rubriques chiffrées sur ${all.length}`;
+}

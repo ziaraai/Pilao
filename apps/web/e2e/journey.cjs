@@ -737,12 +737,21 @@ let current; // the page, for a screenshot when a step fails
     .getByText("prix de votre liste : Nettoyage de fin de chantier avant OPR")
     .first()
     .waitFor({ timeout: 60000 });
-  // the plasterwork is not the company's: set aside, neither priced nor counted
-  const plaster = page.getByRole("checkbox", {
-    name: "Mise de côté (pas chiffrée par vous)",
-  });
-  if ((await plaster.count()) !== 1)
+  // the plasterwork is not the company's: set aside, not shown, neither priced nor counted
+  await page.getByText("1 rubrique mise de côté n'est pas affichée").waitFor();
+  if (await page.getByText("Cloisons", { exact: true }).count())
+    throw new Error("a rubrique set aside is still shown");
+  await page.getByRole("button", { name: "1 rubrique chiffrée sur 2" }).click();
+  const plaster = page.getByRole("checkbox", { name: "4 Plâtrerie" });
+  if (await plaster.isChecked())
     throw new Error("the plasterwork rubrique was not set aside");
+  await page.screenshot({ path: `${S}/consultation-rubriques.png` });
+  // taken back from the list it shows again, then it is set aside again
+  await plaster.check();
+  await page.getByText("Cloisons", { exact: true }).waitFor();
+  await plaster.uncheck();
+  await page.getByText("1 rubrique mise de côté n'est pas affichée").waitFor();
+  await page.getByRole("button", { name: "Fermer", exact: true }).click();
   await page.getByRole("cell", { name: "7 500,00 €" }).last().waitFor(); // 1,50 × 2 × 2 500
   await page.screenshot({ path: `${S}/consultation-prix.png`, fullPage: true });
   await page.getByRole("tab", { name: "Devis" }).click();

@@ -131,3 +131,18 @@ export function quantityText(quantity: string | null, unit: string): string {
     n >= 2 && PLURALS.has(word.toLowerCase()) && !word.endsWith("s");
   return `${decimalText(quantity)} ${plural ? `${word}s` : word}`.trim();
 }
+
+const PER_AREA = /^(m²|m2|ml|m³|m3)$/i;
+
+/** Hours on a line priced by the m², ml or m³ are hours for ONE unit: 4 h per m² is rarely
+ * meant (it makes 120 €/m² at 30 €/h). Null when nothing looks wrong. */
+export function hoursWarning(line: PriceLine): string | null {
+  const unit = line.unit.trim();
+  if (line.hours == null || !PER_AREA.test(unit)) return null;
+  if (Number(line.hours) < 1) return null;
+  return `${decimalText(line.hours)} h par ${unit} : est-ce bien le temps pour un seul ${unit} ? Sinon, saisissez le prix unitaire.`;
+}
+
+export function hoursPlaceholder(unit: string): string {
+  return unit.trim() ? `h/${unit.trim()}` : "h";
+}

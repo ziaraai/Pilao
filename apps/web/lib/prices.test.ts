@@ -4,6 +4,8 @@ import {
   bySection,
   decimalText,
   hoursInput,
+  hoursPlaceholder,
+  hoursWarning,
   lineHint,
   missingText,
   quantityText,
@@ -123,5 +125,24 @@ describe("a price from « Ma liste de prix »", () => {
     expect(
       sourceText({ ...priced, service_name: "Nettoyage avant OPR" }, null),
     ).toBe("prix de votre liste : Nettoyage avant OPR");
+  });
+});
+
+describe("hours typed on a line priced by the m²", () => {
+  it("are questioned when they cannot be for a single m²", () => {
+    const m2 = line({ unit: "m²", hours: "4" });
+    expect(hoursWarning(m2)).toBe(
+      "4 h par m² : est-ce bien le temps pour un seul m² ? Sinon, saisissez le prix unitaire.",
+    );
+    expect(hoursWarning({ ...m2, hours: "0.02" })).toBeNull();
+    expect(hoursWarning(line({ unit: "jour", hours: "4" }))).toBeNull();
+    expect(
+      hoursWarning(line({ unit: "ml", hours: "1,5".replace(",", ".") })),
+    ).toContain("1,5 h par ml");
+  });
+
+  it("names the unit in the hours box", () => {
+    expect(hoursPlaceholder("m²")).toBe("h/m²");
+    expect(hoursPlaceholder("")).toBe("h");
   });
 });
