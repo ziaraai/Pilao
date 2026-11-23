@@ -19,7 +19,7 @@ import {
   tableRow,
 } from "@/components/ui";
 import { api } from "@/lib/api";
-import { originLabel, updateBanner } from "@/lib/dce-source";
+import { analysisCall, originLabel, updateBanner } from "@/lib/dce-source";
 import { useAction, useApi } from "@/lib/hooks";
 import { DCE_KINDS, JOB_STATUS } from "@/lib/labels";
 import type { Analysis, DceSource, DceVersion } from "@/lib/types";
@@ -58,21 +58,41 @@ export function DceSection({
       return busy;
     },
   );
-  // read only when Pilao brought an update: the banner's « analysed yet? »
-  const hasUpdate = versions.data?.some((v) => v.origin === "update") ?? false;
+  const latest = versions.data?.[0];
+  const latestReady = latest?.status === "ready";
+  // the analysis behind the DCE: « Lancer l'analyse », « Mettre à jour », the update banner
   const analysis = useApi<Analysis>(
-    hasUpdate ? `/bids/${bidId}/analysis` : null,
+    !consultation && versions.data?.some((v) => v.status === "ready")
+      ? `/bids/${bidId}/analysis`
+      : null,
+    (a) => a.status === "pending" || a.status === "processing",
   );
   const deposit = useAction();
   const kind = useAction();
   const analyse = useAction();
+  // 23/11: files added to a DCE already read are forgotten pieces by default, not a new version
+  const [mode, setMode] = useState<"add" | "new">("add");
+  const adding = latestReady && mode === "add";
 
   async function onFiles(files: File[]) {
     const form = new FormData();
     files.forEach((f) => form.append("files", f));
-    if (await deposit.run(() => api(`/bids/${bidId}/dce`, { form }))) {
+    // a deposit by hand waits for « Lancer l'analyse »: forgotten pieces can be added first
+    const query = adding ? "mode=add" : "mode=new&analyse=false";
+    if (await deposit.run(() => api(`/bids/${bidId}/dce?${query}`, { form }))) {
       wasBusy.current = true;
       versions.reload();
+    }
+  }
+
+  async function launchAnalysis() {
+    if (
+      await analyse.run(() =>
+        api(`/bids/${bidId}/analysis`, { method: "POST" }),
+      )
+    ) {
+      analysis.reload();
+      onProcessed(); // the analysis card follows its progress
     }
   }
 
@@ -81,6 +101,10 @@ export function DceSection({
   const update = versions.data
     ? updateBanner(versions.data, analysis.data?.dce_version ?? null)
     : null;
+  const call =
+    !consultation && versions.data && !analysis.loading
+      ? analysisCall(versions.data, analysis.data ?? null)
+      : null;
   return (
     <Card
       title={
@@ -131,45 +155,114 @@ export function DceSection({
               action="dce_analysis"
               label="Analyser la nouvelle version"
               busy={analyse.busy}
-              onClick={async () => {
-                if (
-                  await analyse.run(() =>
-                    api(`/bids/${bidId}/analysis`, { method: "POST" }),
-                  )
-                ) {
-                  analysis.reload();
-                  onProcessed(); // the analysis card follows its progress
-                }
-              }}
+              onClick={launchAnalysis}
             />
           </div>
           {analyse.error && <Alert tone="danger">{analyse.error}</Alert>}
         </div>
       )}
+      {call && (
+        <section
+          aria-label="Analyse du DCE"
+          className="mb-4 space-y-3 rounded-lg border-2 border-brand-navy bg-white p-4"
+        >
+          {call.kind === "launch" ? (
+            <>
+              <p className="text-sm text-slate-800">
+                <b>
+                  Le DCE est lu : {call.pieces} pièce
+                  {call.pieces > 1 ? "s" : ""}.
+                </b>{" "}
+                Il en manque une ? Ajoutez-la ci-dessous (« pièces oubliées »).
+                Tout est là ? Lancez l&apos;analyse.
+              </p>
+              <PaidButton
+                action="dce_analysis"
+                label={`Lancer l'analyse (${call.pieces} pièce${call.pieces > 1 ? "s" : ""})`}
+                busy={analyse.busy}
+                onClick={launchAnalysis}
+              />
+            </>
+          ) : (
+            <>
+              <p className="text-sm text-slate-800">
+                <b>Des pièces ont été ajoutées après l&apos;analyse.</b>{" "}
+                Mettez-la à jour pour qu&apos;elle les lise aussi.
+              </p>
+              <PaidButton
+                action="dce_analysis"
+                label="Mettre à jour l'analyse"
+                busy={analyse.busy}
+                onClick={launchAnalysis}
+              />
+            </>
+          )}
+          {analyse.error && <Alert tone="danger">{analyse.error}</Alert>}
+        </section>
+      )}
+      {latestReady && (
+        <fieldset className="mb-3 space-y-1.5 text-sm">
+          <legend className="mb-1 font-semibold text-slate-800">
+            Les fichiers que vous ajoutez sont :
+          </legend>
+          <label className="flex items-start gap-2">
+            <input
+              type="radio"
+              name="dce-mode"
+              className="mt-1"
+              checked={mode === "add"}
+              onChange={() => setMode("add")}
+            />
+            <span>
+              <b>Des pièces oubliées</b> : elles complètent le DCE actuel
+              (version {latest?.version}), les autres pièces restent.
+            </span>
+          </label>
+          <label className="flex items-start gap-2">
+            <input
+              type="radio"
+              name="dce-mode"
+              className="mt-1"
+              checked={mode === "new"}
+              onChange={() => setMode("new")}
+            />
+            <span>
+              <b>Une nouvelle version publiée par l&apos;acheteur</b> : Pilao la
+              compare à la précédente.
+            </span>
+          </label>
+        </fieldset>
+      )}
       <UploadButton
         id="dce-upload"
         label={
-          versions.data?.length
-            ? "Déposer une nouvelle version"
-            : consultation
-              ? "Déposer les documents"
-              : "Déposer le DCE"
+          adding
+            ? "Ajouter au DCE"
+            : versions.data?.length
+              ? "Déposer la nouvelle version"
+              : consultation
+                ? "Déposer les documents"
+                : "Déposer le DCE"
         }
         accept=".zip,.pdf,.docx,.doc,.odt,.xlsx,.xls,.ods,.png,.jpg,.jpeg"
         multiple
         busy={deposit.busy || busy}
         onFiles={onFiles}
         title={
-          consultation
-            ? "Glissez ici les documents reçus"
-            : hasVersions
-              ? "Glissez le DCE ici"
-              : "Glissez ici le ZIP téléchargé"
+          adding
+            ? "Glissez ici les pièces qui manquent"
+            : consultation
+              ? "Glissez ici les documents reçus"
+              : hasVersions
+                ? "Glissez le DCE ici"
+                : "Glissez ici le DCE téléchargé"
         }
         hint={
-          consultation
-            ? "Les pièces jointes de l'e-mail, une par une ou en ZIP"
-            : "Le ZIP téléchargé sur le profil acheteur, ou les pièces une par une"
+          adding
+            ? "Une par une, en ZIP ou un dossier entier"
+            : consultation
+              ? "Les pièces jointes de l'e-mail, une par une, en ZIP ou en dossier"
+              : "Les ZIP, les fichiers ou le dossier entier téléchargés sur le profil acheteur"
         }
       />
       <p className="mt-2 text-xs text-slate-500">
@@ -285,10 +378,10 @@ export function DceSection({
               )}
               {v.skipped.length > 0 && (
                 <div className="text-xs text-slate-600">
-                  <p className="font-medium">Pièces non retenues :</p>
+                  <p className="font-medium">Fichiers non lus ou en double :</p>
                   <ul className="list-inside list-disc">
-                    {v.skipped.map((s) => (
-                      <li key={s.path}>
+                    {v.skipped.map((s, i) => (
+                      <li key={`${s.path}-${i}`}>
                         {s.path} — {s.reason}
                       </li>
                     ))}

@@ -579,3 +579,14 @@ Format : numéro, date, décision, raison, statut. Ajouter une entrée pour chaq
   - Consultation : la carte « La consultation » en haut, les étapes Documents reçus · Prix · Devis, « J'ai envoyé le devis ».
 - **Alternatives écartées** : un assistant pas à pas qui bloque l'étape suivante (Abdraouf saute souvent des étapes : prix avant le mémoire) ; ouvrir l'étape en cours par défaut (c'est ce qui rendait la page chargée) ; résumer l'analyse par l'IA (une étape payante de plus, et des notes sans source).
 - **Statut** : construit ; à faire essayer à Abdraouf.
+
+## ADR-054 — Le DCE déposé en plusieurs fois, l'analyse au feu vert
+
+- **Date** : 2026-11-23
+- **Contexte** : sur un DCE d'AWS (Loire, CG42), Faycal télécharge plusieurs ZIP et un dossier « Pièces communes ». Glisser le dossier ne déposait rien (Pilao ne recevait que des fichiers) ; un fichier d'un format non lu faisait refuser tout le dépôt ; ajouter le RC oublié créait une version 5 d'une seule pièce, « 6 supprimées » ; et l'analyse partait dès le premier dépôt, avant les pièces manquantes. « Je veux pouvoir ajouter des fichiers avant de commencer l'analyse, même un par un ; et choisir : nouvelle version, ou document manquant de la version précédente. »
+- **Décision** :
+  - Dépôt : les dossiers glissés sont parcourus (`collectFiles`), les fichiers choisis un par un s'additionnent (`mergeFiles`), 200 fichiers par dépôt ; un fichier non lu est listé (« format non lu par Pilao ») au lieu de refuser le lot, seul un lot sans rien de lisible est refusé.
+  - `POST /bids/{id}/dce?mode=add` : les fichiers complètent la dernière version lue (`add_files`, `app/services/dce.py`) ; le traitement ne lit que les fichiers déposés pas encore lus (`dce_versions.read_file_ids`), retrouve ce qui vient de chacun (`dce_files.source_file_id`) pour qu'une reprise après coupure ne double rien, signale les doublons, et une archive illisible est listée sans abîmer la version ; `completed_at` date le dernier ajout. `mode=new` (par défaut) reste une nouvelle version comparée à la précédente.
+  - `analyse=false` (`dce_versions.auto_analysis`) : le dépôt à la main attend « Lancer l'analyse » (carte du DCE, étape Analyse, « Prochaine étape ») ; le robot garde l'analyse automatique. Des pièces ajoutées après l'analyse proposent « Mettre à jour l'analyse » (`analysisCall`). Une nouvelle analyse est une action payante comme avant.
+- **Alternatives écartées** : relire toute la version à chaque ajout (les pièces changeraient d'identité : sources de l'analyse et fichiers de prix perdus) ; garder les fichiers d'un format inconnu (stockage de n'importe quel fichier, sans pouvoir les lire) ; fusionner d'office toute version d'une seule pièce dans la précédente (l'acheteur publie parfois un seul fichier modifié).
+- **Statut** : construit ; à essayer par Faycal sur le DCE d'AWS (redéposer les 6 pièces de la version 4 en « pièces oubliées » dans la version 5).

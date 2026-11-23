@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { acceptsFile, readyText } from "./upload";
+import { acceptsFile, collectFiles, mergeFiles, readyText } from "./upload";
 
 describe("file drop", () => {
   it("keeps a file a site sent with a wrong type when its name is right (AWS)", () => {
@@ -44,5 +44,53 @@ describe("file drop", () => {
     expect(readyText(["1.pdf", "2.pdf", "3.pdf", "4.pdf", "5.pdf"])).toBe(
       "5 fichiers prêts à être déposés : 1.pdf, 2.pdf, 3.pdf…",
     );
+  });
+});
+
+describe("a DCE dropped as folders (AWS: « Pièces communes », several ZIPs)", () => {
+  const file = (name: string) => new File(["x"], name);
+  const leaf = (name: string) => ({
+    isFile: true,
+    isDirectory: false,
+    name,
+    file: (ok: (f: File) => void) => ok(file(name)),
+  });
+  // a folder gives its entries in batches, then an empty batch
+  const folder = (name: string, children: object[]) => ({
+    isFile: false,
+    isDirectory: true,
+    name,
+    createReader: () => {
+      let given = false;
+      return {
+        readEntries: (ok: (e: object[]) => void) => {
+          ok(given ? [] : children);
+          given = true;
+        },
+      };
+    },
+  });
+
+  it("takes every file of the folders and their sub-folders", async () => {
+    const dropped = [
+      folder("Pièces communes", [
+        leaf("RC.pdf"),
+        folder("Annexes", [leaf("Plans.zip"), leaf("BPU.xlsx")]),
+      ]),
+      leaf("CCTP.pdf"),
+    ];
+    const files = await collectFiles(dropped as never);
+    expect(files.map((f) => f.name).sort()).toEqual([
+      "BPU.xlsx",
+      "CCTP.pdf",
+      "Plans.zip",
+      "RC.pdf",
+    ]);
+  });
+
+  it("adds the files picked one by one, without twins", () => {
+    const a = file("RC.pdf");
+    const merged = mergeFiles([a], [file("CCTP.pdf"), file("RC.pdf")]);
+    expect(merged.map((f) => f.name)).toEqual(["RC.pdf", "CCTP.pdf"]);
   });
 });

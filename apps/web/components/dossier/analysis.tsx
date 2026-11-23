@@ -116,9 +116,12 @@ export function AnalysisSection({
   bidId,
   onReady,
   openAnchor,
+  dceReady = false,
 }: {
   bidId: string;
   onReady?: () => void;
+  /** The DCE is read: the analysis can be launched (it waits for the go, 23/11). */
+  dceReady?: boolean;
   /** Opens one block (« bloc-watch »…): a line of the overview's to-do list was clicked. */
   openAnchor?: { id: string; n: number };
 }) {
@@ -149,11 +152,40 @@ export function AnalysisSection({
   const a = analysis.data;
 
   if (analysis.error && !a) {
+    const none = analysis.error === "Aucune analyse pour ce dossier.";
+    if (none && dceReady)
+      return (
+        <Card title="Analyse du DCE" color="blue">
+          <div className="flex flex-col items-start gap-3">
+            <p className="text-sm text-slate-700">
+              Le DCE est lu. Vérifiez que toutes les pièces sont déposées (étape
+              DCE), puis lancez l&apos;analyse.
+            </p>
+            <PaidButton
+              action="dce_analysis"
+              label="Lancer l'analyse"
+              busy={rerun.busy}
+              onClick={async () => {
+                if (
+                  await rerun.run(() =>
+                    api(`/bids/${bidId}/analysis`, { method: "POST" }),
+                  )
+                ) {
+                  wasWorking.current = true;
+                  analysis.reload();
+                  onReady?.(); // the step bar and the next step follow
+                }
+              }}
+            />
+            {rerun.error && <Alert tone="danger">{rerun.error}</Alert>}
+          </div>
+        </Card>
+      );
     return (
       <Card title="Analyse du DCE" color="blue">
         <Empty>
-          {analysis.error === "Aucune analyse pour ce dossier."
-            ? "L'analyse démarrera dès que le DCE sera déposé et traité."
+          {none
+            ? "L'analyse se lance une fois le DCE déposé et lu."
             : analysis.error}
         </Empty>
       </Card>

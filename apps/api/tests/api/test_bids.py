@@ -121,7 +121,7 @@ def test_zip_is_expanded_typed_and_reported(
     }
     assert all(f["kind_source"] == "filename" and not f["kind_confirmed"] for f in version["files"])
     assert version["skipped"] == [
-        {"path": "DCE/annexes.zip/plans/plan_RDC.dwg", "reason": "format non pris en charge"}
+        {"path": "DCE/annexes.zip/plans/plan_RDC.dwg", "reason": "format non lu par Pilao"}
     ]
     assert version["diff"] is None  # first version
 
@@ -228,9 +228,13 @@ def test_deposit_validation(
     bid = new_bid(c)
     assert deposit(c, bid, ("notes.txt", b"bonjour")).status_code == 415
     assert c.post(f"/bids/{bid}/dce").status_code == 422  # no file at all
-    # A failing file in the batch: nothing from the batch is kept.
-    assert deposit(c, bid, ("RC.pdf", RC), ("x.txt", b"bonjour")).status_code == 415
     assert storage.objects == {} and c.get(f"/bids/{bid}/dce").json() == []
+    # A file Pilao cannot read no longer refuses the batch: it is listed (23/11, ENG PRO).
+    assert deposit(c, bid, ("RC.pdf", RC), ("x.txt", b"bonjour")).status_code == 202
+    queue.drain_dce()
+    version = c.get(f"/bids/{bid}/dce/1").json()
+    assert [f["path"] for f in version["files"]] == ["RC.pdf"]
+    assert version["skipped"] == [{"path": "x.txt", "reason": "format non lu par Pilao"}]
 
 
 def test_only_one_deposit_processed_at_a_time(

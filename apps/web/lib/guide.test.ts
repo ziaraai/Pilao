@@ -78,6 +78,14 @@ describe("the steps of a tender", () => {
     });
   });
 
+  it("say the analysis is to launch once the DCE is read (it waits for the go)", () => {
+    expect(guideSteps(bid({ dce_ready: true }))[1]).toMatchObject({
+      id: "analyse",
+      note: "à lancer",
+    });
+    expect(guideSteps(bid({}))[1].note).toBe("à venir");
+  });
+
   it("flag the analysis when it found a blocking point", () => {
     const b = bid({
       dce_ready: true,
@@ -134,6 +142,13 @@ describe("the next step of a tender", () => {
     });
     expect(nextStep(b, null, null, "processing")).toMatchObject({
       title: "Lire l'analyse du DCE",
+    });
+    // deposited by hand (23/11): the analysis waits for the go, pieces can be added first
+    expect(nextStep(b, null, null, "none")).toMatchObject({
+      id: "dce",
+      index: 2,
+      title: "Lancer l'analyse du DCE",
+      action: "Vérifier les pièces",
     });
   });
 

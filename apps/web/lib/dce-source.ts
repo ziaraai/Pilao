@@ -42,6 +42,40 @@ export function updateBanner(
   return (analysedVersion ?? 0) < latest.version ? latest : null;
 }
 
+/** The analysis behind the latest version, as far as the DCE card needs it. */
+export type AnalysisState = {
+  status: string;
+  dce_version: number;
+  created_at: string;
+} | null;
+
+/**
+ * The call of the DCE card once the pieces are read (23/11): « Lancer l'analyse » for a DCE
+ * deposited by hand (it waits for the user's go, so that forgotten pieces can be added first),
+ * « Mettre à jour l'analyse » when pieces were added after it. Nothing while a reading or an
+ * analysis runs, nor for an update found by Pilao (its own banner).
+ */
+export function analysisCall(
+  versions: DceVersion[],
+  analysis: AnalysisState,
+): { kind: "launch" | "update"; pieces: number } | null {
+  if (versions.length === 0) return null;
+  const latest = versions.reduce((a, b) => (b.version > a.version ? b : a));
+  if (latest.status !== "ready" || latest.origin === "update") return null;
+  const pieces = latest.files.length;
+  if (!analysis || analysis.dce_version < latest.version)
+    return { kind: "launch", pieces };
+  if (analysis.status === "pending" || analysis.status === "processing")
+    return null;
+  if (
+    latest.completed_at &&
+    new Date(latest.completed_at).getTime() >
+      new Date(analysis.created_at).getTime()
+  )
+    return { kind: "update", pieces };
+  return null;
+}
+
 /** « Surveillé par Pilao — dernière vérification : aujourd'hui 06:45 ». */
 export function watchLine(w: DceWatch | null, now: Date): string | null {
   if (!w) return null;

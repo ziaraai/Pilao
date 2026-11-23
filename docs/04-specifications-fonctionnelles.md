@@ -95,6 +95,9 @@ Je dépose le ZIP ou les fichiers du DCE dans un dossier.
 - CA3 : extraction du texte page par page ; reconnaissance de texte (OCR) pour les PDF scannés.
 - CA5 : pièces acceptées : PDF, Word (DOCX, DOC), Excel (XLSX, XLS), LibreOffice (ODT, ODS), images ; les documents texte non PDF gardent leurs numéros de page (ADR-034).
 - CA4 : un nouveau dépôt (DCE modifié) crée une nouvelle version et signale les différences.
+- CA6 (ADR-054) : on peut glisser des **dossiers entiers** (sous-dossiers et ZIP dans les ZIP compris) et jusqu'à 200 fichiers à la fois ; les fichiers choisis un par un s'ajoutent à la liste avant l'envoi. Un fichier que Pilao ne sait pas lire (plan .dwg, .txt…) est listé « format non lu par Pilao » au lieu de faire refuser tout le dépôt.
+- CA7 : une fois un DCE lu, ajouter des fichiers demande ce qu'ils sont : **« des pièces oubliées »** (par défaut) complètent la version en cours — seules les nouvelles sont lues, les autres gardent leur identité (les sources de l'analyse restent valables), un doublon est signalé — ou **« une nouvelle version publiée par l'acheteur »** (CA4).
+- CA8 : un DCE déposé à la main **n'est pas analysé tout seul** : « Le DCE est lu : N pièces — il en manque une ? ajoutez-la ; tout est là ? Lancer l'analyse (N pièces) » ; la carte « Prochaine étape » dit « Lancer l'analyse du DCE ». Des pièces ajoutées après l'analyse proposent « Mettre à jour l'analyse ». Le DCE rapporté par le robot reste analysé tout seul.
 
 **US-3.4 Récupérer le DCE** (ADR-045)
 Dans le dossier, je récupère le DCE sans le chercher.

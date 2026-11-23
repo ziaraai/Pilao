@@ -1,5 +1,5 @@
 import uuid
-from typing import Annotated
+from typing import Annotated, Literal
 
 from fastapi import APIRouter, Depends, Query, Response, UploadFile
 from sqlalchemy import select
@@ -63,6 +63,8 @@ def _version_out(db: ScopedDb, version: DceVersion) -> DceVersionOut:
         update={
             "files": [DceFileOut.model_validate(f) for f in files],
             "uploaded_by_name": (uploader.full_name or uploader.email) if uploader else None,
+            # what was not read, and why (the bookkeeping of the additions stays inside)
+            "skipped": [{"path": x["path"], "reason": x["reason"]} for x in version.skipped],
         }
     )
 
@@ -110,19 +112,21 @@ def deposit_dce(
     storage: Storage,
     scanner: Annotated[VirusScanner, Depends(_scanner)],
     queue: Queue,
+    mode: Literal["new", "add"] = "new",
+    analyse: bool = True,
 ) -> DceVersionOut:
-    """Deposit the DCE (ZIP and/or documents). Each deposit is a new version, processed in the
-    background: poll ``GET /bids/{id}/dce`` for its status and its files."""
-    version = dce_svc.create_version(
-        db,
-        ctx.org,
-        ctx.user,
-        _bid(db, bid_id),
-        [(f.file, f.filename) for f in files],
-        storage,
-        scanner,
-        queue,
-    )
+    """Deposit the DCE (ZIP and/or documents), processed in the background: poll
+    ``GET /bids/{id}/dce`` for its status and its files. ``mode=new``: a new version (the buyer
+    published one); ``mode=add``: forgotten pieces added to the current version. ``analyse``
+    false: the analysis waits for « Lancer l'analyse »."""
+    uploads = [(f.file, f.filename) for f in files]
+    bid = _bid(db, bid_id)
+    if mode == "add":
+        version = dce_svc.add_files(db, ctx.org, ctx.user, bid, uploads, storage, scanner, queue)
+    else:
+        version = dce_svc.create_version(
+            db, ctx.org, ctx.user, bid, uploads, storage, scanner, queue, auto_analysis=analyse
+        )
     return _version_out(db, version)
 
 

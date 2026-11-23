@@ -39,7 +39,7 @@ node e2e/journey.cjs $W                            # captures dans $W/*.png
 L'annuaire des entreprises pointe vers un port fermé et la lecture IA des attestations n'est pas
 configurée : le parcours vérifie donc la saisie manuelle dans ces deux cas.
 
-Erreurs de console attendues à la fin du parcours : 1 × 422 (formulaire refusé exprès), une trentaine de 404 (31 à 35 selon la vitesse de la machine)
+Erreurs de console attendues à la fin du parcours : 1 × 422 (formulaire refusé exprès), une quarantaine de 404 (38 à 45 selon la vitesse de la machine : la carte du DCE demande aussi l'analyse avant qu'elle soit lancée)
 (ressources effacées ou absentes exprès, et l'analyse et le mémoire des dossiers qui n'en ont pas encore : les trois dossiers de la récupération des DCE en ajoutent) et 1 × 403 (la page « Dossiers » refusée pendant que le
 module « Réponse » est désactivé). Avant de relancer, videz les entreprises et les annonces des
 parcours précédents (`delete from organizations; delete from tenders where source_id like 'E2E-%';`

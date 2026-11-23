@@ -1,6 +1,12 @@
 import { describe, expect, it } from "vitest";
 
-import { originLabel, sourceCase, updateBanner, watchLine } from "./dce-source";
+import {
+  analysisCall,
+  originLabel,
+  sourceCase,
+  updateBanner,
+  watchLine,
+} from "./dce-source";
 import type { DceSource, DceVersion } from "./types";
 
 const source = (over: Partial<DceSource> = {}): DceSource => ({
@@ -32,6 +38,7 @@ const version = (over: Partial<DceVersion> = {}): DceVersion => ({
   origin: "deposit",
   source_url: null,
   uploaded_by_name: "Sabrina",
+  completed_at: null,
   ...over,
 });
 
@@ -102,5 +109,51 @@ describe("DCE source", () => {
       "Surveillance interrompue : la page de la consultation ne répond plus",
     );
     expect(watchLine(null, now)).toBeNull();
+  });
+});
+
+describe("the analysis of a DCE deposited by hand (23/11)", () => {
+  const files = [{ id: "f1" }, { id: "f2" }] as DceVersion["files"];
+  const analysed = (over: object = {}) => ({
+    status: "ready",
+    dce_version: 1,
+    created_at: "2026-11-23T10:00:00Z",
+    ...over,
+  });
+
+  it("waits for « Lancer l'analyse » once the pieces are read", () => {
+    expect(analysisCall([version({ files })], null)).toEqual({
+      kind: "launch",
+      pieces: 2,
+    });
+    // a new version deposited by hand: analysed on the go as well
+    expect(
+      analysisCall([version({ version: 2, files }), version()], analysed()),
+    ).toEqual({ kind: "launch", pieces: 2 });
+  });
+
+  it("offers to update the analysis after forgotten pieces", () => {
+    const completed = version({ files, completed_at: "2026-11-23T11:00:00Z" });
+    expect(analysisCall([completed], analysed())).toEqual({
+      kind: "update",
+      pieces: 2,
+    });
+    expect(
+      analysisCall(
+        [version({ files, completed_at: "2026-11-23T09:00:00Z" })],
+        analysed(),
+      ),
+    ).toBeNull(); // added before the analysis: already read
+  });
+
+  it("stays quiet while something runs, or for an update found by Pilao", () => {
+    expect(analysisCall([version({ status: "processing" })], null)).toBeNull();
+    expect(
+      analysisCall([version({ files })], analysed({ status: "processing" })),
+    ).toBeNull();
+    expect(
+      analysisCall([version({ version: 2, origin: "update" })], analysed()),
+    ).toBeNull(); // its own banner « Analyser la nouvelle version »
+    expect(analysisCall([], null)).toBeNull();
   });
 });

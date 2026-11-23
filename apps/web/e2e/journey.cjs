@@ -292,6 +292,30 @@ let current; // the page, for a screenshot when a step fails
     .getByRole("cell", { name: "DCE/CCTP.pdf", exact: true })
     .waitFor({ timeout: 60000 });
   step("DCE processed in the background, pieces listed");
+  // 23/11: a DCE deposited by hand waits for the go; a forgotten piece completes the version
+  // (here the same ZIP again: nothing doubles), then « Lancer l'analyse »
+  await page
+    .getByRole("heading", { name: "Lancer l'analyse du DCE" })
+    .waitFor({ timeout: 60000 });
+  const dceCall = page.getByRole("region", { name: "Analyse du DCE" });
+  await dceCall.getByText("Le DCE est lu : 4 pièces.").waitFor();
+  if (!(await page.getByLabel(/Des pièces oubliées/).isChecked()))
+    throw new Error("an addition must complete the current version by default");
+  await page.setInputFiles("#dce-upload", `${S}/DCE_mairie.zip`);
+  await page
+    .getByRole("button", { name: "Ajouter au DCE", exact: true })
+    .click();
+  await page
+    .getByText("doublon d'un fichier déjà déposé", { exact: false })
+    .first()
+    .waitFor({ timeout: 60000 });
+  if ((await page.getByText(/^Version \d/).allTextContents()).length !== 1)
+    throw new Error("forgotten pieces made a new version");
+  await dceCall.getByText("Le DCE est lu : 4 pièces.").waitFor();
+  await dceCall
+    .getByRole("button", { name: /^Lancer l'analyse \(4 pièces\)/ })
+    .click();
+  step("DCE completed piece by piece, analysis launched on the go");
   // The top of the page once analysed: four key facts, the next step and its reminders
   await page
     .getByRole("heading", { name: "Préparer le mémoire technique" })
@@ -1211,7 +1235,7 @@ let current; // the page, for a screenshot when a step fails
   await page
     .getByText("1. Cliquez sur « retirer le DCE en mode anonyme ».")
     .waitFor();
-  await page.getByText("Glissez ici le ZIP téléchargé").first().waitFor();
+  await page.getByText("Glissez ici le DCE téléchargé").first().waitFor();
   // a wrong link can be corrected: the robot comes back for an Atexo consultation
   await page.getByRole("button", { name: "Modifier le lien" }).click();
   await pasteLink(`${ATEXO}/entreprise/consultation/1002?orgAcronyme=t1x`);

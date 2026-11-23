@@ -93,6 +93,16 @@ class DceVersion(IdMixin, TimestampMixin, OrgScoped, Base):
         Text, nullable=False, default="deposit", server_default="deposit"
     )
     source_url: Mapped[str | None] = mapped_column(Text)
+    # A deposit by hand waits for « Lancer l'analyse »; the robot's DCE is analysed by itself.
+    auto_analysis: Mapped[bool] = mapped_column(
+        Boolean, nullable=False, default=True, server_default=true()
+    )
+    # Pieces added to this version afterwards (« pièce oubliée »): the last time, and the
+    # deposited files already read (an addition reads only the new ones).
+    completed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    read_file_ids: Mapped[list[uuid.UUID]] = mapped_column(
+        ARRAY(UUID(as_uuid=True)), nullable=False, default=list, server_default="{}"
+    )
 
 
 class DceFile(IdMixin, TimestampMixin, OrgScoped, Base):
@@ -116,6 +126,10 @@ class DceFile(IdMixin, TimestampMixin, OrgScoped, Base):
     )
     file_id: Mapped[uuid.UUID] = mapped_column(
         UUID(as_uuid=True), ForeignKey("files.id", ondelete="CASCADE"), nullable=False
+    )
+    # the deposited file (ZIP or document) it comes from: an interrupted addition starts again
+    source_file_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("files.id", ondelete="SET NULL")
     )
     path: Mapped[str] = mapped_column(Text, nullable=False)  # path inside the deposit
     sha256: Mapped[str] = mapped_column(Text, nullable=False)

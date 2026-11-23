@@ -252,6 +252,8 @@ export type DceVersion = {
   origin: "deposit" | "retrieval" | "update";
   source_url: string | null;
   uploaded_by_name: string | null;
+  /** Forgotten pieces added to this version afterwards (the last time). */
+  completed_at: string | null;
 };
 
 export type RetrievalMode = "identified" | "anonymous";

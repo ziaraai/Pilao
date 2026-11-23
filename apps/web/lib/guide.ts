@@ -75,7 +75,9 @@ function tenderSteps(bid: Bid): GuideStep[] {
       id: "analyse",
       label: "Analyse",
       note: !p?.analysis_ready
-        ? "à venir"
+        ? p?.dce_ready
+          ? "à lancer"
+          : "à venir"
         : blocking > 0
           ? plural(blocking, "point bloquant", "points bloquants")
           : "faite",
@@ -203,7 +205,7 @@ export function nextStep(
   bid: Bid,
   quote?: QuoteState | null,
   platform?: string | null,
-  /** The status of the DCE analysis: waiting for credits, failed… */
+  /** The status of the DCE analysis: waiting for credits, failed, « none » (not launched)… */
   analysisStatus?: string | null,
 ): NextStep {
   const steps = guideSteps(bid, quote);
@@ -304,6 +306,15 @@ export function nextStep(
         action: "Récupérer le DCE",
       };
     case "analyse":
+      if (analysisStatus === "none")
+        // deposited by hand (23/11): the pieces can be completed before the go
+        return {
+          ...base,
+          id: "dce",
+          title: "Lancer l'analyse du DCE",
+          text: "Le DCE est lu. Vérifiez que toutes les pièces sont là (ajoutez celles qui manquent), puis lancez l'analyse.",
+          action: "Vérifier les pièces",
+        };
       if (analysisStatus === "waiting_credits")
         return {
           ...base,

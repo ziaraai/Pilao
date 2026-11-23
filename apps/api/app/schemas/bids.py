@@ -112,6 +112,8 @@ class DceVersionOut(BaseModel):
     origin: Literal["deposit", "retrieval", "update"] = "deposit"
     source_url: str | None = None
     uploaded_by_name: str | None = None
+    # forgotten pieces added afterwards (the last time): the analysis may need an update
+    completed_at: datetime | None = None
     files: list[DceFileOut] = Field(default_factory=list)
 
 

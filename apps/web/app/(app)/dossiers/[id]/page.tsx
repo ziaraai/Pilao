@@ -99,7 +99,11 @@ function Dossier() {
   const now = new Date();
   const analysis = facts.data ?? null;
   const platform = analysis?.data?.key_info.submission_platform?.value;
-  const next = nextStep(b, quote.data, platform, analysis?.status);
+  // deposited by hand, the analysis waits for « Lancer l'analyse » (23/11)
+  const analysisStatus =
+    analysis?.status ??
+    (b.progress?.dce_ready && facts.error ? "none" : undefined);
+  const next = nextStep(b, quote.data, platform, analysisStatus);
   const todo = consultation ? null : todoItems(analysis, b, now);
   const reminders = todo?.items.slice(0, REMINDERS) ?? [];
   const more = todo ? todo.items.length - reminders.length + todo.more : 0;
@@ -214,10 +218,8 @@ function Dossier() {
         <ConsultationOverview bid={b} onSaved={bid.setData} />
       ) : (
         b.progress?.dce_ready &&
-        // shown once the analysis is read (a missing one reads « Analyse en cours »)
-        (facts.data || facts.error) && (
-          <KeyFacts tiles={overviewTiles(analysis, b, now)} />
-        )
+        // shown once there is an analysis to read them from
+        facts.data && <KeyFacts tiles={overviewTiles(analysis, b, now)} />
       )}
       <StepBar steps={steps} open={step} onSelect={show} />
       <NextStepCard
@@ -269,6 +271,7 @@ function Dossier() {
                 key={analysisKey}
                 bidId={id}
                 openAnchor={target?.focus ? target : undefined}
+                dceReady={!!b.progress?.dce_ready}
                 onReady={() => {
                   bid.reload(); // the analysis pre-fills buyer and deadline
                   facts.reload(); // and the key facts at the top

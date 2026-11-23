@@ -45,7 +45,8 @@ DEPOSIT_MIMES = frozenset(
     | {t.mime for t in (*TEXT_TO_CONVERT, *SHEETS_TO_CONVERT)}  # read after conversion
 )
 MEMBER_MIMES = DEPOSIT_MIMES - {ZIP.mime}
-MAX_FILES_PER_DEPOSIT = 50
+MAX_FILES_PER_DEPOSIT = 200  # a whole DCE folder dropped at once
+UNREADABLE = "format non lu par Pilao"
 
 
 class _Permanent(Exception):
@@ -53,6 +54,76 @@ class _Permanent(Exception):
 
 
 # ---------- deposit -----------------------------------------------------------------------
+
+
+def _check_uploads(uploads: list[tuple[BinaryIO, str | None]]) -> None:
+    if not uploads:
+        raise ApiError(422, "no_file", "Déposez au moins un fichier.")
+    if len(uploads) > MAX_FILES_PER_DEPOSIT:
+        raise ApiError(
+            422, "too_many_files", f"{MAX_FILES_PER_DEPOSIT} fichiers maximum par dépôt."
+        )
+
+
+def _processing(db: Session, bid: Bid) -> bool:
+    return (
+        db.scalar(
+            select(DceVersion.id).where(
+                DceVersion.bid_id == bid.id,
+                DceVersion.status.in_(("pending", "processing")),
+                # A worker killed after its last retry never finishes: do not block forever.
+                DceVersion.updated_at
+                > datetime.now(UTC) - timedelta(seconds=2 * DCE_JOB_TIMEOUT_SECONDS),
+            )
+        )
+        is not None
+    )
+
+
+def _store_uploads(
+    db: Session,
+    org: Organization,
+    user: User,
+    uploads: list[tuple[BinaryIO, str | None]],
+    storage: ObjectStorage,
+    scanner: VirusScanner,
+) -> tuple[list[File], list[dict[str, Any]]]:
+    """Store the deposited files. A file Pilao cannot read is listed (« non lu ») instead of
+    refusing the whole deposit; nothing readable at all is refused. On any other failure,
+    what was stored is removed (no half deposit)."""
+    stored: list[File] = []
+    skipped: list[dict[str, Any]] = []
+    first_refusal: ApiError | None = None
+    try:
+        for fileobj, filename in uploads:
+            try:
+                stored.append(
+                    files_svc.upload_file(
+                        db,
+                        org,
+                        user,
+                        fileobj,
+                        filename,
+                        storage,
+                        scanner,
+                        allowed_mimes=DEPOSIT_MIMES,
+                        max_bytes=get_settings().max_dce_upload_bytes,
+                    )
+                )
+            except ApiError as exc:
+                if exc.code != "unsupported_type":
+                    raise
+                first_refusal = first_refusal or exc
+                skipped.append(
+                    {"path": filename or "fichier sans nom", "reason": UNREADABLE, "deposit": True}
+                )
+    except Exception:
+        db.rollback()
+        _delete_files(db, user, stored, storage)
+        raise
+    if not stored and first_refusal is not None:
+        raise first_refusal
+    return stored, skipped
 
 
 def create_version(
@@ -67,43 +138,18 @@ def create_version(
     *,
     origin: str = "deposit",
     source_url: str | None = None,
+    auto_analysis: bool = True,
 ) -> DceVersion:
     """A new version of the DCE from deposited files, or from the robot's ZIP (``origin``
-    ``retrieval`` or ``update``, spec « Récupération des DCE »): the same checks either way."""
-    if not uploads:
-        raise ApiError(422, "no_file", "Déposez au moins un fichier.")
-    if len(uploads) > MAX_FILES_PER_DEPOSIT:
-        raise ApiError(
-            422, "too_many_files", f"{MAX_FILES_PER_DEPOSIT} fichiers maximum par dépôt."
-        )
-    busy = db.scalar(
-        select(DceVersion.id).where(
-            DceVersion.bid_id == bid.id,
-            DceVersion.status.in_(("pending", "processing")),
-            # A worker killed after its last retry never finishes: do not block forever.
-            DceVersion.updated_at
-            > datetime.now(UTC) - timedelta(seconds=2 * DCE_JOB_TIMEOUT_SECONDS),
-        )
-    )
-    if busy is not None:
+    ``retrieval`` or ``update``, spec « Récupération des DCE »): the same checks either way.
+    ``auto_analysis`` False: the analysis waits for « Lancer l'analyse » (a deposit by hand,
+    completed piece by piece)."""
+    _check_uploads(uploads)
+    if _processing(db, bid):
         raise ApiError(409, "dce_processing", "Un dépôt est déjà en cours de traitement.")
 
-    stored: list[File] = []
+    stored, skipped = _store_uploads(db, org, user, uploads, storage, scanner)
     try:
-        for fileobj, filename in uploads:
-            stored.append(
-                files_svc.upload_file(
-                    db,
-                    org,
-                    user,
-                    fileobj,
-                    filename,
-                    storage,
-                    scanner,
-                    allowed_mimes=DEPOSIT_MIMES,
-                    max_bytes=get_settings().max_dce_upload_bytes,
-                )
-            )
         number = (
             db.scalar(select(func.max(DceVersion.version)).where(DceVersion.bid_id == bid.id)) or 0
         ) + 1
@@ -114,8 +160,10 @@ def create_version(
             uploaded_by=user.id,
             status="pending",
             source_file_ids=[f.id for f in stored],
+            skipped=skipped,
             origin=origin,
             source_url=source_url,
+            auto_analysis=auto_analysis,
         )
         db.add(version)
         db.add(Job(kind=JOB_KIND, ref_id=version.id, org_id=org.id, status="pending"))
@@ -135,6 +183,54 @@ def create_version(
         version.status, version.error = "error", "File d'attente indisponible. Redéposez plus tard."
         set_job_status(db, JOB_KIND, version.id, "error", version.error)
         db.commit()
+    return version
+
+
+def add_files(
+    db: Session,
+    org: Organization,
+    user: User,
+    bid: Bid,
+    uploads: list[tuple[BinaryIO, str | None]],
+    storage: ObjectStorage,
+    scanner: VirusScanner,
+    queue: JobQueue,
+) -> DceVersion:
+    """Forgotten pieces added to the current version (not a new version): only the new files
+    are read, the pieces already read keep their identity (the analysis' sources stay valid),
+    and nothing is analysed by itself."""
+    _check_uploads(uploads)
+    if _processing(db, bid):
+        raise ApiError(409, "dce_processing", "Un dépôt est déjà en cours de traitement.")
+    version = db.scalars(
+        select(DceVersion).where(DceVersion.bid_id == bid.id).order_by(DceVersion.version.desc())
+    ).first()
+    if version is None or version.status != "ready":
+        raise ApiError(
+            409,
+            "no_dce",
+            "Déposez d'abord le DCE : les pièces oubliées s'ajoutent à un DCE déjà lu.",
+        )
+    stored, skipped = _store_uploads(db, org, user, uploads, storage, scanner)
+    version.source_file_ids = [*version.source_file_ids, *(f.id for f in stored)]
+    version.skipped = [*version.skipped, *skipped]
+    version.status, version.error = "pending", None
+    version.completed_at = datetime.now(UTC)
+    set_job_status(db, JOB_KIND, version.id, "pending")
+    db.commit()
+    try:
+        queue.enqueue_process_dce(version.id)
+    except Exception:
+        logger.exception("could not enqueue the addition to DCE version %s", version.id)
+        new = {f.id for f in stored}
+        version.source_file_ids = [i for i in version.source_file_ids if i not in new]
+        version.status = "ready"
+        set_job_status(db, JOB_KIND, version.id, "done")
+        db.commit()
+        _delete_files(db, user, stored, storage)
+        raise ApiError(
+            503, "queue_unavailable", "File d'attente indisponible. Réessayez plus tard."
+        ) from None
     return version
 
 
@@ -167,7 +263,9 @@ def _members(record: File, data: BinaryIO, skipped: list[dict[str, Any]]) -> Ite
     if record.mime == ZIP.mime:
         members, archive_skipped = expand(data, "")
         yield from members
-        skipped.extend({"path": s.path, "reason": s.reason} for s in archive_skipped)
+        skipped.extend(
+            {"path": s.path, "reason": s.reason, "source": str(record.id)} for s in archive_skipped
+        )
     else:
         size = data.seek(0, 2)
         data.seek(0)
@@ -183,19 +281,22 @@ def _sha256(data: BinaryIO) -> str:
     return digest.hexdigest()
 
 
-def _store_member(ctx: _Ctx, member: Member, source_name: str) -> None:
+def _store_member(ctx: _Ctx, member: Member, source: File) -> None:
+    source_name, tag = source.filename, str(source.id)
     path = member.path
     if path in ctx.seen:  # same relative path twice (two archives, two uploads...)
         digest = _sha256(member.data)
         if digest == ctx.seen[path]:
-            ctx.skipped.append({"path": path, "reason": "doublon d'un fichier déjà déposé"})
+            ctx.skipped.append(
+                {"path": path, "reason": "doublon d'un fichier déjà déposé", "source": tag}
+            )
             return  # the very same entry twice: nothing to add
         path, n = f"{source_name}/{member.path}", 2
         while path in ctx.seen:  # different content: keep it under a unique path
             path, n = f"{source_name} ({n})/{member.path}", n + 1
     kind = detect(member.data)
     if kind is None or kind.mime not in MEMBER_MIMES:
-        ctx.skipped.append({"path": path, "reason": "format non pris en charge"})
+        ctx.skipped.append({"path": path, "reason": UNREADABLE, "source": tag})
         return
     try:
         record = files_svc.upload_file(
@@ -214,7 +315,7 @@ def _store_member(ctx: _Ctx, member: Member, source_name: str) -> None:
             raise  # transient: the whole job is retried
         if exc.code == "quota_exceeded":
             raise _Permanent("Espace de stockage de l'organisation dépassé.") from exc
-        ctx.skipped.append({"path": path, "reason": exc.message})
+        ctx.skipped.append({"path": path, "reason": exc.message, "source": tag})
         return
     ctx.seen[path] = record.sha256  # same content under two names is kept: never drop silently
     extraction = extract_pages(member.data, record.mime, ctx.ocr)
@@ -225,6 +326,7 @@ def _store_member(ctx: _Ctx, member: Member, source_name: str) -> None:
         id=uuid.uuid4(),  # the pages below reference it before the flush
         dce_version_id=ctx.version.id,
         file_id=record.id,
+        source_file_id=source.id,
         path=path,
         sha256=record.sha256,
         detected_kind=typing.kind,
@@ -243,13 +345,23 @@ def _store_member(ctx: _Ctx, member: Member, source_name: str) -> None:
     ctx.db.commit()
 
 
-def _cleanup(db: Session, user: User | None, version_id: uuid.UUID, storage: ObjectStorage) -> None:
-    """Remove what a previous (failed) attempt extracted, so that a retry starts clean."""
-    records = db.scalars(
+def _cleanup(
+    db: Session,
+    user: User | None,
+    version_id: uuid.UUID,
+    storage: ObjectStorage,
+    sources: list[uuid.UUID] | None = None,
+) -> None:
+    """Remove what a previous (failed) attempt extracted, so that a retry starts clean: the
+    whole version, or only what came from ``sources`` (an addition)."""
+    query = (
         select(File)
         .join(DceFile, DceFile.file_id == File.id)
         .where(DceFile.dce_version_id == version_id)
-    ).all()
+    )
+    if sources is not None:
+        query = query.where(DceFile.source_file_id.in_(sources))
+    records = db.scalars(query).all()
     for record in records:
         files_svc.delete_file(db, user, record, storage)  # cascades to dce_files
 
@@ -275,23 +387,44 @@ def run_process_dce(
     set_job_status(db, JOB_KIND, version_id, "running")
     db.commit()
 
-    ctx = _Ctx(db, org, user, version, storage, scanner, [], {}, ocr)
+    read = set(version.read_file_ids)
+    adding = bool(read)  # pieces added to a version already read (« pièce oubliée »)
+    sources = [i for i in version.source_file_ids if i not in read]
+    tags = {str(i) for i in sources}
+
+    def kept_entry(entry: dict[str, Any]) -> bool:
+        # an addition keeps what was reported before (but redoes its own sources); a first
+        # reading keeps only the files refused at the deposit
+        return entry.get("source") not in tags if adding else bool(entry.get("deposit"))
+
+    kept = [entry for entry in version.skipped if kept_entry(entry)]
+    ctx = _Ctx(db, org, user, version, storage, scanner, kept, {}, ocr)
     try:
-        _cleanup(db, user, version_id, storage)
-        for file_id in version.source_file_ids:
+        if adding:
+            _cleanup(db, user, version_id, storage, sources)
+            ctx.seen = {
+                f.path: f.sha256
+                for f in db.scalars(select(DceFile).where(DceFile.dce_version_id == version_id))
+            }
+        else:
+            _cleanup(db, user, version_id, storage)
+        for file_id in sources:
             record = db.get(File, file_id)
             if record is None:
+                if adding:
+                    continue  # removed meanwhile: the pieces already read stay
                 raise _Permanent("Un fichier du dépôt a été supprimé : redéposez le DCE.")
-            data = storage.get(record.storage_key)
             try:
-                for member in _members(record, data, ctx.skipped):
-                    try:
-                        _store_member(ctx, member, record.filename)
-                    finally:
-                        if member.data is not data:
-                            member.data.close()
-            finally:
-                data.close()
+                _read_source(ctx, record)
+            except (ArchiveError, _Permanent) as exc:
+                if not adding:
+                    raise
+                # one bad addition never breaks the DCE already read: it is reported
+                db.rollback()
+                _cleanup(db, user, version_id, storage, [record.id])
+                ctx.skipped.append(
+                    {"path": record.filename, "reason": str(exc), "source": str(record.id)}
+                )
         if not ctx.seen:
             raise _Permanent("Aucun fichier exploitable dans ce dépôt.")
     except (ArchiveError, _Permanent) as exc:
@@ -313,8 +446,11 @@ def run_process_dce(
     fresh = db.get(DceVersion, version_id, populate_existing=True)
     if fresh is None:  # the bid was deleted meanwhile
         return
+    fresh.read_file_ids = list(fresh.source_file_ids)
     fresh.diff, fresh.diff_summary = compute_diff(db, fresh)
     _finish(db, version_id, "ready", None, ctx.skipped)
+    if adding:
+        return  # an addition is never analysed by itself: « Mettre à jour l'analyse »
     if fresh.origin == "update":  # never analysed without a click (spec « Récupération des DCE »)
         if mailer is not None:
             from app.services.dce_retrieval import notify_update  # avoid an import cycle
@@ -323,10 +459,26 @@ def run_process_dce(
         return
     if db.get_one(Bid, fresh.bid_id).kind == "consultation":
         return  # no règlement to read: the documents feed the « Prix » tab (ADR-052)
+    if not fresh.auto_analysis:
+        return  # deposited by hand: the analysis waits for « Lancer l'analyse »
     if queue is not None:
         from app.services.dce_analysis import request_analysis  # avoid an import cycle
 
         request_analysis(db, fresh, queue, user_id=fresh.uploaded_by, automatic=True)
+
+
+def _read_source(ctx: _Ctx, record: File) -> None:
+    """Expand, store and read one deposited file (ZIP or document)."""
+    data = ctx.storage.get(record.storage_key)
+    try:
+        for member in _members(record, data, ctx.skipped):
+            try:
+                _store_member(ctx, member, record)
+            finally:
+                if member.data is not data:
+                    member.data.close()
+    finally:
+        data.close()
 
 
 def _finish(

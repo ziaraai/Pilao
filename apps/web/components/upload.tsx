@@ -3,7 +3,13 @@
 import { useRef, useState } from "react";
 
 import { Button } from "@/components/ui";
-import { acceptsFile, readyText } from "@/lib/upload";
+import {
+  type DroppedEntry,
+  acceptsFile,
+  collectFiles,
+  mergeFiles,
+  readyText,
+} from "@/lib/upload";
 
 /**
  * A drop zone that cannot be missed (users took the old grey picker for nothing and the
@@ -50,7 +56,28 @@ export function UploadButton({
         .filter((f) => !acceptsFile(f.name, f.type, accept))
         .map((f) => f.name),
     );
-    setChosen(multiple ? kept : kept.slice(0, 1));
+    // several files: what is picked or dropped next adds to the list (one by one is fine)
+    setChosen((prev) => (multiple ? mergeFiles(prev, kept) : kept.slice(0, 1)));
+  }
+
+  /** A dropped folder is walked through: every file inside, sub-folders included. */
+  async function dropped(data: DataTransfer) {
+    const entries = Array.from(data.items ?? [])
+      .map((item) =>
+        typeof item.webkitGetAsEntry === "function"
+          ? (item.webkitGetAsEntry() as DroppedEntry | null)
+          : null,
+      )
+      .filter((e): e is DroppedEntry => e !== null);
+    if (multiple && entries.some((e) => e.isDirectory)) {
+      try {
+        choose(await collectFiles(entries));
+        return;
+      } catch {
+        // an unreadable folder: fall back to the files the browser gives
+      }
+    }
+    choose(Array.from(data.files).filter((f) => f.type !== "" || f.size > 0));
   }
 
   function clear() {
@@ -73,7 +100,10 @@ export function UploadButton({
         type="file"
         multiple={multiple}
         className="peer sr-only"
-        onChange={(e) => choose(Array.from(e.target.files ?? []))}
+        onChange={(e) => {
+          choose(Array.from(e.target.files ?? []));
+          e.target.value = ""; // the same file can be picked again after « Retirer »
+        }}
       />
       <label
         htmlFor={id}
@@ -85,7 +115,7 @@ export function UploadButton({
         onDrop={(e) => {
           e.preventDefault();
           setOver(false);
-          choose(Array.from(e.dataTransfer.files));
+          void dropped(e.dataTransfer);
         }}
         className={`block cursor-pointer rounded-lg border-2 border-dashed text-center text-blue-900 transition-colors peer-focus-visible:outline-2 peer-focus-visible:outline-offset-2 peer-focus-visible:outline-brand-navy ${compact ? "px-4 py-3" : "px-4 py-6"} ${over ? "border-blue-600 bg-blue-100" : "border-blue-400 bg-blue-50 hover:bg-blue-100"}`}
       >
