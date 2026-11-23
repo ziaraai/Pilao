@@ -13,49 +13,9 @@ import {
   toggleSection,
   vatLabel,
 } from "@/lib/consultation";
-import { tabDone, tabFromQuery, tabsFor } from "@/lib/dossier";
-import type { DossierProgress, QuoteState } from "@/lib/types";
+import type { QuoteState } from "@/lib/types";
 
-const READY: DossierProgress = {
-  dce_ready: true,
-  analysis_ready: false,
-  memoir_ready: false,
-  documents_ready: false,
-  exported: false,
-  blocking_points: 0,
-};
-
-describe("the tabs of a dossier", () => {
-  it("are the light ones in a consultation", () => {
-    expect(tabsFor("consultation").map((t) => t.label)).toEqual([
-      "Aperçu",
-      "Documents reçus",
-      "Prix",
-      "Devis",
-    ]);
-    expect(tabsFor("tender").map((t) => t.id)).toEqual([
-      "apercu",
-      "dce",
-      "analyse",
-      "memoire",
-      "prix",
-      "documents",
-      "export",
-    ]);
-  });
-
-  it("never open a tab the dossier has not", () => {
-    expect(tabFromQuery("devis", READY, "consultation")).toBe("devis");
-    expect(tabFromQuery("memoire", READY, "consultation")).toBe("apercu");
-    expect(tabFromQuery("devis", READY, "tender")).toBe("apercu");
-    expect(tabFromQuery("devis", READY)).toBe("apercu");
-  });
-
-  it("mark the quote done when it is ready", () => {
-    expect(tabDone(READY, true).devis).toBe(true);
-    expect(tabDone(READY).devis).toBe(false);
-  });
-
+describe("a consultation", () => {
   it("name the two kinds", () => {
     expect(KIND_LABELS.consultation).toBe("Consultation (devis)");
     expect(KIND_LABELS.tender).toBe("Appel d'offres");

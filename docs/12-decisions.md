@@ -565,3 +565,16 @@ Format : numéro, date, décision, raison, statut. Ajouter une entrée pour chaq
 - **Hors lot** : le CRM (suivi des devis envoyés, relances), l'envoi du devis par e-mail depuis Pilao, un devis sans fichier de prix (lignes saisies à la main), l'import Excel de la liste de prix.
 - **Statut** : construit ; à essayer avec Abdraouf sur la consultation Récamier.
 
+## ADR-053 — Le dossier guidé : une étape à la fois, l'analyse en notes
+
+- **Date** : 2026-11-23
+- **Contexte** : Faycal trouve la plateforme compliquée (« looks so complicated ») : sept onglets, un Aperçu chargé, une analyse en huit blocs. Il retient la maquette du dossier guidé (artefact « Maquette du dossier guidé », « oui srrt ça dans le dossier ») et ajoute : « ce qui est trop, c'est l'analyse, si on peut la réduire à juste des notes ».
+- **Décision** :
+  - La page du dossier montre les **chiffres clés**, la **barre des étapes** et la carte **« Prochaine étape »** ; l'onglet Aperçu disparaît. Les étapes et la prochaine chose à faire sont des fonctions pures (`apps/web/lib/guide.ts`) lues dans l'avancement calculé par le serveur.
+  - **Aucune étape ouverte par défaut** : le détail s'ouvre au clic (les étapes restent des onglets ARIA, `?onglet=` garde ses noms : `export` pour « Envoi »). Une étape déjà ouverte reste ouverte au clic.
+  - **« Prix » seulement si le DCE a un bordereau** : l'avancement du dossier porte `price_files` (fichiers de prix affichés : un Excel cache son jumeau PDF, `pricing.shown_price_files`) et `prices_ready` (chaque fichier lu et sans ligne sans prix).
+  - **L'analyse en notes** (`apps/web/lib/notes.ts`) : une ligne par chose à savoir, chacune avec sa source (règle 2) ; les points « à noter » sont seulement comptés ; « Voir l'analyse complète » ouvre les blocs de l'ADR-047, qu'un rappel ouvre aussi directement.
+  - Dernière étape « Envoi » : le dossier complet, puis « J'ai déposé mon offre » (statut « déposé ») ; le résultat et le temps passé y sont. Pilao ne dépose jamais à la place de l'entreprise (règle absolue).
+  - Consultation : la carte « La consultation » en haut, les étapes Documents reçus · Prix · Devis, « J'ai envoyé le devis ».
+- **Alternatives écartées** : un assistant pas à pas qui bloque l'étape suivante (Abdraouf saute souvent des étapes : prix avant le mémoire) ; ouvrir l'étape en cours par défaut (c'est ce qui rendait la page chargée) ; résumer l'analyse par l'IA (une étape payante de plus, et des notes sans source).
+- **Statut** : construit ; à faire essayer à Abdraouf.

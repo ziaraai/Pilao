@@ -51,6 +51,8 @@ class BidProgressOut(BaseModel):
     exported: bool
     blocking_points: int
     missing_count: int = 0  # « Ce qu'il manque » (ADR-048)
+    price_files: int = 0  # BPU / DPGF / DQE of the DCE: the « Prix » step exists (ADR-053)
+    prices_ready: bool = False  # every price file read, no line left without a price
 
 
 class BidOut(BaseModel):

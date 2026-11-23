@@ -18,6 +18,7 @@ from app.db.models import (
 )
 from app.schemas.bids import BidIn, BidPatch, BidProgressOut
 from app.services import files as files_svc
+from app.services import pricing as pricing_svc
 from app.services.missing import missing_count
 from app.services.tenders import release_matches
 from app.storage.objects import ObjectStorage
@@ -89,6 +90,7 @@ def progress(db: Session, bid: Bid) -> BidProgressOut:
         .order_by(DceAnalysis.created_at.desc())
     ).first()
     watch_points = ((analysis.data or {}).get("watch_points") or []) if analysis else []
+    prices = pricing_svc.shown_price_files(db, bid)
     return BidProgressOut(
         dce_ready=exists(DceVersion.bid_id == bid.id, DceVersion.status == "ready"),
         analysis_ready=analysis is not None,
@@ -107,4 +109,6 @@ def progress(db: Session, bid: Bid) -> BidProgressOut:
             1 for w in watch_points if isinstance(w, dict) and w.get("severity") == "blocking"
         ),
         missing_count=missing_count(db, bid),
+        price_files=len(prices),
+        prices_ready=pricing_svc.prices_ready(db, bid, prices),
     )

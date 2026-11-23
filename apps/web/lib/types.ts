@@ -188,6 +188,10 @@ export type DossierProgress = {
   blocking_points: number;
   /** « Ce qu'il manque » (ADR-048): the missing items of the dossier. */
   missing_count?: number;
+  /** BPU / DPGF / DQE of the DCE: the guided dossier shows « Prix » (ADR-053). */
+  price_files?: number;
+  /** Every price file read, no line left without a price. */
+  prices_ready?: boolean;
 };
 export type MissingKind =
   "staff" | "equipment" | "certification" | "reference" | "identity" | "tender";

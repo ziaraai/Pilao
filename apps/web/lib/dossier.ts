@@ -1,80 +1,19 @@
 /**
- * Rules of the dossier page (spec « Page du dossier en onglets »): which tab opens, what the
- * overview shows, the « À faire avant de répondre » list and the one-line summary of each
- * analysis block. Pure functions: the components only lay them out.
+ * Rules of the dossier page: the key facts at the top, the reminders of the next step and the
+ * one-line summary of each analysis block (the steps themselves: lib/guide.ts, ADR-053).
+ * Pure functions: the components only lay them out.
  */
-import { CONSULTATION_TABS } from "@/lib/consultation";
 import { VERDICT } from "@/lib/labels";
-import type {
-  Analysis,
-  Bid,
-  BidKind,
-  DossierProgress,
-  MemoirVersion,
-} from "@/lib/types";
+import type { Analysis, Bid, MemoirVersion } from "@/lib/types";
 import { missingSummary } from "@/lib/missing";
 
+/** The steps of a dossier (ADR-053; ``?onglet=`` keeps these names). */
 export type TabId =
-  | "apercu"
-  | "dce"
-  | "analyse"
-  | "memoire"
-  | "prix"
-  | "documents"
-  | "export"
-  | "devis";
-
-export const TABS: { id: TabId; label: string }[] = [
-  { id: "apercu", label: "Aperçu" },
-  { id: "dce", label: "DCE" },
-  { id: "analyse", label: "Analyse" },
-  { id: "memoire", label: "Mémoire" },
-  { id: "prix", label: "Prix" },
-  { id: "documents", label: "Documents" },
-  { id: "export", label: "Export" },
-];
+  "dce" | "analyse" | "memoire" | "prix" | "documents" | "export" | "devis";
 
 export type Level = "blocking" | "warning" | "info";
 
 const PARIS = "Europe/Paris";
-
-export function defaultTab(
-  progress: DossierProgress | null | undefined,
-): TabId {
-  return progress?.dce_ready ? "apercu" : "dce";
-}
-
-/** The tabs of a dossier: a consultation has the light ones (ADR-052). */
-export function tabsFor(
-  kind: BidKind = "tender",
-): { id: TabId; label: string }[] {
-  return kind === "consultation" ? CONSULTATION_TABS : TABS;
-}
-
-export function tabFromQuery(
-  value: string | null,
-  progress: DossierProgress | null | undefined,
-  kind: BidKind = "tender",
-): TabId {
-  const known = tabsFor(kind).find((t) => t.id === value);
-  return known ? known.id : defaultTab(progress);
-}
-
-export function tabDone(
-  progress: DossierProgress | null | undefined,
-  quoteReady = false,
-): Record<TabId, boolean> {
-  return {
-    apercu: false,
-    dce: !!progress?.dce_ready,
-    analyse: !!progress?.analysis_ready,
-    memoire: !!progress?.memoir_ready,
-    prix: false, // no « done » mark: prices are checked by the company until the deposit
-    documents: !!progress?.documents_ready,
-    export: !!progress?.exported,
-    devis: quoteReady,
-  };
-}
 
 /** The start of a sentence, cut on a word, never empty (older analyses have no title). */
 export function shortTitle(text: string, max = 60): string {
@@ -109,7 +48,7 @@ function daysLeft(iso: string, now: Date): number {
 
 /** « 20/11 » — or the text as written when the analysis gave something that is not a date
  * (« sur rendez-vous », « 20/11/2026 »): never a crash. */
-function dayMonth(iso: string): string {
+export function dayMonth(iso: string): string {
   const plain = /^\d{4}-\d{2}-\d{2}$/.test(iso);
   const date = new Date(plain ? `${iso}T00:00:00Z` : iso);
   if (Number.isNaN(date.getTime())) return iso;
@@ -132,7 +71,7 @@ export function daysLeftText(iso: string, now: Date): string {
   return inDays(daysLeft(iso, now));
 }
 
-function euros(value: number): string {
+export function euros(value: number): string {
   return `${Math.round(value).toLocaleString("fr-FR").replace(/\s/g, " ")} € HT`;
 }
 

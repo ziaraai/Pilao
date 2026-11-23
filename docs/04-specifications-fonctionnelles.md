@@ -121,7 +121,21 @@ Le système produit une fiche d'analyse structurée (`schemas/dce_analysis.schem
 - CA7 : **chaque élément porte sa source** (fichier + page), cliquable.
 - CA8 : temps de traitement cible : moins de 5 minutes pour un DCE de 300 pages.
 
-**Page du dossier** (ADR-047) : six onglets — Aperçu, DCE, Analyse, Mémoire, Documents, Export — avec une coche par étape faite et une pastille rouge sur Analyse s'il y a un point bloquant ; l'onglet ouvert est dans l'adresse (`?onglet=`). L'Aperçu montre quatre cases (avis, montant, date limite, visite) et « À faire avant de répondre » (6 lignes au plus : bloquants, visite obligatoire, pièces manquantes ou qui expirent, cadre de l'acheteur, date des questions), chaque ligne menant au bon bloc. L'Analyse se lit en blocs fermés avec une ligne de résumé ; les listes sont des tableaux ; chaque point de vigilance a un titre court et « Lire » pour la phrase complète.
+**Page du dossier — le dossier guidé** (ADR-053, remplace la page en onglets de l'ADR-047)
+
+En haut : les quatre cases (avis Go / No-Go, montant, date limite, visite), puis la barre des étapes — DCE · Analyse · Mémoire · [Prix] · Documents · Envoi — avec « N étapes sur M terminées », une coche par étape faite, l'étape en cours en couleur et quelques mots sous chacune (« 3 informations à compléter », « 2 points bloquants », « à déposer »). L'étape « Prix » n'apparaît que si le DCE contient un bordereau (BPU, DPGF, DQE). Une consultation a ses trois étapes : Documents reçus · Prix · Devis, sous la carte « La consultation ».
+
+Sous la barre : la carte **« Prochaine étape »**, une seule chose à faire et un seul bouton (« Récupérer le DCE », « Compléter 1 information pour le mémoire », « Remplir le bordereau de prix », « Télécharger le dossier complet »…), avec au plus trois rappels tirés de l'analyse (« À ne pas oublier » : bloquants, visite obligatoire, pièces manquantes ou qui expirent, cadre de l'acheteur, date des questions), chacun menant au bon bloc. Une fois le dossier exporté : « Déposer votre offre » (sur la plateforme et avant la date limite lues dans l'analyse) et le bouton « J'ai déposé mon offre » ; Pilao ne dépose jamais à la place de l'entreprise. Une fois déposée : « Noter le résultat » (« Marché gagné » / « Marché perdu »).
+
+**Aucune étape n'est ouverte par défaut** : son détail (le contenu des anciens onglets) s'ouvre au clic, sous la carte ; `?onglet=analyse` (liens, e-mails) ouvre une étape. Le résultat et le temps passé sont dans la dernière étape.
+
+L'**Analyse se lit en notes** : une ligne courte par chose à savoir (avis, objet, montant, durée, date limite et plateforme, visite, questions, critères, consignes du mémoire, pièces demandées, chaque point bloquant ou d'attention), chacune avec sa source cliquable ; « Voir l'analyse complète » ouvre les blocs détaillés (tableaux, exigences du CCTP, points à vérifier).
+
+- CA1 : un dossier neuf n'ouvre aucune étape ; la carte demande le DCE et son bouton ouvre l'étape DCE.
+- CA2 : la carte et la barre suivent le travail fait (l'étape en cours change sans recharger la page).
+- CA3 : un dossier sans bordereau n'a pas d'étape « Prix ».
+- CA4 : chaque note de l'analyse tirée du DCE garde sa source (fichier + page) ; un rappel ouvre l'analyse complète au bon bloc.
+- CA5 : sur téléphone, les étapes passent sur deux lignes, sans élargir la page.
 
 **US-3.3 Avis Go / No-Go**
 Score + explication (adéquation métier, distance, taille, délai restant, pièces manquantes). Indicatif uniquement.

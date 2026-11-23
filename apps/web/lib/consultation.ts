@@ -1,9 +1,8 @@
 /**
  * Rules of the consultations (ADR-052): a general contractor asks the company for a quote on
- * part of a lot. The dossier is lighter (Aperçu · Documents reçus · Prix · Devis), prices come
+ * part of a lot. The dossier is lighter (Documents reçus · Prix · Devis), prices come
  * from « Ma liste de prix » or the company, the quote cites the CCTP. Pure functions.
  */
-import type { TabId } from "@/lib/dossier";
 import { parseEuros } from "@/lib/format";
 import type { BidKind, Inclusion, QuoteState, ServiceIn } from "@/lib/types";
 
@@ -11,13 +10,6 @@ export const KIND_LABELS: Record<BidKind, string> = {
   tender: "Appel d'offres",
   consultation: "Consultation (devis)",
 };
-
-export const CONSULTATION_TABS: { id: TabId; label: string }[] = [
-  { id: "apercu", label: "Aperçu" },
-  { id: "dce", label: "Documents reçus" },
-  { id: "prix", label: "Prix" },
-  { id: "devis", label: "Devis" },
-];
 
 /** The same units as the server (app/db/models/pricing.py PRICE_UNITS). */
 export const PRICE_UNITS = [

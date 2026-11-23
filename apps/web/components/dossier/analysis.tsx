@@ -18,6 +18,7 @@ import { api } from "@/lib/api";
 import { type BlockId, blockSummaries, shortTitle } from "@/lib/dossier";
 import { formatCents, formatDateTime } from "@/lib/format";
 import { useAction, useApi } from "@/lib/hooks";
+import { analysisNotes, type Note } from "@/lib/notes";
 import {
   DOC_CHECK,
   FACTOR_TONE,
@@ -74,6 +75,43 @@ const BAR_COLORS = [
   "bg-rose-500",
 ];
 
+const NOTE_DOT: Record<Note["tone"], string> = {
+  neutral: "bg-slate-300",
+  ok: "bg-emerald-500",
+  info: "bg-sky-500",
+  warning: "bg-amber-500",
+  danger: "bg-red-600",
+};
+
+/** One short line per thing to know, each with its source in the DCE (ADR-053). */
+function NoteList({ notes }: { notes: Note[] }) {
+  if (!notes.length) return <Empty>L&apos;analyse n&apos;a rien relevé.</Empty>;
+  return (
+    <ul className="divide-y divide-slate-100" aria-label="L'essentiel du DCE">
+      {notes.map((n) => (
+        <li
+          key={n.key}
+          className="grid grid-cols-[0.625rem_minmax(0,1fr)] gap-x-3 py-2 text-sm sm:grid-cols-[0.625rem_8rem_minmax(0,1fr)]"
+        >
+          <span
+            className={`mt-1.5 h-2.5 w-2.5 rounded-full ${NOTE_DOT[n.tone]}`}
+            aria-hidden="true"
+          />
+          <span
+            className={`font-semibold ${n.tone === "danger" ? "text-red-800" : n.tone === "warning" ? "text-amber-900" : "text-slate-700"}`}
+          >
+            {n.label}
+          </span>
+          <span className="col-start-2 text-slate-800 sm:col-start-3">
+            {n.text}
+            <SourceLink source={n.source} />
+          </span>
+        </li>
+      ))}
+    </ul>
+  );
+}
+
 export function AnalysisSection({
   bidId,
   onReady,
@@ -88,12 +126,17 @@ export function AnalysisSection({
   const [read, setRead] = useState<Set<number>>(new Set());
   const [filter, setFilter] = useState("all");
   const [showAll, setShowAll] = useState(false);
+  // ADR-053: the analysis reads as short notes; the full analysis is one click away
+  const [full, setFull] = useState(false);
   const [anchorSeen, setAnchorSeen] = useState(openAnchor?.n);
   if (openAnchor && openAnchor.n !== anchorSeen) {
     // a new request to open a block: adjust the state while rendering (no effect needed)
     setAnchorSeen(openAnchor.n);
     const id = openAnchor.id.replace(/^bloc-/, "") as BlockId;
-    if (BLOCKS.includes(id)) setOpen((prev) => new Set(prev).add(id));
+    if (BLOCKS.includes(id)) {
+      setFull(true);
+      setOpen((prev) => new Set(prev).add(id));
+    }
   }
   const wasWorking = useRef(false);
   const analysis = useApi<Analysis>(`/bids/${bidId}/analysis`, (a) => {
@@ -194,6 +237,32 @@ export function AnalysisSection({
   const weights = d.award_criteria.map((c) => c.weight_pct ?? 0);
   const total = weights.reduce((x, y) => x + y, 0);
 
+  if (!full)
+    return (
+      <SourceViewer>
+        <div className="space-y-3">
+          {rerun.error && <Alert tone="danger">{rerun.error}</Alert>}
+          <Card
+            title="L'essentiel du DCE"
+            color="blue"
+            actions={actions}
+            id="analyse-notes"
+          >
+            <NoteList notes={analysisNotes(a, new Date())} />
+            <div className="mt-4 flex flex-wrap items-center justify-between gap-3 border-t border-slate-200 pt-3">
+              <p className="text-xs text-slate-500">
+                Lu dans la version {a.dce_version} du DCE. Vérifiez avant de
+                vous engager : la décision vous appartient.
+              </p>
+              <Button variant="secondary" onClick={() => setFull(true)}>
+                Voir l&apos;analyse complète
+              </Button>
+            </div>
+          </Card>
+        </div>
+      </SourceViewer>
+    );
+
   return (
     <SourceViewer>
       <div className="space-y-3">
@@ -203,6 +272,9 @@ export function AnalysisSection({
             vérifiez avant de vous engager.
           </p>
           <div className="flex flex-wrap items-center gap-2">
+            <Button variant="ghost" onClick={() => setFull(false)}>
+              Revenir à l&apos;essentiel
+            </Button>
             <Button
               variant="ghost"
               onClick={() =>

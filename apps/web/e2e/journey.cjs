@@ -266,16 +266,19 @@ let current; // the page, for a screenshot when a step fails
   await page.getByRole("button", { name: "Créer", exact: true }).click();
   await page.waitForURL(/\/dossiers\/[0-9a-f-]+$/);
   const bidUrl = page.url(); // lot 4: the paid relaunch of its analysis
-  // Dossier in tabs: a new dossier opens on its DCE tab; the overview asks for the DCE first
-  if (
-    (await page
-      .getByRole("tab", { name: "DCE" })
-      .getAttribute("aria-selected")) !== "true"
-  )
-    throw new Error("a new dossier must open on its DCE tab");
-  await page.getByRole("tab", { name: "Aperçu" }).click();
-  await page.getByText("Le DCE n'est pas encore prêt").waitFor();
-  await page.getByRole("tab", { name: "DCE" }).click();
+  // Guided dossier (ADR-053): no step open, the next step asks for the DCE first; its button
+  // opens the DCE step
+  await page.getByRole("heading", { name: "Récupérer le DCE" }).waitFor();
+  if (await page.getByRole("tab", { selected: true }).count())
+    throw new Error("a new dossier must open with no step open");
+  await page.screenshot({
+    path: `${S}/02-dossier-nouveau.png`,
+    fullPage: true,
+  });
+  await page
+    .getByRole("button", { name: "Récupérer le DCE", exact: true })
+    .click();
+  await page.getByRole("tab", { name: "DCE", selected: true }).waitFor(); // the step is open
   // A phone greys out a file a site sent with a wrong type (AWS): the picker must show every
   // file; the zone refuses an unsupported name itself and the server checks the content.
   if ((await page.getAttribute("#dce-upload", "accept")) !== null)
@@ -289,9 +292,10 @@ let current; // the page, for a screenshot when a step fails
     .getByRole("cell", { name: "DCE/CCTP.pdf", exact: true })
     .waitFor({ timeout: 60000 });
   step("DCE processed in the background, pieces listed");
-  // The overview: four tiles and the to-do list, once the analysis is ready
-  await page.getByRole("tab", { name: "Aperçu" }).click();
-  await page.getByText("À faire avant de répondre").waitFor({ timeout: 90000 });
+  // The top of the page once analysed: four key facts, the next step and its reminders
+  await page
+    .getByRole("heading", { name: "Préparer le mémoire technique" })
+    .waitFor({ timeout: 90000 });
   for (const tile of [
     "Avis Go / No-Go",
     "Montant",
@@ -299,11 +303,18 @@ let current; // the page, for a screenshot when a step fails
     "Visite du site",
   ])
     await page
-      .getByRole("tabpanel", { name: "Aperçu" })
+      .getByRole("region", { name: "Chiffres clés" })
       .getByText(tile, { exact: true })
       .waitFor();
+  await page.getByText("À ne pas oublier").waitFor();
+  if (
+    (await page
+      .getByRole("tab", { name: /Analyse/ })
+      .getAttribute("aria-current")) === "step"
+  )
+    throw new Error("the analysed step is still the current one");
   await page.screenshot({ path: `${S}/02a-apercu.png`, fullPage: true });
-  // A to-do line opens its block in the analysis tab, in view
+  // A reminder opens its block in the full analysis, in view
   await page.getByRole("button", { name: /Ajouter : Extrait Kbis/ }).click();
   const piecesBlock = page
     .getByRole("tabpanel", { name: "Analyse" })
@@ -323,10 +334,23 @@ let current; // the page, for a screenshot when a step fails
       .getAttribute("aria-selected")) !== "true"
   )
     throw new Error("?onglet=analyse must open the analysis tab");
-  step(
-    "dossier in tabs: DCE first, overview tiles and to-do, tab kept in the address",
-  );
+  // ADR-053: the analysis reads as short notes, each with its source; the full analysis is
+  // one click away
   const analysisPanel = page.getByRole("tabpanel", { name: "Analyse" });
+  const notes = analysisPanel.getByRole("list", { name: "L'essentiel du DCE" });
+  await notes.getByText("Pièces", { exact: true }).waitFor({ timeout: 90000 });
+  await notes.getByText("Pénalités de retard prévues au CCAP").waitFor();
+  if (
+    !(await notes.getByRole("button", { name: /^\[RC\.pdf p\. 1\]/ }).count())
+  )
+    throw new Error("a note lost its source");
+  await page.screenshot({ path: `${S}/02b-analyse-notes.png`, fullPage: true });
+  await analysisPanel
+    .getByRole("button", { name: "Voir l'analyse complète" })
+    .click();
+  step(
+    "guided dossier: no step open, the next step and its reminders, the key facts, the analysis in notes, the step kept in the address",
+  );
   await analysisPanel
     .getByRole("button", { name: /^Avis Go \/ No-Go/ })
     .waitFor({ timeout: 90000 });
@@ -481,8 +505,12 @@ let current; // the page, for a screenshot when a step fails
   );
 
   // 6d bis. « Ce qu'il manque » (ADR-048): listed once, filled from the profile
-  await page.getByRole("tab", { name: "Aperçu" }).click();
-  await page.getByRole("button", { name: /1 information à compléter/ }).click();
+  await page.getByRole("tab", { name: "Mémoire" }).click(); // the steps follow the drafting
+  await page
+    .getByRole("heading", { name: "Compléter 1 information pour le mémoire" })
+    .waitFor();
+  await page.getByRole("tab", { name: /1 information à compléter/ }).waitFor();
+  await page.getByRole("button", { name: "Compléter maintenant" }).click();
   const missingBlock = page.locator("#bloc-missing");
   await missingBlock.getByText("Ce qu'il manque : 1 information").waitFor();
   const agentsRow = missingBlock.locator("li", {
@@ -518,20 +546,16 @@ let current; // the page, for a screenshot when a step fails
     .getByText("4 agents affectés au site", { exact: false })
     .first()
     .waitFor();
-  await page.getByRole("tab", { name: "Aperçu" }).click();
-  await page
-    .getByText("Déjà exporté")
-    .or(page.getByText("Word, PDF ou dossier complet"))
-    .first()
-    .waitFor();
+  await page.getByRole("tab", { name: "Mémoire" }).click(); // the steps follow the work done
+  await page.getByRole("tab", { name: /Mémoire.*rédigé/ }).waitFor();
   if (
-    await page
-      .getByText(/informations? à compléter/)
-      .filter({ visible: true })
-      .count()
+    (await page
+      .getByRole("region", { name: "Avancement du dossier" })
+      .textContent()
+      .then((t) => /à compléter/.test(t))) ||
+    (await page.getByRole("heading", { name: /^Compléter/ }).count())
   )
-    throw new Error("the overview still lists missing information");
-  await page.getByRole("tab", { name: "Mémoire" }).click();
+    throw new Error("the steps still ask for missing information");
   step(
     "« Ce qu'il manque »: one line for two chapters, staff added from the dossier, sentences completed",
   );
@@ -607,7 +631,7 @@ let current; // the page, for a screenshot when a step fails
   step("DC1 generated and downloaded, pre-filled from profile and DCE");
 
   // 6f. Export of the complete folder, warnings first (P2-07)
-  await page.getByRole("tab", { name: "Export" }).click();
+  await page.getByRole("tab", { name: "Envoi" }).click();
   const exportCard = page.locator("section", {
     has: page.getByRole("heading", { name: "Export", exact: true }),
   });
@@ -660,9 +684,9 @@ let current; // the page, for a screenshot when a step fails
   step(
     "memoir written into the buyer's frame: the candidate's name, the boxes kept",
   );
-  // The overview follows the work done in the other tabs
-  await page.getByRole("tab", { name: "Aperçu" }).click();
-  await page.getByText("Déjà exporté").waitFor();
+  // The steps follow the work done: the dossier is exported, it waits for its deposit
+  await page.getByRole("tab", { name: "Envoi" }).click();
+  await page.getByRole("tab", { name: /Envoi.*à déposer/ }).waitFor();
   const names = zipNames(`${S}/dossier.zip`);
   for (const expected of [
     "01 - Mémoire technique.docx",
@@ -715,8 +739,12 @@ let current; // the page, for a screenshot when a step fails
   await page.getByRole("button", { name: "Créer", exact: true }).click();
   await page.waitForURL(/\/dossiers\/[0-9a-f-]+$/);
   await page.getByRole("tab", { name: "Devis" }).waitFor(); // the page has loaded
+  await page.getByRole("heading", { name: "La consultation" }).waitFor();
+  await page
+    .getByRole("heading", { name: "Déposer les documents reçus" })
+    .waitFor();
   const consultTabs = await page.getByRole("tab").allTextContents();
-  for (const name of ["Aperçu", "Documents reçus", "Prix", "Devis"])
+  for (const name of ["Documents reçus", "Prix", "Devis"])
     if (!consultTabs.some((t) => t.includes(name)))
       throw new Error(
         `the consultation has no « ${name} » tab: ${consultTabs}`,
@@ -952,12 +980,15 @@ let current; // the page, for a screenshot when a step fails
     "notices pre-filtered (area, CPV) and scored; one dismissed with a reason, one followed",
   );
 
-  // 10. Result of a bid (US-5.4) and dashboard (US-5.3): the result is in the overview tab
-  await page.getByRole("tab", { name: "Aperçu" }).click();
+  // 10. Result of a bid (US-5.4) and dashboard (US-5.3): once deposited, the next step asks
+  // for the result; its detail is in the last step
   await page
     .getByLabel("Statut", { exact: true })
     .filter({ visible: true })
     .selectOption("submitted");
+  await page.getByRole("heading", { name: "Noter le résultat" }).waitFor();
+  await page.getByRole("button", { name: "Marché gagné" }).waitFor();
+  await page.getByRole("tab", { name: "Envoi" }).click();
   await page.getByLabel("Montant proposé (€ HT)").fill("148 000");
   await page.getByLabel("Classement").fill("1");
   await page
@@ -1138,7 +1169,13 @@ let current; // the page, for a screenshot when a step fails
     await page.getByLabel("Intitulé").fill(title);
     await page.getByRole("button", { name: "Créer", exact: true }).click();
     await page.waitForURL(/\/dossiers\/[0-9a-f-]+$/);
-    return page.url();
+    const url = page.url();
+    // the next step's button opens the DCE step (ADR-053), then only the robot's button stays
+    await page
+      .getByRole("button", { name: "Récupérer le DCE", exact: true })
+      .click();
+    await page.getByLabel("Collez le lien de la consultation").waitFor();
+    return url;
   }
   async function pasteLink(url) {
     await page.getByLabel("Collez le lien de la consultation").fill(url);
@@ -1611,7 +1648,7 @@ let current; // the page, for a screenshot when a step fails
   // the DCE robot switched off: the client is guided, then it is switched on again
   await admin.getByLabel("Robot de récupération des DCE actif").click();
   await admin.getByText("Coupé — mode guidé pour tous les clients").waitFor();
-  await page.goto(robotOffBid);
+  await page.goto(`${robotOffBid}?onglet=dce`);
   await page.getByRole("link", { name: "Ouvrir la page du DCE" }).waitFor();
   if (
     await page

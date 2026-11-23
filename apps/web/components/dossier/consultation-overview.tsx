@@ -4,53 +4,22 @@ import { useState } from "react";
 
 import { Alert, Button, Card, Field, Input } from "@/components/ui";
 import { api } from "@/lib/api";
-import type { TabId } from "@/lib/dossier";
 import { formatDateTime, fromParisInput, toParisInput } from "@/lib/format";
 import { useAction } from "@/lib/hooks";
-import type { Bid, QuoteState } from "@/lib/types";
+import type { Bid } from "@/lib/types";
 
 /**
- * The overview of a consultation (ADR-052): who asks, how to reach them, and the three steps
- * of the quote (documents received, prices, quote).
+ * Who asks for the quote and how to reach them (ADR-052), at the top of a consultation; its
+ * steps are in the step bar of the guided dossier (ADR-053).
  */
 export function ConsultationOverview({
   bid,
-  quote,
-  onOpen,
   onSaved,
 }: {
   bid: Bid;
-  quote: QuoteState | undefined;
-  onOpen: (tab: TabId) => void;
   onSaved: (b: Bid) => void;
 }) {
   const [editing, setEditing] = useState(false);
-  const steps: { tab: TabId; label: string; state: string; done: boolean }[] = [
-    {
-      tab: "dce",
-      label: "Documents reçus",
-      state: bid.progress?.dce_ready
-        ? "Déposés et lus."
-        : "Déposez les pièces reçues par e-mail.",
-      done: !!bid.progress?.dce_ready,
-    },
-    {
-      tab: "prix",
-      label: "Prix",
-      state:
-        quote?.blocking ?? "Tous les prix des rubriques retenues sont saisis.",
-      done: !!quote && !quote.blocking,
-    },
-    {
-      tab: "devis",
-      label: "Devis",
-      state:
-        quote?.quote?.status === "ready"
-          ? `Devis n° ${quote.quote.number} prêt.`
-          : "À préparer quand les prix sont saisis.",
-      done: quote?.quote?.status === "ready",
-    },
-  ];
 
   return (
     <div className="space-y-6">
@@ -99,27 +68,6 @@ export function ConsultationOverview({
             <dd>{formatDateTime(bid.deadline_at)}</dd>
           </dl>
         )}
-      </Card>
-      <Card title="Étapes du devis" color="green" icon="todo">
-        <ol className="space-y-3">
-          {steps.map((s, i) => (
-            <li
-              key={s.tab}
-              className="flex flex-wrap items-center justify-between gap-3"
-            >
-              <div>
-                <p className="text-sm font-semibold text-slate-900">
-                  {s.done ? "✓ " : `${i + 1}. `}
-                  {s.label}
-                </p>
-                <p className="text-sm text-slate-600">{s.state}</p>
-              </div>
-              <Button variant="secondary" onClick={() => onOpen(s.tab)}>
-                Ouvrir
-              </Button>
-            </li>
-          ))}
-        </ol>
       </Card>
     </div>
   );

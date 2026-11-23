@@ -366,3 +366,21 @@ def test_an_option_is_shown_apart_from_the_total(
     assert out["total_cents"] == 6250 * 208 + 3125 * 2
     assert out["options_total_cents"] == 40000 * 2
     assert out["lines"][2]["total_cents"] == 40000 * 2
+
+
+def test_the_dossier_knows_its_price_file_and_when_it_is_priced(
+    make_client: Factory, outbox: Outbox, queue: FakeQueue, reader: PriceModel
+) -> None:
+    """The guided dossier shows « Prix » only with a price file, done once nothing is left."""
+    c = signed_in_client(make_client, outbox)
+    c.put("/profile/rates", json={"hourly_rate_cents": 2500, "night_pct": 25})
+    bid = bid_with_prices(c, queue)
+    progress = c.get(f"/bids/{bid}").json()["progress"]
+    assert (progress["price_files"], progress["prices_ready"]) == (1, False)  # PDF twin hidden
+    sheet = read(c, queue, bid)
+    entries = {"DQE!B5": {"hours": "2"}, "DQE!B32": {"price_cents": 40000}}
+    c.put(f"/price-sheets/{sheet['id']}", json={"entries": entries})
+    assert c.get(f"/bids/{bid}").json()["progress"]["prices_ready"] is False  # Gymnase B left
+    entries["DQE!B6"] = {"hours": "2"}
+    c.put(f"/price-sheets/{sheet['id']}", json={"entries": entries})
+    assert c.get(f"/bids/{bid}").json()["progress"]["prices_ready"] is True

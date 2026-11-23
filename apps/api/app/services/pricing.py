@@ -230,8 +230,34 @@ def sheet_out(db: Session, sheet: PriceSheet) -> PriceSheetOut:
     )
 
 
-def prices_for_bid(db: Session, bid: Bid) -> PricesOut:
+def shown_price_files(db: Session, bid: Bid) -> list[DceFile]:
+    """The price files the company fills: an Excel file hides its PDF twin."""
     files = price_files(db, bid)
+    excel_stems = {_stem(f.path) for f in files if fillable(f.path)}
+    return [f for f in files if fillable(f.path) or _stem(f.path) not in excel_stems]
+
+
+def prices_ready(db: Session, bid: Bid, files: list[DceFile]) -> bool:
+    """Every price file read, and no line left without a price (the guided dossier's step)."""
+    if not files:
+        return False
+    sheets = {
+        s.dce_file_id: s
+        for s in db.scalars(
+            select(PriceSheet).where(
+                PriceSheet.bid_id == bid.id,
+                PriceSheet.dce_file_id.in_([f.id for f in files]),
+                PriceSheet.status == "ready",
+            )
+        )
+    }
+    return all(
+        f.id in sheets and priced_sheet(db, sheets[f.id])[1].missing_count == 0 for f in files
+    )
+
+
+def prices_for_bid(db: Session, bid: Bid) -> PricesOut:
+    files = shown_price_files(db, bid)
     sheets = {
         s.dce_file_id: s
         for s in db.scalars(
@@ -240,11 +266,8 @@ def prices_for_bid(db: Session, bid: Bid) -> PricesOut:
             )
         )
     }
-    excel_stems = {_stem(f.path) for f in files if fillable(f.path)}
     out = []
     for f in files:
-        if not fillable(f.path) and _stem(f.path) in excel_stems:
-            continue  # the PDF twin of an Excel file: the Excel one is filled
         sheet = sheets.get(f.id)
         out.append(
             PriceFileOut(

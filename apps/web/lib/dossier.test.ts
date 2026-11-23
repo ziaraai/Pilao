@@ -3,15 +3,13 @@ import { describe, expect, it } from "vitest";
 import {
   blockSummaries,
   daysLeftText,
-  defaultTab,
   exportableMemoir,
   overviewTiles,
   shortTitle,
-  tabDone,
-  tabFromQuery,
   todoItems,
 } from "./dossier";
-import type { Analysis, Bid, DossierProgress } from "./types";
+import { analysis } from "./test-fixtures";
+import type { Bid, DossierProgress } from "./types";
 
 const NONE: DossierProgress = {
   dce_ready: false,
@@ -52,99 +50,6 @@ function bid(over: Partial<Bid> = {}): Bid {
   };
 }
 
-type Watch = Analysis["data"] extends infer D
-  ? D extends { watch_points: infer W }
-    ? W
-    : never
-  : never;
-
-function analysis(over: {
-  watch?: Watch;
-  documents?: Analysis["documents"];
-  criteria?: { name: string; weight_pct: number }[];
-  requirements?: number;
-  warnings?: string[];
-  visit?: { mandatory: boolean | null; dates: string[] };
-  template?: boolean | null;
-  questions?: string | null;
-  font?: { name: string | null; size: number | null } | null;
-  maxPages?: number | null;
-  amount?: number | null;
-  framework?: string | null;
-}): Analysis {
-  return {
-    id: "a",
-    status: "ready",
-    error: null,
-    dce_version: 1,
-    model: null,
-    prompt_version: "0.4.0",
-    created_at: "2026-11-14T09:00:00Z",
-    warnings: over.warnings ?? [],
-    requirements: Array.from({ length: over.requirements ?? 0 }, (_, i) => ({
-      id: `r${i}`,
-      ref: `CCTP-${i + 1}`,
-      text: "Exigence",
-      category: "other",
-      importance: "expected",
-      source: SRC,
-    })),
-    documents: over.documents ?? [],
-    go_no_go: {
-      score: 60,
-      verdict: "to_study",
-      factors: [],
-      disclaimer: "Avis indicatif",
-    },
-    framework_amounts: over.framework
-      ? {
-          minimum_eur_ht: 80000,
-          maximum_eur_ht: 170000,
-          per_year: true,
-          label: over.framework,
-          source: SRC,
-        }
-      : null,
-    imposed_font: over.font ?? null,
-    data: {
-      key_info: {
-        buyer_name: { value: "Ville", source: SRC },
-        title: { value: "Entretien", source: SRC },
-        procedure: { value: "Appel d'offres ouvert", source: SRC },
-        estimated_amount_eur_ht:
-          over.amount != null ? { value: over.amount, source: SRC } : null,
-        duration: { value: "12 mois reconductible 3 fois", source: SRC },
-        submission_deadline: null,
-        submission_platform: null,
-        lots: [],
-      },
-      site_visit: {
-        mandatory: over.visit?.mandatory ?? null,
-        dates: over.visit?.dates ?? [],
-        details: null,
-        source: SRC,
-      },
-      questions_deadline: over.questions
-        ? { value: over.questions, source: SRC }
-        : null,
-      award_criteria: (over.criteria ?? []).map((c) => ({
-        ...c,
-        subcriteria: [],
-        source: SRC,
-      })),
-      memoir_requirements: {
-        imposed_outline: [],
-        response_template_provided: over.template ?? null,
-        max_pages: over.maxPages ?? null,
-        format_constraints: null,
-        source: SRC,
-      },
-      required_documents: [],
-      watch_points: over.watch ?? [],
-    },
-  };
-}
-
 const VISIT_TEXT =
   "Visite obligatoire : l'offre sans attestation de visite signée est déclarée irrégulière.";
 const doc = (name: string, status: string, detail = "") => ({
@@ -153,34 +58,6 @@ const doc = (name: string, status: string, detail = "") => ({
   compliance_kind: null,
   status,
   detail,
-});
-
-describe("tabs", () => {
-  it("opens the DCE until one is deposited, then the overview", () => {
-    expect(defaultTab(null)).toBe("dce");
-    expect(defaultTab(NONE)).toBe("dce");
-    expect(defaultTab({ ...NONE, dce_ready: true })).toBe("apercu");
-  });
-  it("reads the tab from the address, unknown or empty falls back", () => {
-    expect(tabFromQuery("analyse", READY)).toBe("analyse");
-    expect(tabFromQuery("prix", READY)).toBe("prix");
-    expect(tabFromQuery("xyz", READY)).toBe("apercu");
-    expect(tabFromQuery("", NONE)).toBe("dce");
-    expect(tabFromQuery(null, READY)).toBe("apercu");
-  });
-  it("marks each step done from the progress", () => {
-    expect(tabDone({ ...READY, memoir_ready: true, exported: true })).toEqual({
-      apercu: false,
-      dce: true,
-      analyse: true,
-      memoire: true,
-      prix: false,
-      documents: false,
-      export: true,
-      devis: false,
-    });
-    expect(tabDone(null).dce).toBe(false);
-  });
 });
 
 describe("short titles", () => {
