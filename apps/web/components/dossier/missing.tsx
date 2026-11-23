@@ -4,11 +4,13 @@ import { useEffect, useRef, useState } from "react";
 
 import { Disclosure } from "@/components/blocks";
 import { AddToProfileDialog } from "@/components/dossier/missing-dialog";
-import { Alert, Button, Card, Input } from "@/components/ui";
+import { Alert, Button, Card, Textarea } from "@/components/ui";
 import { api } from "@/lib/api";
 import { useAction, useApi } from "@/lib/hooks";
 import {
   KIND_META,
+  answerExample,
+  answersHere,
   chaptersLabel,
   fillMessage,
   gapMessages,
@@ -138,7 +140,9 @@ function MissingRow({
 }) {
   const meta = KIND_META[item.kind];
   const company = isCompanyKind(item.kind);
-  const [answering, setAnswering] = useState(!company);
+  // a question about this tender is answered here first; the profile stays a second choice
+  const here = answersHere(item);
+  const [answering, setAnswering] = useState(here);
   const [value, setValue] = useState("");
   const [removing, setRemoving] = useState(false);
   const [adding, setAdding] = useState(false);
@@ -185,12 +189,12 @@ function MissingRow({
           </div>
         )}
       </div>
-      <div className="flex shrink-0 flex-col items-start gap-2 sm:items-end">
+      <div className="flex w-full shrink-0 flex-col items-start gap-2 sm:w-auto sm:items-end">
         {busy ? (
           <span className="text-xs text-slate-500">Rédaction en cours</span>
         ) : (
           <>
-            {company && meta.button && (
+            {company && meta.button && !here && (
               <Button
                 variant="secondary"
                 busy={act.busy || running(item)}
@@ -201,23 +205,40 @@ function MissingRow({
             )}
             {answering && inChapters && (
               <form
-                className="flex gap-2"
+                className="flex w-full flex-col gap-2 sm:w-80"
                 onSubmit={(e) => {
                   e.preventDefault();
                   void send("answer", { key: item.key, answer: value });
                 }}
               >
-                <Input
+                <Textarea
                   aria-label={`Réponse : ${item.text}`}
                   value={value}
                   maxLength={2000}
+                  rows={2}
+                  placeholder={answerExample(item.text)}
                   onChange={(e) => setValue(e.target.value)}
-                  className="w-56"
+                  className="w-full"
                 />
-                <Button type="submit" busy={act.busy} disabled={!value.trim()}>
-                  OK
+                <Button
+                  type="submit"
+                  busy={act.busy}
+                  disabled={!value.trim()}
+                  className="self-end"
+                >
+                  Enregistrer la réponse
                 </Button>
               </form>
+            )}
+            {company && meta.button && here && (
+              <button
+                type="button"
+                className="text-xs text-sky-800 underline disabled:opacity-50"
+                disabled={act.busy || running(item)}
+                onClick={() => setAdding(true)}
+              >
+                {meta.button} (pour tous vos dossiers)
+              </button>
             )}
             {inChapters && (
               <div className="flex flex-wrap gap-3 text-xs">

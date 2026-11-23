@@ -2,6 +2,8 @@ import { describe, expect, it } from "vitest";
 
 import {
   KIND_META,
+  answerExample,
+  answersHere,
   chaptersLabel,
   dialogIntro,
   fillMessage,
@@ -115,5 +117,73 @@ describe("the add-to-profile window", () => {
     expect(dialogIntro(null)).toBe(
       "Ce que vous ajoutez est enregistré dans votre profil et servira à tous vos dossiers.",
     );
+  });
+});
+
+describe("where a missing item is answered", () => {
+  // the items of the Louison Bobet DQE (ENG PRO, 23/11): they are about this tender
+  const HERE = [
+    "effectif affecté à chaque bâtiment et volume horaire hebdomadaire correspondant",
+    "nom, qualification et coordonnées directes du chef d'équipe désigné pour ce marché.",
+    "service de santé au travail auquel l'entreprise est rattachée et périodicité des visites appliquée aux agents du marché.",
+    "matériel de vitrerie utilisé pour ce marché (raclettes, perches, produits)",
+    "affectation des matériels à ce marché, avec quantités et modèles par bâtiment",
+    "planning des interventions par site",
+  ];
+
+  it("answers in the dossier what is about this tender, even in a drawer of the profile", () => {
+    for (const text of HERE)
+      expect(answersHere(item({ text, kind: "staff" })), text).toBe(true);
+  });
+
+  it("sends to the profile what serves every dossier", () => {
+    for (const text of [
+      "nombre d'agents",
+      "certification Qualipropre",
+      "chiffre d'affaires des trois dernières années",
+      "références de marchés similaires",
+    ])
+      expect(answersHere(item({ text, kind: "staff" })), text).toBe(false);
+  });
+
+  it("always answers in place a detail of the tender", () => {
+    expect(
+      answersHere(item({ text: "nom de l'acheteur", kind: "tender" })),
+    ).toBe(true);
+  });
+});
+
+describe("the example of an answer", () => {
+  it("fits the question, and is only an example", () => {
+    const ex = (text: string) => answerExample(text);
+    expect(
+      ex("effectif affecté à chaque bâtiment et volume horaire hebdomadaire"),
+    ).toBe(
+      "ex. Hôtel de ville : 2 agents, 15 h / semaine ; gymnase : 1 agent, 8 h / semaine",
+    );
+    expect(ex("coordonnées du chef d'équipe désigné pour ce marché")).toBe(
+      "ex. M. Martin, chef d'équipe, 10 ans d'expérience, 06 12 34 56 78",
+    );
+    expect(ex("service de santé au travail et périodicité des visites")).toBe(
+      "ex. AST Grand Lyon, visite tous les 2 ans",
+    );
+    expect(ex("matériel de vitrerie utilisé (raclettes, perches)")).toMatch(
+      /^ex\. perches télescopiques/,
+    );
+    expect(ex("affectation des matériels par bâtiment")).toMatch(
+      /^ex\. Bâtiment A : 1 autolaveuse/,
+    );
+    expect(ex("produits d'entretien utilisés")).toMatch(
+      /^ex\. produits écolabellisés/,
+    );
+    expect(ex("planning des interventions")).toMatch(
+      /^ex\. du lundi au vendredi/,
+    );
+    expect(ex("nombre d'agents")).toBe("ex. 4 agents, dont 1 chef d'équipe");
+    expect(ex("quelque chose d'inattendu")).toBe(
+      "Votre réponse, en quelques mots ou chiffres",
+    );
+    for (const text of ["nombre d'agents", "planning des interventions"])
+      expect(ex(text).startsWith("ex. ")).toBe(true); // never mistaken for an answer
   });
 });

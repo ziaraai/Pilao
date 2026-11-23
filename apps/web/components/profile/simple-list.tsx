@@ -120,6 +120,7 @@ export function SimpleList<T extends { id: string }>({
                           aria-label={c.label}
                           form={`${path}-edit`}
                           type={c.type ?? "text"}
+                          placeholder={c.placeholder}
                           autoFocus={i === 0}
                           value={editDraft[c.key]}
                           onChange={(e) =>

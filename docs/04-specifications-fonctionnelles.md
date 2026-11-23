@@ -187,6 +187,8 @@ DC1, DC2 (ou données DUME), liste des moyens humains et matériels, liste des r
 - CA6 : chaque changement crée une révision (« modifié » pour une réponse ou une suppression, « rédigé » avec la consigne « Complété : … » pour une complétion) et rend la matrice « à revoir ».
 - CA7 : avant la rédaction, si le profil n'a ni moyens humains, ni matériel, ni références, une carte « Avant la rédaction » le dit et ouvre le même formulaire.
 - CA8 : compléter une information est une action payante réglable dans l'administration, à 0 crédit par défaut, remboursée si elle échoue.
+- CA9 (complément du 2026-11-23) : un manque qui parle de **ce marché** (« ce marché », « du marché », « chaque bâtiment », « par site », « affecté », « désigné », « volume horaire », « planning »…) se répond **dans le dossier** : la case de réponse est ouverte d'office, le tiroir du profil reste un lien (« Ajouter dans Moyens humains (pour tous vos dossiers) ») ; le formulaire du profil ne sait pas porter « Mairie : 2 agents, 15 h / semaine ».
+- CA10 : la case de réponse montre en gris un exemple adapté à la question (effectif et heures par bâtiment, chef d'équipe, santé au travail, vitrerie, matériel par bâtiment, produits, planning…), jamais écrit dans le mémoire ; les formulaires du profil (moyens humains, matériel, certifications, références, veille) montrent aussi un exemple dans chaque case où l'on peut hésiter (« Précisions : ex. CQP, temps partiel », avec une ligne qui dit à quoi elle sert).
 
 **US-4.8 Chiffrage : remplir le fichier de prix de l'acheteur** (ADR-049)
 En tant qu'entreprise, je veux que Pilao remplisse le BPU, le DPGF ou le DQE de l'acheteur avec mes prix, pour ne plus le faire à la main dans Excel.

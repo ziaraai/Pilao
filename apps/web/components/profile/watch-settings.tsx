@@ -234,6 +234,7 @@ export function WatchSettings({
                 <Textarea
                   id="include"
                   rows={2}
+                  placeholder="ex. nettoyage, entretien des locaux, vitrerie"
                   value={form.include}
                   onChange={set("include")}
                 />
@@ -254,6 +255,7 @@ export function WatchSettings({
                 <Input
                   id="min"
                   inputMode="decimal"
+                  placeholder="ex. 20 000"
                   value={form.min}
                   onChange={set("min")}
                 />
@@ -262,6 +264,7 @@ export function WatchSettings({
                 <Input
                   id="max"
                   inputMode="decimal"
+                  placeholder="ex. 500 000"
                   value={form.max}
                   onChange={set("max")}
                 />

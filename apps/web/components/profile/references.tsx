@@ -185,6 +185,7 @@ function ReferenceFields({
       <Field label="Client" htmlFor={`${prefix}-client`}>
         <Input
           id={`${prefix}-client`}
+          placeholder="ex. Ville de Montbrison"
           value={draft.client_name}
           onChange={(e) => setDraft({ ...draft, client_name: e.target.value })}
         />
@@ -202,6 +203,7 @@ function ReferenceFields({
       <Field label="Objet du marché" htmlFor={`${prefix}-title`}>
         <Input
           id={`${prefix}-title`}
+          placeholder="ex. Nettoyage des écoles et du gymnase"
           value={draft.title}
           onChange={(e) => setDraft({ ...draft, title: e.target.value })}
         />
@@ -209,6 +211,7 @@ function ReferenceFields({
       <Field label="Département" htmlFor={`${prefix}-dept`}>
         <Input
           id={`${prefix}-dept`}
+          placeholder="ex. 42"
           value={draft.department}
           onChange={(e) => setDraft({ ...draft, department: e.target.value })}
         />
@@ -217,6 +220,7 @@ function ReferenceFields({
         <Input
           id={`${prefix}-amount`}
           inputMode="decimal"
+          placeholder="ex. 85 000"
           value={draft.amount}
           onChange={(e) => setDraft({ ...draft, amount: e.target.value })}
         />
@@ -225,6 +229,7 @@ function ReferenceFields({
         <Input
           id={`${prefix}-year`}
           type="number"
+          placeholder="ex. 2024"
           value={draft.year}
           onChange={(e) => setDraft({ ...draft, year: e.target.value })}
         />
