@@ -1136,3 +1136,23 @@ export type QuoteState = {
   blocking: string | null;
   cctp: boolean;
 };
+
+/** « Plateformes des DCE » (admin, 24/11): where the DCE are, and how Pilao gets them. */
+export type AdminDcePlatformRow = {
+  platform: string;
+  retrieval: "robot" | "guided" | "none";
+  notices: number;
+  matched: number;
+  dossiers: number;
+};
+export type AdminDcePlatforms = {
+  days: number;
+  org_id: string | null;
+  rows: AdminDcePlatformRow[];
+  totals: {
+    notices: number;
+    matched: number;
+    dossiers: number;
+    robot_dossiers: number;
+  };
+};

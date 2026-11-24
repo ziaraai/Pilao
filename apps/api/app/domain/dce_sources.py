@@ -156,6 +156,26 @@ def recognize(url: str | None) -> DceSource | None:
     return DceSource(clean, _platform(hostname) or "other", hostname, host, scheme, None, None)
 
 
+_GUIDED_NAMES: dict[str, str] = {
+    "aws": "AWS (marches-publics.info)",
+    "achatpublic": "achatpublic.com",
+    "e_marchespublics": "e-marchespublics.com",
+    "marches_securises": "Marchés Sécurisés",
+}
+NO_LINK = "Sans lien vers le DCE"
+
+
+def platform_group(src: DceSource | None) -> tuple[str, Literal["robot", "guided", "none"]]:
+    """The line of « Plateformes des DCE » (admin) a link counts in, and how its DCE is
+    retrieved: by the robot (a known Atexo platform), guided, or no link at all."""
+    if src is None:
+        return NO_LINK, "none"
+    if src.platform == "atexo":
+        return src.site, "robot" if src.known else "guided"
+    name = _GUIDED_NAMES.get(src.platform)
+    return (name or src.host.split(":")[0]), "guided"
+
+
 def consultation_url(src: DceSource) -> str:
     return (
         f"{src.scheme}://{src.host}/entreprise/consultation/{src.consultation_id}"

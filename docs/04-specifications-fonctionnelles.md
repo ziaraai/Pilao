@@ -351,6 +351,11 @@ Budget d'IA maximum par entreprise et par mois (1 à 10 000 €), adresse de sup
 **US-6.19 Le robot de récupération des DCE** (ADR-045)
 Dans « Réglages », un interrupteur coupe le robot pour tous les clients (bouton « Récupérer » remplacé par le mode guidé, surveillance arrêtée) ; réussites et échecs sur 24 h ; au journal. « À surveiller » signale les pages que le robot ne comprend plus et les plateformes sans réponse.
 
+**US-6.20 Les plateformes des DCE** (24/11)
+L'exploitant voit où sont les DCE, pour savoir où le robot ou l'adresse e-mail rapporteront le plus.
+- CA1 : « Plateformes des DCE » (menu de l'administration, lecture seule) : pour chaque plateforme (PLACE et chaque plateforme Atexo connue, AWS, achatpublic, e-marchespublics, Marchés Sécurisés, les autres sites par leur domaine, « Sans lien vers le DCE »), les annonces publiées, celles retenues pour les entreprises et les dossiers créés, sur 30, 90 ou 365 jours ; la récupération : « Robot », « Guidé » ou « Pas de lien ».
+- CA2 : le lien d'un dossier est celui collé dans le dossier, sinon celui de l'annonce ; une entreprise choisie limite les annonces retenues et les dossiers aux siens ; au-delà de 20 lignes, les autres sites sont additionnés sur « Autres sites » ; en tête, « N dossiers sur M récupérables par le robot ».
+
 ---
 
 ## Hors périmètre V1

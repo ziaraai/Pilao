@@ -253,3 +253,36 @@ def test_default_port_dropped() -> None:
         "https://www.marches-publics.gouv.fr:443/entreprise/consultation/1?orgAcronyme=a"
     )
     assert src is not None and src.host == "www.marches-publics.gouv.fr"
+
+
+def test_each_link_is_counted_under_its_platform() -> None:
+    """« Plateformes des DCE » (admin, 24/11): where the DCE are, robot or guided."""
+    from app.domain.dce_sources import platform_group
+
+    def group(url: str | None) -> tuple[str, str]:
+        return platform_group(recognize(url))
+
+    assert group(
+        "https://www.marches-publics.gouv.fr/entreprise/consultation/1?orgAcronyme=a1b"
+    ) == ("PLACE", "robot")
+    assert group("https://marches.maximilien.fr/entreprise/consultation/9?orgAcronyme=x") == (
+        "Maximilien",
+        "robot",
+    )
+    # an Atexo look-alike Pilao does not know: never visited by the robot
+    assert group("https://marches.inconnu.fr/entreprise/consultation/3?orgAcronyme=z") == (
+        "marches.inconnu.fr",
+        "guided",
+    )
+    assert group("https://www.marches-publics.info/mpiaws/index.cfm?IDM=1") == (
+        "AWS (marches-publics.info)",
+        "guided",
+    )
+    assert group("https://www.achatpublic.com/sdm/ent/gen/ent_detail.do?PCSLID=1") == (
+        "achatpublic.com",
+        "guided",
+    )
+    assert group("https://www.e-marchespublics.com/x") == ("e-marchespublics.com", "guided")
+    assert group("https://www.marches-securises.fr/x") == ("Marchés Sécurisés", "guided")
+    assert group("https://acheteur.example.fr/dce") == ("acheteur.example.fr", "guided")
+    assert group(None) == ("Sans lien vers le DCE", "none")

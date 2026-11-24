@@ -1322,11 +1322,20 @@ let current; // the page, for a screenshot when a step fails
     ["/admin/entreprises", "Entreprises"],
     ["/admin/couts-ia", "Coûts de l'IA"],
     ["/admin/technique", "Technique"],
+    ["/admin/plateformes", "Plateformes des DCE"],
     ["/admin/avis", "Avis des testeurs"],
   ]) {
     await admin.getByRole("link", { name: heading, exact: true }).click();
     await admin.waitForURL(`${WEB}${path}`);
     await admin.getByRole("heading", { name: heading }).waitFor();
+    if (path === "/admin/plateformes") {
+      // 24/11: where the DCE of the notices and dossiers are, robot or guided
+      await admin.getByRole("columnheader", { name: "Récupération" }).waitFor();
+      await admin.screenshot({
+        path: `${S}/admin-plateformes.png`,
+        fullPage: true,
+      });
+    }
   }
   await admin.getByRole("link", { name: "Entreprises", exact: true }).click();
   await admin

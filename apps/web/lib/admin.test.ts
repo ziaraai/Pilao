@@ -48,21 +48,23 @@ describe("administration", () => {
     ).toBe("/admin/technique");
   });
 
-  it("has nine screens, the overview first, the settings last", () => {
+  it("has ten screens, the overview first, the settings last", () => {
     expect(ADMIN_NAV.map((n) => n.href)).toEqual([
       "/admin",
       "/admin/entreprises",
       "/admin/couts-ia",
       "/admin/technique",
+      "/admin/plateformes",
       "/admin/avis",
       "/admin/journal",
       "/admin/modules",
       "/admin/formules",
       "/admin/reglages",
     ]);
-    expect(ADMIN_NAV[6].label).toBe("Modules");
-    expect(ADMIN_NAV[7].label).toBe("Formules");
-    expect(ADMIN_NAV[8].label).toBe("Réglages");
+    expect(ADMIN_NAV[4].label).toBe("Plateformes des DCE");
+    expect(ADMIN_NAV[7].label).toBe("Modules");
+    expect(ADMIN_NAV[8].label).toBe("Formules");
+    expect(ADMIN_NAV[9].label).toBe("Réglages");
   });
 
   it("names the journal's actions in French", () => {

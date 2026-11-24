@@ -9,6 +9,7 @@ export const ADMIN_NAV: { href: string; label: string; icon: IconName }[] = [
   { href: "/admin/entreprises", label: "Entreprises", icon: "profile" },
   { href: "/admin/couts-ia", label: "Coûts de l'IA", icon: "results" },
   { href: "/admin/technique", label: "Technique", icon: "todo" },
+  { href: "/admin/plateformes", label: "Plateformes des DCE", icon: "bids" },
   { href: "/admin/avis", label: "Avis des testeurs", icon: "documents" },
   { href: "/admin/journal", label: "Journal", icon: "vault" },
   { href: "/admin/modules", label: "Modules", icon: "start" },

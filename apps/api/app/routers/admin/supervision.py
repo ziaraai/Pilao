@@ -16,6 +16,7 @@ from app.core.errors import ApiError
 from app.core.net import client_ip
 from app.schemas.admin import (
     AiCostsOut,
+    DcePlatformsOut,
     FeedbackOut,
     OrganizationDetailOut,
     OrganizationRowOut,
@@ -23,11 +24,13 @@ from app.schemas.admin import (
     SystemOut,
 )
 from app.services.admin import audit
+from app.services.admin import platforms as platforms_svc
 from app.services.admin import settings as settings_svc
 from app.services.admin import supervision as svc
 
 router = APIRouter(prefix="/admin", tags=["admin"])
 FEEDBACK_WINDOWS = (7, 30, 90)  # days
+PLATFORM_WINDOWS = (30, 90, 365)  # days
 
 
 def _now() -> datetime:
@@ -79,3 +82,13 @@ def feedback(db: AdminReadDb, days: int = 30) -> FeedbackOut:
     if days not in FEEDBACK_WINDOWS:
         raise ApiError(422, "invalid_days", "Choisissez 7, 30 ou 90 jours.")
     return svc.feedback(db, days, _now())
+
+
+@router.get("/dce-platforms")
+def dce_platforms(
+    db: AdminReadDb, days: int = 90, org_id: uuid.UUID | None = None
+) -> DcePlatformsOut:
+    """Where the DCE of the notices and of the dossiers are (robot, guided, no link)."""
+    if days not in PLATFORM_WINDOWS:
+        raise ApiError(422, "invalid_days", "Choisissez 30, 90 ou 365 jours.")
+    return platforms_svc.dce_platforms(db, _now(), days, org_id)

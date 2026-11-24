@@ -608,3 +608,20 @@ class ImportSwitchIn(BaseModel):
 
 class GeneralValueIn(BaseModel):
     value: int | float | str | bool | None  # checked by kind in the service (422)
+
+
+class DcePlatformRowOut(BaseModel):
+    """One buyers' platform of « Plateformes des DCE »."""
+
+    platform: str
+    retrieval: Literal["robot", "guided", "none"]
+    notices: int  # published over the window, all companies
+    matched: int  # retained for the companies (or the chosen one)
+    dossiers: int  # created over the window
+
+
+class DcePlatformsOut(BaseModel):
+    days: int
+    org_id: uuid.UUID | None
+    rows: list[DcePlatformRowOut]
+    totals: dict[str, int]
