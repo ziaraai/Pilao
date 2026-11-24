@@ -55,6 +55,8 @@ export const RETENTION = {
   sessionDays: 14, // SESSION_TTL_HOURS
   verifyLinkHours: 48, // EMAIL_VERIFY_TTL_HOURS
   loginAttemptsDays: 30, // LOGIN_ATTEMPTS_RETENTION_DAYS
+  unsortedMailDays: 30, // DCE_MAIL_RETENTION_DAYS (« À classer »)
+  mailTraceDays: 180, // services/inbound_mail.py purge()
 };
 
 /** The value, or the placeholder the product uses everywhere for a missing fact. */

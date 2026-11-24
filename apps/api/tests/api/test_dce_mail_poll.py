@@ -2,7 +2,6 @@
 
 from email.message import EmailMessage
 
-from fastapi.testclient import TestClient
 from sqlalchemy import Connection
 
 from app.integrations.imap_mailbox import MailboxError, Waiting
@@ -84,7 +83,7 @@ def test_the_antivirus_down_stops_the_pass_and_keeps_the_emails(
     scanner: FakeScanner,
     queue: FakeQueue,
 ) -> None:
-    c, address, _ = setup(make_client, outbox, conn, storage, scanner, queue)
+    _, address, _ = setup(make_client, outbox, conn, storage, scanner, queue)
     box = FakeMailbox({"1": mail(address), "2": mail(address)})
     scanner.down = True
     result = run(conn, box, storage, scanner, queue)
@@ -102,7 +101,7 @@ def test_an_email_that_cannot_be_read_is_flagged_and_left(
     scanner: FakeScanner,
     queue: FakeQueue,
 ) -> None:
-    c, address, _ = setup(make_client, outbox, conn, storage, scanner, queue)
+    _, address, _ = setup(make_client, outbox, conn, storage, scanner, queue)
     box = FakeMailbox({"1": mail(address, subject="A"), "2": mail(address, subject="B")})
     box.broken.add("1")
     result = run(conn, box, storage, scanner, queue)
@@ -119,7 +118,7 @@ def test_a_mailbox_that_breaks_stops_the_pass(
     scanner: FakeScanner,
     queue: FakeQueue,
 ) -> None:
-    c, address, _ = setup(make_client, outbox, conn, storage, scanner, queue)
+    _, address, _ = setup(make_client, outbox, conn, storage, scanner, queue)
     box = FakeMailbox({"1": mail(address)})
 
     def down(uid: str) -> bytes:

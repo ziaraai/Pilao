@@ -40,7 +40,7 @@ class FileMailIn(BaseModel):
 
 class FiledOut(BaseModel):
     bid_id: uuid.UUID
-    version: int
+    version: int | None  # None: a link put in the dossier (no piece)
 
 
 class NewBidOut(BaseModel):

@@ -72,6 +72,10 @@ describe("DCE source", () => {
     expect(originLabel(version({ uploaded_by_name: null }), null)).toBe(
       "Déposé le 13/11",
     );
+    // the pieces of an e-mail sent to the company's DCE address (ADR-055)
+    expect(originLabel(version({ origin: "mail" }), "PLACE")).toBe(
+      "Reçu par e-mail le 13/11",
+    );
   });
 
   it("shows the update banner until the new version is analysed", () => {

@@ -111,6 +111,15 @@ Les fichiers déposés sont stockés sur le disque du serveur, dans le volume `p
     - Fermer un compte tout de suite : la même commande avec `--disable`.
     - Changer `APP_SECRET_KEY` rend les secrets des applications d'authentification illisibles : relancez alors la commande pour chaque super admin.
 14. **Adresse de contact** (lot 2) : `SUPPORT_EMAIL=contact@votre-domaine.fr` dans `secrets.env`, puis redémarrer. Elle s'affiche dans « Contactez Pilao : … » (entreprise suspendue) et à la fin des e-mails de suppression envoyés au nom de Pilao. Sans elle, le message dit seulement « Contactez Pilao. »
+15. **Adresse e-mail des DCE** (ADR-055) :
+    - Plesk > Mail > Create Email Address `dce@pilao.pro`, mot de passe fort (noté dans le gestionnaire de mots de passe), taille de boîte 1 Go au moins. Ne rien y lire à la main : Pilao efface chaque message qu'il a lu.
+    - Administration Pilao > Réglages > « Adresse e-mail des DCE » : coller le mot de passe et le code de l'application d'authentification, « Essayer la boîte et enregistrer » (Pilao se connecte avant de le garder). Puis « Tester la connexion », et cocher **Active**.
+      - « Serveur de messagerie injoignable » : le port IMAP 993 doit accepter les connexions venant des conteneurs (Plesk > Tools & Settings > Firewall, comme pour le port 587).
+      - « Connexion refusée » : l'adresse ou le mot de passe ne correspond pas à la boîte de Plesk.
+    - Essayer l'adresse d'une entreprise (Profil > « Adresse e-mail des DCE ») : envoyer depuis sa propre boîte un e-mail avec un PDF à `dce+code@pilao.pro`. Il apparaît en 2 minutes dans « À classer » (ou dans le dossier reconnu).
+      - Si l'e-mail revient en erreur (« User unknown ») : le serveur de Plesk refuse les adresses avec `+`. Plesk > Mail > Mail Settings > `pilao.pro` > **Mail to nonexistent user : Forward to address** `dce@pilao.pro`. Pilao lit le code dans le destinataire ; les messages pour personne sont effacés.
+      - En attendant, un utilisateur peut aussi transférer à `dce@pilao.pro` depuis l'adresse avec laquelle il se connecte à Pilao (rangé « À classer » si son domaine est vérifié par le serveur : DKIM, SPF ou DMARC).
+    - Un message que Pilao n'a pas pu lire reste dans la boîte, marqué d'un drapeau (« Tester la connexion » les compte). Le relire après correction : l'enregistrer en `.eml` sur le serveur, puis `/opt/pilao/pilao.sh exec -T api python -m app.cli receive-dce-mail - < message.eml`.
 
 ### Au quotidien
 

@@ -92,6 +92,7 @@ def test_pieces_go_to_the_dossier_named_in_the_subject(
         "CCTP.pdf",
         "RC.pdf",
     ]
+    assert v["origin"] == "mail"  # « Reçu par e-mail le … »
     assert queue.pending_analyses == []  # the analysis waits for « Lancer l'analyse »
     assert c.get("/dce-mail/inbox").json() == []
 
@@ -406,3 +407,39 @@ def test_what_is_left_to_sort_too_long_is_removed(
     with _new_session(conn) as db:
         assert svc.purge(db, storage, datetime.now(UTC) + timedelta(days=200)) == 1
         assert db.scalars(select(InboundMail)).all() == []
+
+
+def test_pieces_put_in_a_dossier_without_dce_become_its_dce(
+    make_client: Factory,
+    outbox: Outbox,
+    conn: Connection,
+    storage: MemoryStorage,
+    scanner: FakeScanner,
+    queue: FakeQueue,
+) -> None:
+    c, address, box = setup(make_client, outbox, conn, storage, scanner, queue)
+    box.deliver(mail(address, subject="Divers"))
+    bid = new_bid(c)
+    item = c.get("/dce-mail/inbox").json()[0]
+    res = c.post(f"/dce-mail/inbox/{item['id']}/file", json={"bid_id": bid, "mode": "add"})
+    assert res.status_code == 202, res.text
+    assert res.json() == {"bid_id": bid, "version": 1}
+
+
+def test_a_link_can_be_put_in_a_dossier(
+    make_client: Factory,
+    outbox: Outbox,
+    conn: Connection,
+    storage: MemoryStorage,
+    scanner: FakeScanner,
+    queue: FakeQueue,
+) -> None:
+    c, address, box = setup(make_client, outbox, conn, storage, scanner, queue)
+    link = "https://www.marches-publics.info/dce/telecharger?id=42"
+    box.deliver(mail(address, subject="Votre DCE", text=f"Lien : {link}", files=[]))
+    bid = new_bid(c)
+    item = c.get("/dce-mail/inbox").json()[0]
+    res = c.post(f"/dce-mail/inbox/{item['id']}/file", json={"bid_id": bid})
+    assert res.status_code == 202 and res.json() == {"bid_id": bid, "version": None}
+    assert [n["links"] for n in c.get(f"/bids/{bid}/dce-notices").json()] == [[link]]
+    assert c.get("/dce-mail/inbox").json() == []

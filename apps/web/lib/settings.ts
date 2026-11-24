@@ -3,7 +3,7 @@
  * decides (catalogue, trial, key check).
  */
 
-import type { AdminDceRobot } from "./types";
+import type { AdminDceMail, AdminDceRobot } from "./types";
 
 /** A price in euros per million tokens, e.g. « 0,086 € »; « — » when unknown. */
 export function eur(n: number | null): string {
@@ -36,6 +36,19 @@ export function originLabel(source: "admin" | "server" | "none"): string {
 }
 
 /** The DCE robot's line in « Réglages » (spec « Récupération des DCE », § 4.5). */
+/** The DCE mailbox in one line (ADR-055). */
+export function mailboxSummary(box: AdminDceMail): string {
+  if (!box.enabled)
+    return box.password_source === "none"
+      ? "Coupée — mot de passe de la boîte à enregistrer"
+      : "Coupée — l'adresse n'est pas montrée aux clients";
+  const n = box.received_24h;
+  const received = `${n} e-mail${n > 1 ? "s" : ""} reçu${n > 1 ? "s" : ""} sur 24 h`;
+  return box.to_sort > 0
+    ? `Active — ${received}, ${box.to_sort} à classer chez les clients`
+    : `Active — ${received}`;
+}
+
 export function robotSummary(robot: AdminDceRobot): string {
   if (!robot.enabled) return "Coupé — mode guidé pour tous les clients";
   return `Activé — ${robot.succeeded_24h} réussies, ${robot.failed_24h} en échec sur 24 h`;

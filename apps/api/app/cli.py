@@ -12,7 +12,7 @@
 * ``admin-access you@example.fr [--name "Your Name"] [--disable]``: creates a super admin, or
   resets its access (lost phone), and prints the one-time activation link; ``--disable``
   closes the account. The only way to create a platform administrator (ADR-040).
-* ``receive-dce-mail message.eml [...]``: one or more e-mails read as if they came from the
+* ``receive-dce-mail message.eml [...]`` (``-``: read from the standard input): e-mails read as if they came from the
   DCE mailbox (ADR-055): the same filing, « À classer » or notice. For the browser journey
   and to replay an e-mail Pilao could not read (left flagged in the mailbox).
 * ``eval-models --models a,b,c`` runs the phase 0 comparison (docs/11) on ``samples/``:
@@ -109,8 +109,9 @@ def receive_dce_mail(paths: list[Path]) -> int:
     from app.storage.objects import get_storage
 
     for path in paths:
+        raw = sys.stdin.buffer.read() if str(path) == "-" else path.read_bytes()
         with get_sessionmaker()() as db:  # unscoped: the e-mail says whose it is
-            mail = receive(db, path.read_bytes(), get_storage(), get_scanner(), get_job_queue())
+            mail = receive(db, raw, get_storage(), get_scanner(), get_job_queue())
             if mail is None:
                 print(f"{path.name} : pour personne (adresse inconnue ou expéditeur non reconnu)")
             else:

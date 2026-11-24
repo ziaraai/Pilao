@@ -4,6 +4,7 @@ import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { Suspense, useRef, useState } from "react";
 
 import { CompanyIdentity } from "@/components/profile/company-identity";
+import { DceMailCard } from "@/components/dce-mail";
 import { DceRetrievalSettings } from "@/components/profile/dce-retrieval";
 import { DataRights } from "@/components/profile/data-rights";
 import { PlanCredits } from "@/components/profile/plan-credits";
@@ -201,6 +202,7 @@ function ProfileTabs() {
         className="space-y-6"
       >
         {current === "identite" && <CompanyIdentity />}
+        {current === "identite" && answers && <DceMailCard />}
         {current === "identite" && answers && <DceRetrievalSettings />}
         {current === "chiffre-affaires" && answers && <RatesCard />}
         {current === "chiffre-affaires" && answers && <PriceListCard />}

@@ -1,6 +1,13 @@
 import { describe, expect, it } from "vitest";
 
-import { dollars, eur, matches, originLabel, robotSummary } from "./settings";
+import {
+  dollars,
+  eur,
+  mailboxSummary,
+  matches,
+  originLabel,
+  robotSummary,
+} from "./settings";
 
 describe("settings", () => {
   it("writes prices in euros per million tokens, and dollars", () => {
@@ -41,5 +48,27 @@ describe("settings", () => {
     expect(robotSummary({ ...robot, enabled: false })).toBe(
       "Coupé — mode guidé pour tous les clients",
     );
+  });
+  it("sums up the DCE mailbox in one line (ADR-055)", () => {
+    const box = {
+      enabled: true,
+      origin: "admin" as const,
+      address: "dce@pilao.pro",
+      password_source: "admin" as const,
+      received_24h: 3,
+      to_sort: 1,
+    };
+    expect(mailboxSummary(box)).toBe(
+      "Active — 3 e-mails reçus sur 24 h, 1 à classer chez les clients",
+    );
+    expect(mailboxSummary({ ...box, received_24h: 1, to_sort: 0 })).toBe(
+      "Active — 1 e-mail reçu sur 24 h",
+    );
+    expect(mailboxSummary({ ...box, enabled: false })).toBe(
+      "Coupée — l'adresse n'est pas montrée aux clients",
+    );
+    expect(
+      mailboxSummary({ ...box, enabled: false, password_source: "none" }),
+    ).toBe("Coupée — mot de passe de la boîte à enregistrer");
   });
 });

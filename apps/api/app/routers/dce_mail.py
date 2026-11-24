@@ -71,7 +71,7 @@ def file_mail(
 ) -> FiledOut:
     bid = _bid(db, data.bid_id)
     version = svc.file_mail(db, ctx.org, ctx.user, mail_id, bid, data.mode, queue)
-    return FiledOut(bid_id=bid.id, version=version.version)
+    return FiledOut(bid_id=bid.id, version=version.version if version else None)
 
 
 @router.post("/dce-mail/inbox/{mail_id}/new-bid", status_code=201)

@@ -178,7 +178,16 @@ def version_from_files(
     if _processing(db, bid):
         raise ApiError(409, "dce_processing", "Un dépôt est déjà en cours de traitement.")
     return _new_version(
-        db, org, user, bid, stored, skipped, queue, discard=lambda: None, auto_analysis=False
+        db,
+        org,
+        user,
+        bid,
+        stored,
+        skipped,
+        queue,
+        discard=lambda: None,
+        origin="mail",
+        auto_analysis=False,
     )
 
 

@@ -6,6 +6,7 @@ import {
   DceSourcePanel,
   retrievalRunning,
 } from "@/components/dossier/dce-source";
+import { DceMailHint, DceNotices } from "@/components/dce-mail";
 import { PaidButton } from "@/components/paid-button";
 import { UploadButton } from "@/components/upload";
 import {
@@ -133,6 +134,7 @@ export function DceSection({
           }}
         />
       )}
+      <DceNotices bidId={bidId} />
       {update && (
         <div className="mb-4 space-y-2">
           <Alert tone="warning">
@@ -268,6 +270,7 @@ export function DceSection({
       <p className="mt-2 text-xs text-slate-500">
         PDF, Word, Excel, LibreOffice, images : 250 Mo maximum par fichier.
       </p>
+      <DceMailHint />
       {deposit.error && (
         <div className="mt-3">
           <Alert tone="danger">{deposit.error}</Alert>

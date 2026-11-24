@@ -249,7 +249,7 @@ export type DceVersion = {
   created_at: string;
   files: DceFile[];
   /** Deposited, retrieved by Pilao's robot, or an update found by its daily watch. */
-  origin: "deposit" | "retrieval" | "update";
+  origin: "deposit" | "retrieval" | "update" | "mail";
   source_url: string | null;
   uploaded_by_name: string | null;
   /** Forgotten pieces added to this version afterwards (the last time). */
@@ -1032,6 +1032,24 @@ export type AdminSettings = {
   imports: AdminImportSetting[];
   general: AdminGeneralSetting[];
   dce_robot: AdminDceRobot;
+  dce_mail: AdminDceMail;
+};
+
+/** The DCE mailbox (ADR-055): never any part of its password. */
+export type AdminDceMail = {
+  enabled: boolean;
+  origin: SettingOrigin;
+  address: string;
+  password_source: "admin" | "server" | "none";
+  received_24h: number;
+  to_sort: number;
+};
+
+export type AdminDceMailTest = {
+  ok: boolean;
+  waiting: number;
+  flagged: number;
+  error: string | null;
 };
 
 export type AdminCatalogueModel = {
@@ -1155,4 +1173,30 @@ export type AdminDcePlatforms = {
     dossiers: number;
     robot_dossiers: number;
   };
+};
+
+/** The company's DCE e-mail address (ADR-055). */
+export type DceMail = { address: string; active: boolean };
+
+/** An e-mail received on that address, waiting « À classer ». */
+export type InboundMail = {
+  id: string;
+  received_at: string;
+  sender: string;
+  subject: string;
+  kind: "dce" | "notice";
+  attachments: string[];
+  skipped: { path: string; reason: string }[];
+  links: string[];
+  suggested_bid: { id: string; title: string } | null;
+  note: string | null;
+};
+
+/** A platform's notice that the DCE changed, shown in the dossier's DCE step. */
+export type DceNotice = {
+  id: string;
+  received_at: string;
+  sender: string;
+  subject: string;
+  links: string[];
 };

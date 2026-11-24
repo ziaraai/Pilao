@@ -113,6 +113,14 @@ Chaque matin jusqu'à la date limite, Pilao relit la page de la consultation des
 - CA2 : date limite changée → la date du dossier suit la plateforme, e-mail « La date limite de « … » a changé ».
 - CA3 : « Surveillé par Pilao — dernière vérification : … » ; après 3 échecs de suite, « Surveillance interrompue » ; une récupération réussie la relance.
 
+**US-3.6 Recevoir le DCE par e-mail** (ADR-055)
+Je transfère l'e-mail de la plateforme ou de l'acheteur à l'adresse des DCE de mon entreprise, et les pièces arrivent dans le bon dossier.
+- CA1 : mon adresse `dce+code@pilao.pro` est dans le Profil (« Copier ») et sous la zone de dépôt du DCE, seulement quand la boîte est mise en service par Pilao.
+- CA2 : un dossier ouvert reconnu (référence, sinon tous les mots de l'intitulé) et sans DCE reçoit les pièces comme version 1 « Reçu par e-mail » ; rien n'est analysé sans « Lancer l'analyse ».
+- CA3 : sinon l'e-mail attend « À classer » sur la page Dossiers (date, expéditeur, pièces, pièces non gardées et pourquoi) : « Ranger dans… » (pièces du DCE, ou nouvelle version), « Créer le dossier » (nommé d'après l'objet), « Ignorer » (pièces effacées). Pilao propose le dossier qu'il croit reconnaître, sans le choisir à ma place.
+- CA4 : un avis de modification sans pièce jointe d'un dossier reconnu s'affiche dans l'étape DCE avec son lien ; « C'est noté » le retire.
+- CA5 : antivirus, formats d'un dépôt, logos de signature écartés ; le même e-mail reçu deux fois n'est rangé qu'une fois ; un e-mail d'un inconnu à l'adresse sans code est effacé ; « À classer » est gardé 30 jours.
+
 **US-3.2 Fiche d'analyse**
 Le système produit une fiche d'analyse structurée (`schemas/dce_analysis.schema.json`).
 - CA1 : infos clés : acheteur, objet, lots, montant estimé, durée, date et heure limite, visite (obligatoire ?, date), date limite des questions.

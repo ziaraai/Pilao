@@ -18,6 +18,31 @@ const zipNames = (path) =>
     .toString()
     .trim()
     .split("\n");
+// An e-mail as the DCE mailbox would hand it over (ADR-055), read by `app.cli receive-dce-mail`
+const receiveMail = (to, subject, text, attachment) => {
+  const out = `${process.argv[2]}/mail-${Date.now()}.eml`;
+  execFileSync(PY, [
+    "-c",
+    [
+      "import sys",
+      "from email.message import EmailMessage",
+      "m = EmailMessage()",
+      "m['From'] = 'Plateforme <noreply@marches.example>'",
+      "m['To'], m['Subject'] = sys.argv[1], sys.argv[2]",
+      "m.set_content(sys.argv[3])",
+      "if sys.argv[4]: m.add_attachment(open(sys.argv[4], 'rb').read(), maintype='application', subtype='zip', filename=sys.argv[4].rsplit('/', 1)[-1])",
+      "open(sys.argv[5], 'wb').write(m.as_bytes())",
+    ].join("\n"),
+    to,
+    subject,
+    text,
+    attachment ?? "",
+    out,
+  ]);
+  return execFileSync(PY, ["-m", "app.cli", "receive-dce-mail", out], {
+    cwd: `${__dirname}/../../api`,
+  }).toString();
+};
 const S = process.argv[2];
 const WEB = "http://localhost:3000";
 
@@ -1262,6 +1287,69 @@ let current; // the page, for a screenshot when a step fails
   step("profile: the remembered mode and the buyers' contact");
   await page.goto(`${WEB}/profil`);
 
+  // 13b. The DCE e-mail address (ADR-055): the company's own address in its profile; an
+  // e-mail for no dossier waits « À classer », becomes a dossier; a platform's notice shows
+  const mailCard = page.getByRole("region", { name: "Adresse e-mail des DCE" });
+  await mailCard.waitFor();
+  const address = (await mailCard.locator("code").innerText()).trim();
+  if (!/^dce\+[a-z0-9]{6}@pilao\.pro$/.test(address))
+    throw new Error("unexpected DCE address: " + address);
+  await mailCard.screenshot({ path: `${S}/13b-adresse-dce.png` });
+  const received = receiveMail(
+    address,
+    "TR: Mise à disposition du DCE - Nettoyage de la piscine municipale",
+    "Bonjour, veuillez trouver le DCE en pièce jointe.",
+    `${S}/DCE_mairie.zip`,
+  );
+  if (!received.includes("to_sort"))
+    throw new Error("the e-mail should wait « À classer »: " + received);
+  await page.goto(`${WEB}/dossiers`);
+  const inbox = page.getByRole("region", { name: "À classer (1)" });
+  await inbox.getByText("1 pièce : DCE_mairie.zip").waitFor();
+  await page.screenshot({ path: `${S}/13c-a-classer.png`, fullPage: true });
+  await inbox.getByRole("button", { name: "Créer le dossier" }).click();
+  await page.waitForURL(/\/dossiers\/[0-9a-f-]{36}$/);
+  await page
+    .getByRole("heading", { name: "Nettoyage de la piscine municipale" })
+    .first()
+    .waitFor();
+  step(
+    "DCE e-mail: the address in the profile, an unsorted e-mail made a dossier",
+  );
+  receiveMail(
+    address,
+    "Avis de modification - Nettoyage de la piscine municipale",
+    "Le DCE a été modifié : https://www.marches-publics.info/dce?id=42",
+    null,
+  );
+  await page.reload();
+  await page.getByRole("tab", { name: "DCE" }).click();
+  await page.getByText(/^Reçu par e-mail le/).waitFor({ timeout: 60000 });
+  await page
+    .getByRole("cell", { name: "DCE/CCTP.pdf", exact: true })
+    .waitFor({ timeout: 60000 });
+  await page
+    .getByText("E-mail reçu de la plateforme", { exact: false })
+    .waitFor();
+  await page.getByText("Ou transférez l'e-mail", { exact: false }).waitFor();
+  await page.screenshot({
+    path: `${S}/13d-avis-modification.png`,
+    fullPage: true,
+  });
+  await page.getByRole("button", { name: "C'est noté" }).click();
+  await page
+    .getByText("E-mail reçu de la plateforme", { exact: false })
+    .waitFor({ state: "detached" });
+  if (
+    (await page.getByRole("button", { name: /^Lancer l'analyse/ }).count()) ===
+    0
+  )
+    throw new Error("pieces received by e-mail wait for « Lancer l'analyse »");
+  step(
+    "DCE e-mail: pieces read as version 1, the platform's notice shown then noted",
+  );
+  await page.goto(`${WEB}/profil`);
+
   // 14. Platform administration (US-6.1, US-6.2): its own account, created from the server
   const adminEmail = `admin-e2e${n}@example.fr`;
   const adminPassword = "un-mot-de-passe-d-administration";
@@ -1695,6 +1783,12 @@ let current; // the page, for a screenshot when a step fails
   await page
     .getByRole("button", { name: "Récupérer le DCE", exact: true })
     .waitFor();
+  // the DCE mailbox (ADR-055): switched on by the server here, its two e-mails of the day
+  const mailbox = admin.getByRole("region", { name: "Adresse e-mail des DCE" });
+  await mailbox
+    .getByText("Active — 2 e-mails reçus sur 24 h", { exact: false })
+    .waitFor();
+  await mailbox.getByText("Mot de passe du serveur").waitFor();
   await admin.screenshot({ path: `${S}/admin-reglages.png`, fullPage: true });
   await page.goto(`${WEB}/profil?onglet=formule`);
   await page

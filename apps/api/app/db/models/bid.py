@@ -69,7 +69,7 @@ class DceVersion(IdMixin, TimestampMixin, OrgScoped, Base):
     __table_args__ = (
         UniqueConstraint("bid_id", "version", name="uq_dce_versions_bid_id_version"),
         CheckConstraint("status in ('pending','processing','ready','error')", name="status"),
-        CheckConstraint("origin in ('deposit','retrieval','update')", name="origin"),
+        CheckConstraint("origin in ('deposit','retrieval','update','mail')", name="origin"),
     )
 
     bid_id: Mapped[uuid.UUID] = mapped_column(

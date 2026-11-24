@@ -67,6 +67,13 @@ export default function Privacy() {
             l&apos;entreprise.
           </li>
           <li>
+            <strong>Recevoir vos DCE par e-mail</strong> : les messages envoyés
+            à l&apos;adresse des DCE de votre entreprise (expéditeur, objet,
+            liens, pièces jointes). Les pièces sont passées à l&apos;antivirus
+            et rangées dans vos dossiers ; le message est effacé de la boîte dès
+            qu&apos;il est lu. Base légale : le contrat.
+          </li>
+          <li>
             <strong>Préremplir votre entreprise</strong> : à partir du SIRET,
             Pilao interroge l&apos;annuaire public des entreprises (raison
             sociale, adresse, activité).
@@ -168,6 +175,12 @@ export default function Privacy() {
           </li>
           <li>
             Les tentatives de connexion : {RETENTION.loginAttemptsDays} jours.
+          </li>
+          <li>
+            Les e-mails reçus à l&apos;adresse des DCE et laissés « À classer »
+            : {RETENTION.unsortedMailDays} jours, puis leurs pièces sont
+            effacées ; la trace d&apos;un e-mail (expéditeur, objet), qui évite
+            de le lire deux fois : {RETENTION.mailTraceDays} jours.
           </li>
           <li>
             Les sauvegardes :{" "}

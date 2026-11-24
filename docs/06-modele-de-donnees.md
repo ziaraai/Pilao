@@ -180,6 +180,16 @@ dce_fetches (
   dce_version_id uuid null, requested_by uuid null, created_at, finished_at
 )  -- une seule récupération active par dossier (index unique partiel)
 
+inbound_mails (                         -- adresse e-mail des DCE (ADR-055, migration 0035)
+  id, org_id, message_id text,          -- unique par entreprise : un e-mail rangé une fois
+  sender text, subject text, received_at,
+  kind text,                            -- dce (pièces jointes) | notice (lien, avis de modification)
+  status text,                          -- to_sort | filed | ignored
+  bid_id uuid null, suggested_bid_id uuid null,
+  file_ids uuid[],                      -- pièces gardées en attendant d'être rangées
+  attachment_names text[], skipped jsonb, links text[], note text null
+)  -- organizations.dce_mail_code : le code de dce+CODE@pilao.pro ; dce_versions.origin 'mail'
+
 dce_files (
   id, org_id, dce_version_id, file_id,
   detected_kind text,                   -- rc, ccap, cctp, ae, bpu, dpgf, dqe, annex, other

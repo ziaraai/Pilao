@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { MailInbox } from "@/components/dce-mail";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 
@@ -77,6 +78,10 @@ export default function BidsPage() {
         subtitle="Un dossier par appel d'offres ou par consultation d'une entreprise : déposez les documents, chiffrez, préparez votre réponse ou votre devis."
         icon="bids"
         color="blue"
+      />
+      <MailInbox
+        bids={bids.data ?? []}
+        onFiled={(id) => router.push(`/dossiers/${id}`)}
       />
       <Card title="Nouveau dossier" color="blue">
         <fieldset className="mb-4">

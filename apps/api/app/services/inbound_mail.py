@@ -352,16 +352,19 @@ def file_mail(
     bid: Bid,
     mode: Literal["new", "add"],
     queue: JobQueue,
-) -> DceVersion:
-    """« Ranger dans… »: a new version of the dossier's DCE, or forgotten pieces of the
-    current one. The analysis waits for the go, as for a deposit by hand."""
+) -> DceVersion | None:
+    """« Ranger dans… »: the pieces are forgotten pieces of the current DCE (``add``; the
+    first DCE of a dossier that has none) or a new version; the analysis waits for the go,
+    as for a deposit by hand. A link without pieces is shown in the dossier's DCE step."""
     mail = _waiting(db, mail_id)
-    if mail.kind != "dce":
-        raise ApiError(409, "no_pieces", "Ce message n'a pas de pièce jointe à ranger.")
+    db.add(AuditLog(user_id=user.id, action="file_mail", entity="bid", entity_id=bid.id))
+    if mail.kind == "notice":
+        mail.status, mail.bid_id = "filed", bid.id
+        db.commit()
+        return None
     files = _pieces(db, mail)
     mail.status, mail.bid_id, mail.file_ids = "filed", bid.id, []  # committed with the version
-    db.add(AuditLog(user_id=user.id, action="file_mail", entity="bid", entity_id=bid.id))
-    if mode == "add":
+    if mode == "add" and _has_dce(db, bid):
         return dce_svc.add_stored_files(db, bid, files, mail.skipped, queue)
     return dce_svc.version_from_files(db, org, user, bid, files, mail.skipped, queue)
 

@@ -20,6 +20,13 @@ depends_on: str | Sequence[str] | None = None
 
 
 def upgrade() -> None:
+    # a version received by e-mail says so (« Reçu par e-mail le … »)
+    op.drop_constraint(op.f("ck_dce_versions_origin"), "dce_versions", type_="check")
+    op.create_check_constraint(
+        op.f("ck_dce_versions_origin"),
+        "dce_versions",
+        "origin in ('deposit','retrieval','update','mail')",
+    )
     op.add_column("organizations", sa.Column("dce_mail_code", sa.Text(), nullable=True))
     op.create_unique_constraint(
         op.f("uq_organizations_dce_mail_code"), "organizations", ["dce_mail_code"]
@@ -85,3 +92,10 @@ def downgrade() -> None:
     op.drop_table("inbound_mails")
     op.drop_constraint(op.f("uq_organizations_dce_mail_code"), "organizations", type_="unique")
     op.drop_column("organizations", "dce_mail_code")
+    op.execute("update dce_versions set origin = 'deposit' where origin = 'mail'")
+    op.drop_constraint(op.f("ck_dce_versions_origin"), "dce_versions", type_="check")
+    op.create_check_constraint(
+        op.f("ck_dce_versions_origin"),
+        "dce_versions",
+        "origin in ('deposit','retrieval','update')",
+    )

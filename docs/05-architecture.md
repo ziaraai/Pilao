@@ -127,6 +127,15 @@ SMTP_URL=...
 DCE_ROBOT_ENABLED=true
 DCE_ROBOT_ALLOW_PRIVATE_HOSTS=false   # vrai seulement pour les tests et le parcours local
 DCE_ROBOT_BROWSER_PATH=               # vide : le Chromium installé par Playwright (/opt/pw-browsers dans l'image)
+DCE_MAIL_ENABLED=false                # adresse e-mail des DCE (ADR-055) ; l'admin passe avant
+DCE_MAIL_ADDRESS=dce@pilao.pro        # chaque entreprise : dce+CODE@pilao.pro
+DCE_MAIL_PASSWORD=                    # de préférence dans l'admin (chiffré)
+DCE_MAIL_IMAP_HOST=                   # vide : le domaine de l'adresse ; host.docker.internal sur le serveur
+DCE_MAIL_IMAP_PORT=993
+DCE_MAIL_VERIFY_TLS=true              # false sur le serveur (boîte de Plesk, saut local)
+DCE_MAIL_SERVER_NAME=                 # nom de notre serveur dans Authentication-Results (facultatif)
+DCE_MAIL_MAX_BYTES=62914560           # au-delà, seul l'en-tête est lu
+DCE_MAIL_RETENTION_DAYS=30            # « À classer »
 ```
 
 ## Principes

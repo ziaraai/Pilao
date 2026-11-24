@@ -109,7 +109,7 @@ class DceVersionOut(BaseModel):
     diff_summary: str | None
     created_at: datetime
     # deposited, retrieved by the robot, or an update found by its watch (« Récupération des DCE »)
-    origin: Literal["deposit", "retrieval", "update"] = "deposit"
+    origin: Literal["deposit", "retrieval", "update", "mail"] = "deposit"
     source_url: str | None = None
     uploaded_by_name: str | None = None
     # forgotten pieces added afterwards (the last time): the analysis may need an update

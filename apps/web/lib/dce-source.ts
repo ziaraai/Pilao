@@ -26,6 +26,7 @@ export function originLabel(v: DceVersion, site: string | null): string {
     return `Récupéré sur ${site ?? "la plateforme"} le ${day.format(at)} à ${time.format(at)}`;
   if (v.origin === "update")
     return `Mise à jour trouvée par Pilao le ${day.format(at)}`;
+  if (v.origin === "mail") return `Reçu par e-mail le ${day.format(at)}`;
   return v.uploaded_by_name
     ? `Déposé par ${v.uploaded_by_name} le ${day.format(at)}`
     : `Déposé le ${day.format(at)}`;
