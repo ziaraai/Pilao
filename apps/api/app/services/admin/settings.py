@@ -6,7 +6,7 @@ import logging
 import threading
 import time
 from datetime import UTC, datetime, timedelta
-from typing import Any
+from typing import Any, Literal
 
 from pydantic import EmailStr, TypeAdapter, ValidationError
 from sqlalchemy import func, select
@@ -18,14 +18,32 @@ from app.core import crypto, runtime
 from app.core.admin_deps import AdminContext
 from app.core.config import get_settings
 from app.core.errors import ApiError
-from app.db.models import AiCall, DceFetch, PlatformAdmin, PlatformSetting, TenderImport
+from app.db.models import (
+    AiCall,
+    DceFetch,
+    InboundMail,
+    PlatformAdmin,
+    PlatformSetting,
+    TenderImport,
+)
 from app.domain.admin_watch import WatchItem
 from app.domain.ai_catalogue import NEEDS_IMAGES, eur_per_million, usable
-from app.platform_settings import BY_NAME, DCE_ROBOT, GENERAL, IMPORTS, MODEL_LABELS
+from app.integrations.imap_mailbox import MailboxError, Opener
+from app.platform_settings import (
+    BY_NAME,
+    DCE_MAIL,
+    DCE_MAIL_PASSWORD,
+    DCE_ROBOT,
+    GENERAL,
+    IMPORTS,
+    MODEL_LABELS,
+)
 from app.schemas.admin import (
     ApiKeyOut,
     CatalogueModelOut,
     CreditOut,
+    DceMailSettingOut,
+    DceMailTestOut,
     DceRobotSettingOut,
     GeneralSettingOut,
     ImportSettingOut,
@@ -248,6 +266,85 @@ def reset_dce_robot(db: Session, admin: PlatformAdmin, ip: str | None) -> None:
     reset(db, admin, DCE_ROBOT, ip)
 
 
+def dce_mail_out(db: Session) -> DceMailSettingOut:
+    """The DCE mailbox (ADR-055) and its last day, every company."""
+    since = datetime.now(UTC) - timedelta(days=1)
+    received = db.scalar(select(func.count()).where(InboundMail.created_at >= since)) or 0
+    to_sort = db.scalar(select(func.count()).where(InboundMail.status == "to_sort")) or 0
+    if runtime.source(DCE_MAIL_PASSWORD) == "admin" and DCE_MAIL_PASSWORD in (
+        runtime.snapshot().secrets
+    ):
+        password: Literal["admin", "server", "none"] = "admin"
+    elif get_settings().dce_mail_password:
+        password = "server"
+    else:
+        password = "none"
+    return DceMailSettingOut(
+        enabled=bool(runtime.effective(DCE_MAIL)),
+        origin=runtime.source(DCE_MAIL),
+        address=get_settings().dce_mail_address,
+        password_source=password,
+        received_24h=int(received),
+        to_sort=int(to_sort),
+    )
+
+
+def set_dce_mail(
+    db: Session, admin: PlatformAdmin, enabled: bool, ip: str | None
+) -> DceMailSettingOut:
+    if enabled and not runtime.secret(DCE_MAIL_PASSWORD):
+        raise ApiError(409, "no_password", "Enregistrez d'abord le mot de passe de la boîte.")
+    before = bool(runtime.effective(DCE_MAIL))
+    _store(db, DCE_MAIL, admin, value=enabled)
+    meta = {"setting": DCE_MAIL, "label": BY_NAME[DCE_MAIL].label, "from": before, "to": enabled}
+    audit.record(db, "setting_changed", admin=admin, ip=ip, meta=meta)
+    _done(db)
+    return dce_mail_out(db)
+
+
+def set_dce_mail_password(
+    db: Session, ctx: AdminContext, opener: Opener, password: str, code: str, ip: str | None
+) -> DceMailSettingOut:
+    """Tried on the mailbox first, then the authenticator code asked again (whoever sets it
+    receives every company's DCE), then stored encrypted. Never shown again, not even in part."""
+    try:
+        opener(password).close()
+    except MailboxError as exc:
+        raise ApiError(422, "mailbox_refused", str(exc)) from None
+    admin_auth.confirm_code(db, ctx.admin, ctx.session, code, ip)  # 400 « Code incorrect. »
+    secret = crypto.encrypt(password, DCE_MAIL_PASSWORD)
+    _store(db, DCE_MAIL_PASSWORD, ctx.admin, secret=secret)
+    audit.record(db, "dce_mail_password_replaced", admin=ctx.admin, ip=ip, meta={})
+    _done(db)
+    return dce_mail_out(db)
+
+
+def reset_dce_mail_password(db: Session, admin: PlatformAdmin, ip: str | None) -> None:
+    row = db.get(PlatformSetting, DCE_MAIL_PASSWORD)
+    if row is None:
+        return
+    db.delete(row)
+    audit.record(db, "dce_mail_password_reset", admin=admin, ip=ip, meta={})
+    _done(db)
+
+
+def try_dce_mail(opener: Opener) -> DceMailTestOut:
+    """« Tester la connexion »: the mailbox opened with the password in use."""
+    if not runtime.secret(DCE_MAIL_PASSWORD):
+        error = "Le mot de passe de la boîte n'est pas enregistré."
+        return DceMailTestOut(ok=False, waiting=0, flagged=0, error=error)
+    try:
+        box = opener()
+    except MailboxError as exc:
+        return DceMailTestOut(ok=False, waiting=0, flagged=0, error=str(exc))
+    try:
+        waiting = box.waiting()
+    finally:
+        box.close()
+    flagged = sum(1 for w in waiting if w.flagged)
+    return DceMailTestOut(ok=True, waiting=len(waiting) - flagged, flagged=flagged, error=None)
+
+
 def general_out(name: str) -> GeneralSettingOut:
     d = BY_NAME[name]
     return GeneralSettingOut(
@@ -273,6 +370,7 @@ def state(db: Session, client: OpenRouter) -> SettingsOut:
         imports=imports_out(db),
         general=[general_out(name) for name in GENERAL],
         dce_robot=dce_robot_out(db),
+        dce_mail=dce_mail_out(db),
     )
 
 

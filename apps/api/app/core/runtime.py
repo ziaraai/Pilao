@@ -36,6 +36,9 @@ class Snapshot:
     key_last4: str | None = None
     key_unreadable: bool = False
     updated: dict[str, tuple[datetime, uuid.UUID | None]] = field(default_factory=dict)
+    # the other secrets set in the administration, decrypted (the DCE mailbox's password)
+    secrets: dict[str, str] = field(default_factory=dict)
+    secrets_last4: dict[str, str | None] = field(default_factory=dict)
 
 
 Loader = Callable[[], list[PlatformSetting]]
@@ -61,9 +64,17 @@ def _load() -> Snapshot:
     updated: dict[str, tuple[datetime, uuid.UUID | None]] = {}
     key = last4 = None
     unreadable = False
+    secrets: dict[str, str] = {}
+    secrets_last4: dict[str, str | None] = {}
     for row in _read_rows():
         updated[row.key] = (row.updated_at, row.updated_by)
-        if row.key == KEY:
+        if row.key != KEY and row.secret is not None:
+            secrets_last4[row.key] = row.secret_last4
+            try:
+                secrets[row.key] = crypto.decrypt(row.secret, row.key)
+            except crypto.DecryptError:
+                logger.warning("the secret %s set in the administration is unreadable", row.key)
+        elif row.key == KEY:
             last4 = row.secret_last4
             try:
                 key = crypto.decrypt(row.secret or "", KEY)
@@ -72,7 +83,7 @@ def _load() -> Snapshot:
                 logger.warning("the OpenRouter key set in the administration is unreadable")
         else:
             values[row.key] = row.value
-    return Snapshot(values, key, last4, unreadable, updated)
+    return Snapshot(values, key, last4, unreadable, updated, secrets, secrets_last4)
 
 
 def snapshot() -> Snapshot:
@@ -98,8 +109,8 @@ def set_loader(load: Loader | None) -> None:
 
 
 def source(name: str) -> Literal["admin", "server"]:
-    if name == KEY:
-        return "admin" if KEY in snapshot().updated else "server"
+    if name == KEY or BY_NAME[name].kind == "secret":
+        return "admin" if name in snapshot().updated else "server"
     return "admin" if name in snapshot().values else "server"
 
 
@@ -120,6 +131,15 @@ def api_key() -> str | None:
     """The key set here and readable, else the server's, else None (LiteLLM then reads the
     environment, as before)."""
     return snapshot().key or get_settings().openrouter_api_key or None
+
+
+def secret(name: str) -> str:
+    """A secret other than the OpenRouter key: the administration's (readable), else the
+    server's, else empty."""
+    snap = snapshot()
+    if name in snap.secrets:
+        return snap.secrets[name]
+    return str(BY_NAME[name].server(get_settings()) or "")
 
 
 def model_for_task(task: str) -> str:

@@ -3,7 +3,7 @@
 import hashlib
 import logging
 import uuid
-from collections.abc import Iterator
+from collections.abc import Callable, Iterator
 from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
 from typing import Any, BinaryIO
@@ -149,6 +149,53 @@ def create_version(
         raise ApiError(409, "dce_processing", "Un dépôt est déjà en cours de traitement.")
 
     stored, skipped = _store_uploads(db, org, user, uploads, storage, scanner)
+    return _new_version(
+        db,
+        org,
+        user,
+        bid,
+        stored,
+        skipped,
+        queue,
+        discard=lambda: _delete_files(db, user, stored, storage),  # no half deposit
+        origin=origin,
+        source_url=source_url,
+        auto_analysis=auto_analysis,
+    )
+
+
+def version_from_files(
+    db: Session,
+    org: Organization,
+    user: User,
+    bid: Bid,
+    stored: list[File],
+    skipped: list[dict[str, Any]],
+    queue: JobQueue,
+) -> DceVersion:
+    """A new version from pieces already stored and scanned (received by e-mail, ADR-055).
+    The analysis waits for « Lancer l'analyse »; on failure the pieces stay where they were."""
+    if _processing(db, bid):
+        raise ApiError(409, "dce_processing", "Un dépôt est déjà en cours de traitement.")
+    return _new_version(
+        db, org, user, bid, stored, skipped, queue, discard=lambda: None, auto_analysis=False
+    )
+
+
+def _new_version(
+    db: Session,
+    org: Organization,
+    user: User,
+    bid: Bid,
+    stored: list[File],
+    skipped: list[dict[str, Any]],
+    queue: JobQueue,
+    *,
+    discard: Callable[[], None],
+    origin: str = "deposit",
+    source_url: str | None = None,
+    auto_analysis: bool = True,
+) -> DceVersion:
     try:
         number = (
             db.scalar(select(func.max(DceVersion.version)).where(DceVersion.bid_id == bid.id)) or 0
@@ -170,11 +217,11 @@ def create_version(
         db.commit()
     except IntegrityError:  # two deposits raced for the same version number
         db.rollback()
-        _delete_files(db, user, stored, storage)
+        discard()
         raise ApiError(409, "dce_processing", "Un dépôt est déjà en cours de traitement.") from None
     except Exception:
         db.rollback()
-        _delete_files(db, user, stored, storage)  # no half deposit
+        discard()
         raise
     try:
         queue.enqueue_process_dce(version.id)
@@ -200,6 +247,21 @@ def add_files(
     are read, the pieces already read keep their identity (the analysis' sources stay valid),
     and nothing is analysed by itself."""
     _check_uploads(uploads)
+    version = _current_ready(db, bid)
+    stored, skipped = _store_uploads(db, org, user, uploads, storage, scanner)
+    return _append(
+        db, bid, version, stored, skipped, queue, lambda: _delete_files(db, user, stored, storage)
+    )
+
+
+def add_stored_files(
+    db: Session, bid: Bid, stored: list[File], skipped: list[dict[str, Any]], queue: JobQueue
+) -> DceVersion:
+    """Forgotten pieces received by e-mail (ADR-055), already stored and scanned."""
+    return _append(db, bid, _current_ready(db, bid), stored, skipped, queue, lambda: None)
+
+
+def _current_ready(db: Session, bid: Bid) -> DceVersion:
     if _processing(db, bid):
         raise ApiError(409, "dce_processing", "Un dépôt est déjà en cours de traitement.")
     version = db.scalars(
@@ -211,7 +273,18 @@ def add_files(
             "no_dce",
             "Déposez d'abord le DCE : les pièces oubliées s'ajoutent à un DCE déjà lu.",
         )
-    stored, skipped = _store_uploads(db, org, user, uploads, storage, scanner)
+    return version
+
+
+def _append(
+    db: Session,
+    bid: Bid,
+    version: DceVersion,
+    stored: list[File],
+    skipped: list[dict[str, Any]],
+    queue: JobQueue,
+    discard: Callable[[], None],
+) -> DceVersion:
     version.source_file_ids = [*version.source_file_ids, *(f.id for f in stored)]
     version.skipped = [*version.skipped, *skipped]
     version.status, version.error = "pending", None
@@ -227,7 +300,7 @@ def add_files(
         version.status = "ready"
         set_job_status(db, JOB_KIND, version.id, "done")
         db.commit()
-        _delete_files(db, user, stored, storage)
+        discard()
         raise ApiError(
             503, "queue_unavailable", "File d'attente indisponible. Réessayez plus tard."
         ) from None

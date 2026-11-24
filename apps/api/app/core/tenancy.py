@@ -51,6 +51,12 @@ def scope_session(session: Session, org_id: uuid.UUID) -> Session:
     return session
 
 
+def unscope_session(session: Session) -> Session:
+    """Back to an unscoped session (a platform job going over every company)."""
+    session.info.pop(_KEY, None)
+    return session
+
+
 def _org_assignments(state: ORMExecuteState) -> Iterator[object]:
     """Every value an INSERT/UPDATE statement assigns to ``org_id``."""
     stmt: Any = state.statement

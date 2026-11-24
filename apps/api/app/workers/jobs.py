@@ -1,5 +1,6 @@
 """RQ entry points. Run a worker with:  ``uv run rq worker --with-scheduler -u $REDIS_URL``."""
 
+import logging
 import uuid
 from datetime import UTC, datetime
 from typing import cast
@@ -162,3 +163,33 @@ def import_source_job(source: str) -> None:
     """« Importer maintenant » (lot 5): one source, since its last pass."""
     with get_sessionmaker()() as db:  # unscoped: notices are global
         run_import(db, cast(Source, source), ALL_READERS[source](), get_mailer(), get_job_queue())
+
+
+def poll_dce_mail_job() -> None:
+    """Every 2 minutes (ADR-055): the DCE mailbox, when switched on in the administration."""
+    from app.integrations.imap_mailbox import MailboxError, open_mailbox
+    from app.services import inbound_mail
+
+    if not inbound_mail.active():
+        return
+    try:
+        box = open_mailbox()
+    except MailboxError as exc:
+        logging.getLogger("pilao.dce_mail").warning("DCE mailbox not read: %s", exc)
+        return
+    try:
+        result = inbound_mail.poll(
+            get_sessionmaker(), box, get_storage(), get_scanner(), get_job_queue()
+        )
+    finally:
+        box.close()
+    if result.read or result.stopped:
+        logging.getLogger("pilao.dce_mail").info("DCE mailbox: %s", result)
+
+
+def purge_dce_mail_job() -> None:
+    """Every night (ADR-055): « À classer » left too long, old traces of e-mails."""
+    from app.services import inbound_mail
+
+    with get_sessionmaker()() as db:  # unscoped: every company
+        inbound_mail.purge(db, get_storage())

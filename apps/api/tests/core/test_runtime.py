@@ -74,7 +74,7 @@ def test_unreadable_key_falls_back_to_server(db: Session, monkeypatch: pytest.Mo
 
 def test_registry() -> None:
     names = [s.name for s in SETTINGS]
-    assert len(names) == 16 and len(set(names)) == 16
+    assert len(names) == 18 and len(set(names)) == 18  # + the DCE mailbox (ADR-055)
     assert [s.kind for s in SETTINGS].count("model") == 9  # + quote_draft (ADR-052)
     assert {f"model.{task}" for task in TASK_MODELS} <= set(names)
     budget = BY_NAME["ai_monthly_budget_eur_per_org"]
@@ -83,3 +83,22 @@ def test_registry() -> None:
     assert BY_NAME["import.boamp_enabled"].label == "Import BOAMP"
     robot = BY_NAME["dce_robot.enabled"]
     assert (robot.kind, robot.label) == ("bool", "Robot de récupération des DCE")
+    assert BY_NAME["dce_mail.password"].kind == "secret"
+
+
+def test_a_secret_set_in_the_administration_wins(
+    db: Session, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    from app.core import crypto
+
+    monkeypatch.setattr(get_settings(), "dce_mail_password", "mot-de-passe-serveur")
+    assert runtime.secret("dce_mail.password") == "mot-de-passe-serveur"
+    assert runtime.source("dce_mail.password") == "server"
+    put(db, "dce_mail.password", secret=crypto.encrypt("boite-admin", "dce_mail.password"))
+    assert runtime.secret("dce_mail.password") == "boite-admin"
+    assert runtime.source("dce_mail.password") == "admin"
+    # encrypted for another purpose: unreadable, the server's is used
+    db.get_one(PlatformSetting, "dce_mail.password").secret = crypto.encrypt("x", "autre")
+    db.flush()
+    runtime.invalidate()
+    assert runtime.secret("dce_mail.password") == "mot-de-passe-serveur"

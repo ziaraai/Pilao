@@ -7,10 +7,15 @@ from fastapi import APIRouter, Depends, Request, Response
 from app.ai.openrouter import OpenRouter, get_openrouter
 from app.core.admin_deps import AdminDb, AdminReadDb, CurrentAdmin
 from app.core.net import client_ip
+from app.integrations.imap_mailbox import Opener, get_mailbox_opener
 from app.schemas.admin import (
     ApiKeyIn,
     ApiKeyOut,
     CatalogueModelOut,
+    DceMailPasswordIn,
+    DceMailSettingOut,
+    DceMailSwitchIn,
+    DceMailTestOut,
     DceRobotSettingOut,
     DceRobotSwitchIn,
     GeneralSettingOut,
@@ -26,6 +31,7 @@ from app.workers.queue import JobQueue, get_job_queue
 
 router = APIRouter(prefix="/admin/settings", tags=["admin"])
 Client = Annotated[OpenRouter, Depends(get_openrouter)]
+Mailboxes = Annotated[Opener, Depends(get_mailbox_opener)]
 
 
 @router.get("")
@@ -114,3 +120,29 @@ def change_general(
 def reset_general(name: str, request: Request, ctx: CurrentAdmin, db: AdminDb) -> Response:
     svc.reset_general(db, ctx.admin, name, client_ip(request))
     return Response(status_code=204)
+
+
+@router.put("/dce-mail")
+def switch_dce_mail(
+    data: DceMailSwitchIn, request: Request, ctx: CurrentAdmin, db: AdminDb
+) -> DceMailSettingOut:
+    """The DCE e-mail address on or off for every company (ADR-055)."""
+    return svc.set_dce_mail(db, ctx.admin, data.enabled, client_ip(request))
+
+
+@router.put("/dce-mail/password")
+def replace_dce_mail_password(
+    data: DceMailPasswordIn, request: Request, ctx: CurrentAdmin, db: AdminDb, opener: Mailboxes
+) -> DceMailSettingOut:
+    return svc.set_dce_mail_password(db, ctx, opener, data.password, data.code, client_ip(request))
+
+
+@router.delete("/dce-mail/password", status_code=204)
+def reset_dce_mail_password(request: Request, ctx: CurrentAdmin, db: AdminDb) -> Response:
+    svc.reset_dce_mail_password(db, ctx.admin, client_ip(request))
+    return Response(status_code=204)
+
+
+@router.post("/dce-mail/test")
+def try_dce_mail(ctx: CurrentAdmin, opener: Mailboxes) -> DceMailTestOut:
+    return svc.try_dce_mail(opener)

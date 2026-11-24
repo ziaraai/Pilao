@@ -59,3 +59,5 @@ class Organization(IdMixin, TimestampMixin, Base):
     buyer_contact_first_name: Mapped[str | None] = mapped_column(Text)
     buyer_contact_last_name: Mapped[str | None] = mapped_column(Text)
     buyer_contact_email: Mapped[str | None] = mapped_column(Text)
+    # the code of its DCE e-mail address, dce+CODE@pilao.pro (24/11): given at the first reading
+    dce_mail_code: Mapped[str | None] = mapped_column(Text, unique=True)

@@ -117,6 +117,18 @@ class Settings(BaseSettings):
     dce_robot_enabled: bool = True  # the administration's switch wins (dce_robot.enabled)
     dce_robot_allow_private_hosts: bool = False  # tests and the local journey only
     dce_robot_browser_path: str = ""  # empty: the Chromium installed by Playwright
+    # DCE e-mail address (ADR-055): a mailbox read over IMAP every 2 minutes; each company
+    # has its address dce+CODE@domain. Switched on and its password set in the administration.
+    dce_mail_enabled: bool = False
+    dce_mail_address: str = "dce@pilao.pro"
+    dce_mail_password: str = ""
+    dce_mail_imap_host: str = ""  # empty: the domain of the address
+    dce_mail_imap_port: int = 993
+    dce_mail_verify_tls: bool = True  # false only for the server's own mail system (local hop)
+    dce_mail_tls_name: str = ""  # the name on the certificate when the host is a local hop
+    dce_mail_server_name: str = ""  # our server's name in Authentication-Results (if known)
+    dce_mail_max_bytes: int = 60 * 1024 * 1024  # a bigger e-mail is not read (link instead)
+    dce_mail_retention_days: int = 30  # « À classer » kept that long, then removed
 
     @property
     def cookie_secure(self) -> bool:

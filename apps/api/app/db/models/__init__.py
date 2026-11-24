@@ -9,6 +9,7 @@ from app.db.models.dce_fetch import DceFetch
 from app.db.models.document import DOCUMENT_KINDS, GeneratedDocument
 from app.db.models.feedback import Feedback
 from app.db.models.file import File
+from app.db.models.inbound_mail import InboundMail
 from app.db.models.job import Job
 from app.db.models.knowledge import DocumentChunk, KnowledgeDocument
 from app.db.models.memoir import (
@@ -68,6 +69,7 @@ __all__ = [
     "File",
     "GeneratedDocument",
     "HumanResource",
+    "InboundMail",
     "Job",
     "KnowledgeDocument",
     "LoginAttempt",

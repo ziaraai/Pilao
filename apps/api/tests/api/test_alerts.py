@@ -124,8 +124,11 @@ def test_the_alerts_and_the_notice_import_are_scheduled() -> None:
         "import_tenders_job",
         "sweep_stale_works_job",
         "watch_dces_job",  # the DCE retrieved by the robot, every morning
+        "poll_dce_mail_job",  # the DCE mailbox (ADR-055)
+        "purge_dce_mail_job",
     }
     assert jobs["sweep_stale_works_job"]["cron"] == "*/15 * * * *"  # lot 4: dead works refunded
+    assert jobs["poll_dce_mail_job"]["cron"] == "*/2 * * * *"
     assert {job["queue_name"] for job in jobs.values()} == {"default"}
     start = datetime(2026, 11, 5, 7, 0)
     alerts = croniter(jobs["daily_alerts_job"]["cron"], start)

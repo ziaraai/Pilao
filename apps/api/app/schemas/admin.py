@@ -568,6 +568,33 @@ class DceRobotSwitchIn(BaseModel):
     enabled: bool
 
 
+class DceMailSettingOut(BaseModel):
+    """The DCE mailbox (ADR-055): switched on, whose password, its last day."""
+
+    enabled: bool
+    origin: Origin
+    address: str
+    password_source: Literal["admin", "server", "none"]  # never any part of the password
+    received_24h: int
+    to_sort: int
+
+
+class DceMailSwitchIn(BaseModel):
+    enabled: bool
+
+
+class DceMailPasswordIn(BaseModel):
+    password: str = Field(min_length=1, max_length=200)
+    code: str = Field(min_length=1, max_length=40)  # asked again: the mailbox gets every DCE
+
+
+class DceMailTestOut(BaseModel):
+    ok: bool
+    waiting: int
+    flagged: int  # e-mails Pilao could not read, left in the mailbox
+    error: str | None
+
+
 class SettingsOut(BaseModel):
     models: list[ModelSettingOut]
     embedding_model: str
@@ -575,6 +602,7 @@ class SettingsOut(BaseModel):
     imports: list[ImportSettingOut]
     general: list[GeneralSettingOut]
     dce_robot: DceRobotSettingOut
+    dce_mail: DceMailSettingOut
 
 
 class CatalogueModelOut(BaseModel):
