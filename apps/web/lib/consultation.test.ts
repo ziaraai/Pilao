@@ -3,7 +3,12 @@ import { describe, expect, it } from "vitest";
 import {
   KIND_LABELS,
   chosenLabel,
+  consultationCard,
+  downloadLabel,
   excludedFromChosen,
+  missingFacts,
+  quoteNumberError,
+  readingText,
   sectionsOf,
   PRICE_UNITS,
   inclusionSource,
@@ -13,7 +18,7 @@ import {
   toggleSection,
   vatLabel,
 } from "@/lib/consultation";
-import type { QuoteState } from "@/lib/types";
+import type { ConsultationRead, QuoteState } from "@/lib/types";
 
 describe("a consultation", () => {
   it("name the two kinds", () => {
@@ -168,6 +173,105 @@ describe("the rubriques you price, chosen in one list", () => {
     expect(chosenLabel(["a", "b", "c"], [])).toBe("Toutes les rubriques (3)");
     expect(chosenLabel(["a", "b", "c"], ["a"])).toBe(
       "2 rubriques chiffrées sur 3",
+    );
+  });
+});
+
+describe("the consultation's card read in its documents (25/11)", () => {
+  const bid = {
+    title: "Consultation du 25/11/2026",
+    buyer_name: "CCTB",
+    client_address: null,
+    site_address: "M. DELBARRE Jean, 7 rue du Général Leclerc",
+    contact_name: null,
+    contact_email: null,
+    contact_phone: "04 77 25 05 44",
+    reference: "DE36594",
+    facts_sources: {
+      title: { auto: true },
+      buyer_name: { file: "FICHE.pdf", page: 1 },
+      site_address: { file: "DCE/FICHE.pdf", page: 2 },
+    },
+  };
+
+  it("shows each fact with where it was read, the empty ones to fill", () => {
+    const rows = consultationCard(bid);
+    expect(rows.map((r) => r.column)).toEqual([
+      "title",
+      "buyer_name",
+      "client_address",
+      "site_address",
+      "contact_name",
+      "contact_email",
+      "contact_phone",
+      "reference",
+    ]);
+    const by = Object.fromEntries(rows.map((r) => [r.column, r]));
+    expect(by.buyer_name.source).toBe("lu dans FICHE.pdf, p. 1");
+    expect(by.site_address.source).toBe("lu dans FICHE.pdf, p. 2");
+    expect(by.contact_phone.source).toBeNull(); // typed by the user
+    expect(by.client_address.missing && !by.buyer_name.missing).toBe(true);
+    // the title Pilao gave until the documents are read is still to fill
+    expect(by.title.missing).toBe(true);
+    expect(by.title.value).toBe("Consultation du 25/11/2026");
+  });
+
+  it("counts what is left to fill", () => {
+    expect(missingFacts(consultationCard(bid))).toBe(4);
+  });
+});
+
+describe("the reading of the documents", () => {
+  it("says where it stands", () => {
+    expect(readingText({ status: "reading" } as ConsultationRead)).toMatch(
+      /Pilao lit les documents/,
+    );
+    expect(
+      readingText({
+        status: "ready",
+        found: ["title", "client_name"],
+        price_files: [{ dce_file_id: "1", path: "FICHE.pdf", reason: "" }],
+      } as ConsultationRead),
+    ).toBe(
+      "Pilao a relevé 2 informations dans les documents et trouvé le fichier de prix « FICHE.pdf ». Vérifiez-les.",
+    );
+    expect(
+      readingText({
+        status: "ready",
+        found: [],
+        price_files: [
+          { dce_file_id: "1", path: "DCE/FICHE.pdf", reason: "" },
+          { dce_file_id: "2", path: "METRE.pdf", reason: "" },
+        ],
+      } as unknown as ConsultationRead),
+    ).toBe(
+      "Pilao n'a relevé aucune information dans les documents : remplissez la fiche. 2 documents de quantités trouvés : choisissez celui à chiffrer dans l'étape Prix.",
+    );
+    expect(
+      readingText({
+        status: "ready",
+        found: ["reference"],
+        price_files: [],
+      } as unknown as ConsultationRead),
+    ).toBe(
+      "Pilao a relevé 1 information dans les documents. Aucun fichier de prix trouvé : indiquez-le dans l'étape Prix.",
+    );
+  });
+});
+
+describe("the price file's download", () => {
+  it("names a DPGF written by Pilao, or the client's own file filled", () => {
+    expect(downloadLabel("document")).toBe("Télécharger le DPGF (Excel)");
+    expect(downloadLabel("grid")).toBe("Télécharger le fichier rempli");
+  });
+});
+
+describe("the quote's number", () => {
+  it("is free, up to 40 characters", () => {
+    expect(quoteNumberError("")).toBeNull();
+    expect(quoteNumberError(" DEV-2026-118 ")).toBeNull();
+    expect(quoteNumberError("x".repeat(41))).toBe(
+      "Numéro trop long (40 caractères au plus).",
     );
   });
 });

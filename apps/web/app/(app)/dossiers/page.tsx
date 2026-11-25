@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { MailInbox } from "@/components/dce-mail";
+import { UploadButton } from "@/components/upload";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 
@@ -38,16 +39,28 @@ export default function BidsPage() {
   const router = useRouter();
   const bids = useApi<Bid[]>("/bids");
   const [kind, setKind] = useState<BidKind>("tender");
-  const [form, setForm] = useState({
-    title: "",
-    buyer_name: "",
-    deadline: "",
-    contact_name: "",
-    contact_email: "",
-    lot_label: "",
-  });
+  const [form, setForm] = useState({ title: "", buyer_name: "", deadline: "" });
   const create = useAction();
+  const upload = useAction();
   const consultation = kind === "consultation";
+
+  /** « Nouvelle consultation » (25/11): the documents first; Pilao reads them and fills the
+   * card (client, addresses, contact, reference) and finds the price file. */
+  async function onDocuments(files: File[]) {
+    const bid = await create.run(() =>
+      api<Bid>("/bids", { json: { kind: "consultation" } }),
+    );
+    if (!bid) return;
+    if (files.length) {
+      const form = new FormData();
+      files.forEach((f) => form.append("files", f));
+      // refused (too big, a virus…): the dossier's « Documents reçus » step takes them again
+      await upload.run(() =>
+        api(`/bids/${bid.id}/dce?mode=new&analyse=true`, { form }),
+      );
+    }
+    router.push(`/dossiers/${bid.id}${files.length ? "?onglet=dce" : ""}`);
+  }
 
   async function onCreate(e: React.FormEvent) {
     e.preventDefault();
@@ -58,13 +71,6 @@ export default function BidsPage() {
           title: form.title,
           buyer_name: form.buyer_name || null,
           deadline_at: fromParisInput(form.deadline),
-          ...(consultation
-            ? {
-                contact_name: form.contact_name.trim() || null,
-                contact_email: form.contact_email.trim() || null,
-                lot_label: form.lot_label.trim() || null,
-              }
-            : {}),
         },
       }),
     );
@@ -108,92 +114,79 @@ export default function BidsPage() {
             ))}
           </div>
         </fieldset>
-        <form
-          onSubmit={onCreate}
-          className="grid items-end gap-3 sm:grid-cols-[2fr_1.5fr_1fr_auto]"
-          noValidate
-        >
-          <Field label="Intitulé" htmlFor="bid-title">
-            <Input
-              id="bid-title"
-              value={form.title}
-              onChange={(e) => setForm({ ...form, title: e.target.value })}
-              placeholder={
-                consultation
-                  ? "ex. Annexe du lycée — nettoyage de fin de chantier"
-                  : "ex. Nettoyage des écoles de Lyon"
-              }
+        {consultation ? (
+          <div className="space-y-3">
+            <UploadButton
+              id="consultation-upload"
+              label="Créer et lire les documents"
+              title="Glissez ici les documents reçus du client"
+              hint="Fiche d'intervention, DPGF, bordereau, CCTP, plans… en PDF, Word, Excel, images ou ZIP. Pilao remplit la fiche (client, adresses, contact, référence) et trouve le fichier de prix."
+              accept=".zip,.pdf,.docx,.doc,.odt,.xlsx,.xls,.ods,.png,.jpg,.jpeg"
+              multiple
+              busy={create.busy || upload.busy}
+              onFiles={onDocuments}
             />
-          </Field>
-          <Field
-            label={
-              consultation ? "Client (entreprise qui consulte)" : "Acheteur"
-            }
-            htmlFor="bid-buyer"
-          >
-            <Input
-              id="bid-buyer"
-              value={form.buyer_name}
-              onChange={(e) => setForm({ ...form, buyer_name: e.target.value })}
-            />
-          </Field>
-          <Field
-            label={
-              consultation
-                ? "Devis à remettre le (heure de Paris)"
-                : "Date limite (heure de Paris)"
-            }
-            htmlFor="bid-deadline"
-          >
-            <Input
-              id="bid-deadline"
-              type="datetime-local"
-              value={form.deadline}
-              onChange={(e) => setForm({ ...form, deadline: e.target.value })}
-            />
-          </Field>
-          <Button type="submit" busy={create.busy}>
-            Créer
-          </Button>
-          {consultation && (
-            <>
-              <Field label="Contact (nom)" htmlFor="bid-contact">
+            <p className="text-xs text-slate-500">
+              La lecture des documents coûte le prix de la lecture d&apos;un
+              fichier de prix, et la comprend. Rien n&apos;est inventé : ce que
+              les documents ne disent pas reste à compléter.{" "}
+              <button
+                type="button"
+                className="text-brand-navy underline"
+                disabled={create.busy || upload.busy}
+                onClick={() => onDocuments([])}
+              >
+                Créer sans documents
+              </button>
+            </p>
+          </div>
+        ) : (
+          <>
+            <form
+              onSubmit={onCreate}
+              className="grid items-end gap-3 sm:grid-cols-[2fr_1.5fr_1fr_auto]"
+              noValidate
+            >
+              <Field label="Intitulé" htmlFor="bid-title">
                 <Input
-                  id="bid-contact"
-                  value={form.contact_name}
+                  id="bid-title"
+                  value={form.title}
+                  onChange={(e) => setForm({ ...form, title: e.target.value })}
+                  placeholder="ex. Nettoyage des écoles de Lyon"
+                />
+              </Field>
+              <Field label="Acheteur" htmlFor="bid-buyer">
+                <Input
+                  id="bid-buyer"
+                  value={form.buyer_name}
                   onChange={(e) =>
-                    setForm({ ...form, contact_name: e.target.value })
+                    setForm({ ...form, buyer_name: e.target.value })
                   }
                 />
               </Field>
-              <Field label="E-mail du contact" htmlFor="bid-contact-email">
+              <Field
+                label="Date limite (heure de Paris)"
+                htmlFor="bid-deadline"
+              >
                 <Input
-                  id="bid-contact-email"
-                  type="email"
-                  value={form.contact_email}
+                  id="bid-deadline"
+                  type="datetime-local"
+                  value={form.deadline}
                   onChange={(e) =>
-                    setForm({ ...form, contact_email: e.target.value })
+                    setForm({ ...form, deadline: e.target.value })
                   }
                 />
               </Field>
-              <Field label="Lot ou référence" htmlFor="bid-lot">
-                <Input
-                  id="bid-lot"
-                  value={form.lot_label}
-                  placeholder="ex. Lot 16"
-                  onChange={(e) =>
-                    setForm({ ...form, lot_label: e.target.value })
-                  }
-                />
-              </Field>
-            </>
-          )}
-        </form>
-        <p className="mt-2 text-xs text-slate-500">
-          {consultation
-            ? "Vous déposerez ensuite les documents reçus par e-mail (CCTP, DPGF…) ; Pilao lit le fichier de prix et prépare votre devis."
-            : "L'acheteur et la date limite seront repris du DCE s'ils sont laissés vides."}
-        </p>
+              <Button type="submit" busy={create.busy}>
+                Créer
+              </Button>
+            </form>
+            <p className="mt-2 text-xs text-slate-500">
+              L&apos;acheteur et la date limite seront repris du DCE s&apos;ils
+              sont laissés vides.
+            </p>
+          </>
+        )}
         {create.error && (
           <div className="mt-3">
             <Alert tone="danger">{create.error}</Alert>

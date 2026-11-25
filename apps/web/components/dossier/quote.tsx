@@ -5,7 +5,13 @@ import { useState } from "react";
 import { PaidButton } from "@/components/paid-button";
 import { Alert, Button, Card, Field, Input, Select } from "@/components/ui";
 import { api } from "@/lib/api";
-import { inclusionSource, quoteAction, vatLabel } from "@/lib/consultation";
+import {
+  QUOTE_NUMBER_MAX,
+  inclusionSource,
+  quoteAction,
+  quoteNumberError,
+  vatLabel,
+} from "@/lib/consultation";
 import type { TabId } from "@/lib/dossier";
 import { formatCents, formatDateTime } from "@/lib/format";
 import { useAction, useApi } from "@/lib/hooks";
@@ -30,14 +36,21 @@ export function QuoteTab({
 }) {
   const state = useApi<QuoteState>(`/bids/${bidId}/quote`, drafting);
   const act = useAction();
+  // the company's own number (its office software numbers its quotes, 25/11); empty: Pilao's
+  const [number, setNumber] = useState<string | null>(null);
   const data = state.data;
   if (!data)
     return state.error ? <Alert tone="danger">{state.error}</Alert> : null;
   const step = quoteAction(data);
+  const typed = number ?? data.quote?.number ?? "";
+  const numberError = quoteNumberError(typed);
 
   async function prepare(summarize: boolean) {
+    if (numberError) return;
     const done = await act.run(() =>
-      api<Quote>(`/bids/${bidId}/quote`, { json: { summarize } }),
+      api<Quote>(`/bids/${bidId}/quote`, {
+        json: { summarize, number: typed.trim() || null },
+      }),
     );
     if (done) state.reload();
   }
@@ -67,6 +80,24 @@ export function QuoteTab({
                   <Alert tone="danger">{data.quote.error}</Alert>
                 )}
                 <p className="text-sm text-slate-700">{intro}</p>
+                <div className="max-w-xs">
+                  <Field label="N° du devis" htmlFor="quote-number-new">
+                    <Input
+                      id="quote-number-new"
+                      value={typed}
+                      maxLength={QUOTE_NUMBER_MAX + 10}
+                      placeholder="Donné par Pilao (D-AAAA-NNNN)"
+                      onChange={(e) => setNumber(e.target.value)}
+                    />
+                  </Field>
+                  <p className="mt-1 text-xs text-slate-500">
+                    Laissez vide pour le numéro de Pilao, ou reprenez celui de
+                    votre logiciel de devis.
+                  </p>
+                  {numberError && (
+                    <p className="text-xs text-red-700">{numberError}</p>
+                  )}
+                </div>
                 {data.cctp ? (
                   <PaidButton
                     action="quote_draft"
@@ -127,6 +158,7 @@ function ReadyQuote({
   onSaved: () => void;
 }) {
   const [validity, setValidity] = useState(String(quote.validity_days));
+  const [number, setNumber] = useState(quote.number);
   const [vat, setVat] = useState(quote.vat_bp);
   const [items, setItems] = useState<Inclusion[]>(quote.inclusions);
   const [added, setAdded] = useState("");
@@ -139,6 +171,8 @@ function ReadyQuote({
     const days = Number(validity);
     if (!Number.isInteger(days) || days < 1 || days > 365)
       return setBad("Validité : un nombre de jours entre 1 et 365.");
+    const numberError = quoteNumberError(number);
+    if (numberError) return setBad(numberError);
     setBad(null);
     const extra = added.trim()
       ? [{ text: added.trim(), file: null, page: null }]
@@ -147,6 +181,7 @@ function ReadyQuote({
       api<Quote>(`/bids/${bidId}/quote`, {
         method: "PUT",
         json: {
+          number: number.trim(), // "" goes back to Pilao's number
           validity_days: days,
           vat_bp: vat,
           inclusions: [...items, ...extra],
@@ -279,7 +314,16 @@ function ReadyQuote({
               </Field>
             </div>
           </section>
-          <div className="grid gap-3 sm:grid-cols-[10rem_10rem]">
+          <div className="grid gap-3 sm:grid-cols-[14rem_10rem_10rem]">
+            <Field label="N° du devis" htmlFor="quote-number">
+              <Input
+                id="quote-number"
+                value={number}
+                maxLength={QUOTE_NUMBER_MAX + 10}
+                placeholder={quote.proposed_number}
+                onChange={(e) => setNumber(e.target.value)}
+              />
+            </Field>
             <Field label="Validité (jours)" htmlFor="quote-validity">
               <Input
                 id="quote-validity"
@@ -302,6 +346,12 @@ function ReadyQuote({
               </Select>
             </Field>
           </div>
+          {quote.proposed_number && number.trim() !== quote.proposed_number && (
+            <p className="text-xs text-slate-500">
+              Numéro de Pilao : {quote.proposed_number} (videz la case pour le
+              reprendre).
+            </p>
+          )}
           {bad && <p className="text-xs text-red-700">{bad}</p>}
           <div className="flex flex-wrap items-center gap-3">
             <Button type="submit" busy={save.busy} disabled={!!blocking}>

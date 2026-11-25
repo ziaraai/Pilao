@@ -98,6 +98,7 @@ Reste à faire :
 - [x] P4-12 Remplir le cadre de réponse fourni par l'acheteur (Q19, US-4.9, ADR-051) : le Word de l'acheteur rendu rempli, chaque chapitre sous son encadré, le plan qui suit le cadre
 - [x] P4-13 Chiffrage (US-4.8, ADR-049) : onglet « Prix », lecture du BPU / DPGF / DQE par l'IA, heures ou prix saisis, taux et majorations du profil, fichier de l'acheteur rempli case par case, heures données au mémoire
 - [x] P4-15 Consultations d'entreprises (US-4.10, ADR-052) : type de dossier « Consultation (devis) », « Ma liste de prix » rapprochée des lignes, rubriques des autres corps d'état mises de côté, devis numéroté en Word et PDF avec « Prestations comprises » sourcées du CCTP
+- [x] P4-17 Consultation lue dans ses documents (US-4.10 CA9-CA12, ADR-056) : création par le dépôt, fiche du client sourcée (cases jaunes), fichier de prix trouvé par son contenu, PDF/Word lu (OCR des lignes en image) et rendu en DPGF Excel, numéro de devis de l'entreprise, ligne de signature sans répétition
 - [ ] P4-16 Consultations, suite : devis sans fichier de prix (lignes saisies), import Excel de la liste de prix, suivi des devis envoyés (CRM)
 - [ ] P4-14 Estimer les heures depuis les surfaces du CCTP et les cadences de l'entreprise (proposition à valider, jamais imposée)
 

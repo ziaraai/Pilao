@@ -269,6 +269,8 @@ price_sheets (             -- un fichier de prix (BPU, DPGF, DQE) d'un dossier
   entries jsonb,           -- {ligne: {hours | price_cents | service_id}} saisis ou repris de la liste de prix
   rate_cents int null,     -- taux du dossier (sinon celui du profil)
   excluded_sections jsonb, -- consultations (ADR-052) : rubriques mises de côté, ni remplies ni comptées
+  mode text default 'grid' check (mode in ('grid','document')),  -- document : PDF ou Word lu page par page, prix rendus dans un DPGF Excel écrit par Pilao (ADR-056)
+  included bool default false,  -- lu sans crédit : compris dans la lecture des documents d'une consultation (ADR-056)
   created_by null
 )
 ```
@@ -278,6 +280,16 @@ price_sheets (             -- un fichier de prix (BPU, DPGF, DQE) d'un dossier
 ```sql
 bids.kind text default 'tender' check (kind in ('tender','consultation'))
 bids.contact_name text null, bids.contact_email text null   -- le contact de l'entreprise qui consulte
+bids.contact_phone, bids.client_address, bids.site_address text null   -- lus dans les documents (ADR-056)
+bids.facts_sources jsonb default '{}'   -- {champ: {file, page}} où chaque information a été lue ; {title: {auto: true}} titre provisoire ; retirée quand l'utilisateur modifie le champ
+
+consultation_reads (       -- la lecture des documents d'une consultation (ADR-056), une par dossier
+  id, org_id, bid_id unique,
+  status text check (status in ('reading','ready','error','waiting_credits')), error null,
+  found jsonb,             -- les informations relevées (client_name, site_address…)
+  price_files jsonb,       -- [{dce_file_id, path, reason}] : les documents de quantités trouvés
+  created_by null
+)
 
 price_services (           -- « Ma liste de prix » : les prestations de l'entreprise
   id, org_id, name, unit check (m², ml, m³, heure, jour, forfait, u, passage, mois),
@@ -288,6 +300,7 @@ quotes (                   -- le devis de l'entreprise, un par dossier
   id, org_id, bid_id unique, year int, seq int, unique (org_id, year, seq),  -- « D-2026-0001 »
   status text check (status in ('drafting','ready','error')), error null,
   inclusions jsonb,        -- [{text, file, page}] : « Prestations comprises », chacune avec sa page du CCTP (ou ajoutée par l'entreprise : file et page nuls)
+  custom_number text null, -- le numéro de l'entreprise (son logiciel de devis) ; null : « D-AAAA-NNNN » (ADR-056)
   validity_days int check (1..365) default 30, vat_bp int check (0..10000) default 2000,
   file_id null, docx_file_id null, zip_file_id null,   -- PDF, Word, ZIP (devis + fichier du client rempli)
   created_by null

@@ -4,7 +4,14 @@
  * from « Ma liste de prix » or the company, the quote cites the CCTP. Pure functions.
  */
 import { parseEuros } from "@/lib/format";
-import type { BidKind, Inclusion, QuoteState, ServiceIn } from "@/lib/types";
+import type {
+  Bid,
+  BidKind,
+  ConsultationRead,
+  Inclusion,
+  QuoteState,
+  ServiceIn,
+} from "@/lib/types";
 
 export const KIND_LABELS: Record<BidKind, string> = {
   tender: "Appel d'offres",
@@ -113,4 +120,106 @@ export function chosenLabel(all: string[], excluded: string[]): string {
   return n === 1
     ? `1 rubrique chiffrée sur ${all.length}`
     : `${n} rubriques chiffrées sur ${all.length}`;
+}
+
+// ---------- a consultation read from its documents (25/11) ----------------------------------
+
+export type FactColumn =
+  | "title"
+  | "buyer_name"
+  | "client_address"
+  | "site_address"
+  | "contact_name"
+  | "contact_email"
+  | "contact_phone"
+  | "reference";
+
+/** The card's fields, in order, with their labels. */
+export const FACTS: { column: FactColumn; label: string; long?: boolean }[] = [
+  { column: "title", label: "Objet" },
+  { column: "buyer_name", label: "Client (qui demande le devis)" },
+  { column: "client_address", label: "Adresse du client", long: true },
+  { column: "site_address", label: "Adresse du chantier", long: true },
+  { column: "contact_name", label: "Contact" },
+  { column: "contact_email", label: "E-mail" },
+  { column: "contact_phone", label: "Téléphone" },
+  { column: "reference", label: "Référence du client" },
+];
+
+export type FactRow = {
+  column: FactColumn;
+  label: string;
+  long: boolean;
+  value: string;
+  /** « lu dans FICHE.pdf, p. 1 », or null when the user typed it. */
+  source: string | null;
+  /** Empty (or the title Pilao gave until the documents are read): to fill. */
+  missing: boolean;
+};
+
+type CardBid = Pick<
+  Bid,
+  "title" | "buyer_name" | "contact_name" | "contact_email" | "reference"
+> &
+  Pick<
+    Bid,
+    "client_address" | "site_address" | "contact_phone" | "facts_sources"
+  >;
+
+const fileName = (path: string) => path.split("/").pop() ?? path;
+
+export function consultationCard(bid: CardBid): FactRow[] {
+  const sources = bid.facts_sources ?? {};
+  return FACTS.map(({ column, label, long }) => {
+    const value = (bid[column] ?? "").trim();
+    const src = sources[column];
+    return {
+      column,
+      label,
+      long: !!long,
+      value,
+      source:
+        src?.file && src.page
+          ? `lu dans ${fileName(src.file)}, p. ${src.page}`
+          : null,
+      missing: !value || !!src?.auto,
+    };
+  });
+}
+
+export function missingFacts(rows: FactRow[]): number {
+  return rows.filter((r) => r.missing).length;
+}
+
+const plural = (n: number, word: string) => `${n} ${word}${n > 1 ? "s" : ""}`;
+
+/** Where the reading of the documents stands, in one sentence. */
+export function readingText(read: ConsultationRead): string {
+  if (read.status === "reading")
+    return "Pilao lit les documents reçus : la fiche se remplit dans une minute environ.";
+  if (read.status !== "ready") return read.error ?? "";
+  const facts = read.found.length
+    ? `Pilao a relevé ${plural(read.found.length, "information")} dans les documents`
+    : "Pilao n'a relevé aucune information dans les documents : remplissez la fiche";
+  const files = read.price_files;
+  if (files.length === 1)
+    return `${facts} et trouvé le fichier de prix « ${fileName(files[0].path)} ». Vérifiez-les.`;
+  if (files.length > 1)
+    return `${facts}. ${files.length} documents de quantités trouvés : choisissez celui à chiffrer dans l'étape Prix.`;
+  return `${facts}. Aucun fichier de prix trouvé : indiquez-le dans l'étape Prix.`;
+}
+
+/** The price file's download: the DPGF Pilao writes, or the client's own file filled. */
+export function downloadLabel(mode: "grid" | "document" | undefined): string {
+  return mode === "document"
+    ? "Télécharger le DPGF (Excel)"
+    : "Télécharger le fichier rempli";
+}
+
+export const QUOTE_NUMBER_MAX = 40;
+
+export function quoteNumberError(value: string): string | null {
+  return value.trim().length > QUOTE_NUMBER_MAX
+    ? `Numéro trop long (${QUOTE_NUMBER_MAX} caractères au plus).`
+    : null;
 }

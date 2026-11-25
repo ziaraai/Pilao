@@ -15,7 +15,12 @@ import {
 } from "@/components/ui";
 import { api } from "@/lib/api";
 import { centsToInput, formatCents, parseEuros } from "@/lib/format";
-import { chosenLabel, sectionsOf, toggleSection } from "@/lib/consultation";
+import {
+  chosenLabel,
+  downloadLabel,
+  sectionsOf,
+  toggleSection,
+} from "@/lib/consultation";
 import { useAction, useApi } from "@/lib/hooks";
 import { DCE_KINDS } from "@/lib/labels";
 import {
@@ -33,6 +38,8 @@ import {
   sourceText,
 } from "@/lib/prices";
 import type {
+  DceFile,
+  DceVersion,
   PriceFile,
   PriceLine,
   PriceSheet,
@@ -91,21 +98,39 @@ export function PricesTab({
       {data.files.length === 0 ? (
         <Empty>
           {consultation
-            ? "Aucun fichier de prix (BPU, DPGF, DQE) dans les documents reçus. S'il y en a un, vérifiez son type dans l'onglet Documents reçus."
+            ? "Pilao n'a pas trouvé de document avec des quantités à chiffrer. S'il y en a un parmi les documents reçus, indiquez-le ci-dessous."
             : "Aucun fichier de prix (BPU, DPGF, DQE) dans le DCE. S'il y en a un, vérifiez son type dans l'onglet DCE."}
         </Empty>
       ) : (
-        data.files.map((f) => (
-          <PriceFileCard
-            key={f.dce_file_id}
-            bidId={bidId}
-            file={f}
-            rates={data.rates}
-            consultation={consultation}
-            onChanged={(next) => prices.setData(next)}
-            reload={prices.reload}
-          />
-        ))
+        <>
+          {consultation &&
+            data.files.length > 1 &&
+            data.files.every((f) => f.sheet === null) && (
+              <Alert tone="info">
+                Pilao a trouvé {data.files.length} documents avec des quantités
+                : lisez celui qui sert à votre devis.
+              </Alert>
+            )}
+          {data.files.map((f) => (
+            <PriceFileCard
+              key={f.dce_file_id}
+              bidId={bidId}
+              file={f}
+              rates={data.rates}
+              consultation={consultation}
+              onChanged={(next) => prices.setData(next)}
+              reload={prices.reload}
+            />
+          ))}
+        </>
+      )}
+      {consultation && (
+        <OtherDocuments
+          bidId={bidId}
+          open={data.files.length === 0}
+          priced={data.files.map((f) => f.dce_file_id)}
+          onChosen={prices.reload}
+        />
       )}
     </div>
   );
@@ -156,21 +181,28 @@ function PriceFileCard({
     <Card title={title} color="amber" flush id={`prix-${file.dce_file_id}`}>
       {!(sheet?.status === "ready" && !act.error) && (
         <div className="space-y-3 p-5">
-          {!file.fillable ? (
+          {!file.fillable && file.readable === false ? (
             <Alert tone="warning">
-              Ce fichier est un PDF : Pilao ne peut pas le remplir. Demandez la
-              version Excel du bordereau à l&apos;acheteur (elle est souvent
-              fournie avec le DCE).
+              Pilao n&apos;a pas pu lire le texte de ce document : demandez la
+              version Excel du bordereau{" "}
+              {consultation ? "au client" : "à l'acheteur"}, ou une version PDF
+              où le texte se sélectionne.
             </Alert>
           ) : sheet === null ? (
             <div className="space-y-2">
               <p className="text-sm text-slate-700">
-                Pilao repère les lignes à chiffrer et les cases à remplir, et y
-                met les prix de votre liste quand une ligne correspond. Vous
-                complétez vos heures ou vos prix ; Pilao calcule et remplit le
-                fichier {consultation ? "du client" : "de l'acheteur"}.
+                {file.fillable
+                  ? `Pilao repère les lignes à chiffrer et les cases à remplir, et y met les prix de votre liste quand une ligne correspond. Vous complétez vos heures ou vos prix ; Pilao calcule et remplit le fichier ${consultation ? "du client" : "de l'acheteur"}.`
+                  : "Ce document ne se remplit pas : Pilao en lit les lignes et les quantités page par page (le texte en image compris), y met les prix de votre liste quand une ligne correspond, puis écrit un DPGF Excel avec vos prix et les totaux."}
               </p>
-              {readButton("Lire le fichier")}
+              <div className="flex flex-wrap items-center gap-3">
+                {readButton(
+                  file.fillable ? "Lire le fichier" : "Lire le document",
+                )}
+                {consultation && (
+                  <NotAPriceFile fileId={file.dce_file_id} onDone={reload} />
+                )}
+              </div>
             </div>
           ) : sheet.status === "reading" ? (
             <p role="status" className="text-sm text-slate-700">
@@ -192,7 +224,9 @@ function PriceFileCard({
           sheet={sheet}
           rates={rates}
           consultation={consultation}
-          readAgain={readButton("Relire le fichier")}
+          readAgain={readButton(
+            file.fillable ? "Relire le fichier" : "Relire le document",
+          )}
           onSaved={reload} // the same lines of the other price files follow
         />
       )}
@@ -338,12 +372,14 @@ function SheetEditor({
             if (link) window.location.assign(link.url);
           }}
         >
-          Télécharger le fichier rempli
+          {downloadLabel(current.mode)}
         </Button>
         {readAgain}
         <span className="text-xs text-slate-600">
-          {missingText(current.missing_count)}. Les prix manquants restent tels
-          que l&apos;acheteur les a laissés.
+          {missingText(current.missing_count)}.{" "}
+          {current.mode === "document"
+            ? "Les prix manquants restent en cases jaunes dans le DPGF ; les montants et les totaux s'y calculent seuls."
+            : "Les prix manquants restent tels que l'acheteur les a laissés."}
         </span>
       </div>
       {download.error && <Alert tone="danger">{download.error}</Alert>}
@@ -647,5 +683,109 @@ function RubriquePicker({
             : "Toutes les rubriques sont chiffrées."}
       </p>
     </div>
+  );
+}
+
+/** A document Pilao took for a price file by mistake (consultations, 25/11). */
+function NotAPriceFile({
+  fileId,
+  onDone,
+}: {
+  fileId: string;
+  onDone: () => void;
+}) {
+  const act = useAction();
+  return (
+    <span className="inline-flex flex-col gap-1">
+      <Button
+        variant="secondary"
+        busy={act.busy}
+        onClick={async () => {
+          const done = await act.run(() =>
+            api<DceFile>(`/dce-files/${fileId}`, {
+              method: "PATCH",
+              json: { kind: "other" },
+            }),
+          );
+          if (done) onDone();
+        }}
+      >
+        Ce n&apos;est pas le fichier de prix
+      </Button>
+      {act.error && <span className="text-xs text-red-700">{act.error}</span>}
+    </span>
+  );
+}
+
+/**
+ * The other documents received (consultations, 25/11): the company points at the one with
+ * the quantities when Pilao did not find it (« C'est le fichier de prix »).
+ */
+function OtherDocuments({
+  bidId,
+  open,
+  priced,
+  onChosen,
+}: {
+  bidId: string;
+  open: boolean;
+  priced: string[];
+  onChosen: () => void;
+}) {
+  const versions = useApi<DceVersion[]>(`/bids/${bidId}/dce`);
+  const act = useAction();
+  const latest = versions.data?.find((v) => v.status === "ready");
+  const others = (latest?.files ?? []).filter((f) => !priced.includes(f.id));
+  if (!others.length) return null;
+
+  async function choose(file: DceFile) {
+    const done = await act.run(() =>
+      api<DceFile>(`/dce-files/${file.id}`, {
+        method: "PATCH",
+        json: { kind: "dpgf" },
+      }),
+    );
+    if (done) {
+      versions.reload();
+      onChosen();
+    }
+  }
+
+  return (
+    <details
+      open={open}
+      className="rounded-lg bg-white p-4 ring-1 ring-slate-200"
+    >
+      <summary className="cursor-pointer text-sm font-semibold text-slate-800">
+        Le fichier de prix est un autre document ?
+      </summary>
+      <ul className="mt-3 divide-y divide-slate-100">
+        {others.map((f) => (
+          <li
+            key={f.id}
+            className="flex flex-wrap items-center justify-between gap-2 py-2 text-sm"
+          >
+            <span className="min-w-0 break-all">
+              {fileLabel(f.path)}{" "}
+              <span className="text-xs text-slate-500">
+                ({DCE_KINDS[f.detected_kind] ?? f.detected_kind})
+              </span>
+            </span>
+            <Button
+              variant="secondary"
+              busy={act.busy}
+              onClick={() => choose(f)}
+            >
+              C&apos;est le fichier de prix
+            </Button>
+          </li>
+        ))}
+      </ul>
+      {act.error && (
+        <div className="mt-2">
+          <Alert tone="danger">{act.error}</Alert>
+        </div>
+      )}
+    </details>
   );
 }

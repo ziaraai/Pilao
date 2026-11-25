@@ -51,6 +51,13 @@ dpgf_buf = io.BytesIO(); dpgf.save(dpgf_buf)
 buf = io.BytesIO()
 with zipfile.ZipFile(buf, "w") as zf:
     zf.writestr("CCTP lot 16.pdf", lot_cctp); zf.writestr("DPGF lot 16.xlsx", dpgf_buf.getvalue())
+    # 25/11: the request itself, read for the consultation's card (client, site, contact)
+    zf.writestr("Demande de prix.pdf", make_pdf([[
+        "ENTREPRISE GENERALE EXEMPLE - 12 rue des Lilas 69003 Lyon",
+        "Demande de prix n EG-26-016",
+        "Objet : Annexe du lycee - nettoyage",
+        "Chantier : Lycee du Parc, 1 boulevard Anatole France 69006 Lyon",
+        "Contact : Mme Exemple - contact@eg-exemple.fr - Tel 04 72 00 00 00"]]))
 open(f"{out}/consultation.zip", "wb").write(buf.getvalue())
 open(f"{out}/attestation_urssaf.pdf", "wb").write(make_pdf([["ATTESTATION DE VIGILANCE", "URSSAF Rhone-Alpes"]]))
 open(f"{out}/memoire_2025.docx", "wb").write(make_docx([("Heading 1", "Moyens materiels"), ("Normal", "Nous utilisons des autolaveuses et des monobrosses professionnelles."), ("Normal", "Nous disposons de 3 autolaveuses Tennant T5 pour les grandes surfaces."), ("Normal", "Equipe : agents de service et 2 chefs d'equipe.")]))

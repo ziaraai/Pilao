@@ -67,6 +67,8 @@ function Dossier() {
   );
   const [analysisKey, setAnalysisKey] = useState(0);
   const [memoirKey, setMemoirKey] = useState(0);
+  // a consultation's documents processed: their reading has just started (25/11)
+  const [readKey, setReadKey] = useState(0);
   // where to bring the eye once a step is open: its detail, or a block inside it
   const [target, setTarget] = useState<{
     id: string;
@@ -215,7 +217,15 @@ function Dossier() {
       />
       {action.error && <Alert tone="danger">{action.error}</Alert>}
       {consultation ? (
-        <ConsultationOverview bid={b} onSaved={bid.setData} />
+        <ConsultationOverview
+          key={readKey}
+          bid={b}
+          onSaved={bid.setData}
+          onRead={() => {
+            bid.reload(); // the card's facts and the price files read
+            quote.reload();
+          }}
+        />
       ) : (
         b.progress?.dce_ready &&
         // shown once there is an analysis to read them from
@@ -244,6 +254,7 @@ function Dossier() {
             consultation={consultation}
             onProcessed={() => {
               setAnalysisKey((k) => k + 1);
+              setReadKey((k) => k + 1);
               bid.reload();
               facts.reload();
             }}

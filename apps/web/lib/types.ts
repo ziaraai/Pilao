@@ -176,9 +176,17 @@ export type Bid = {
   minutes_with_pilao: number | null;
   minutes_usual: number | null;
   created_at: string;
+  /** A consultation read from its documents (25/11). */
+  contact_phone?: string | null;
+  client_address?: string | null;
+  site_address?: string | null;
+  /** Where each fact was read: {buyer_name: {file, page}}; {title: {auto: true}} for the
+   * title Pilao gave until the documents are read. A field the user typed has none. */
+  facts_sources?: Record<string, FactSource>;
   /** The dossier page only (the marks of its tabs); null in the list. */
   progress?: DossierProgress | null;
 };
+export type FactSource = { file?: string; page?: number; auto?: boolean };
 export type DossierProgress = {
   dce_ready: boolean;
   analysis_ready: boolean;
@@ -1093,6 +1101,9 @@ export type PriceLine = {
 export type PriceSheet = {
   id: string;
   status: "reading" | "ready" | "error";
+  /** grid: the client's Excel filled cell by cell; document: a PDF or Word read page by
+   * page, whose prices go to a DPGF Pilao writes (25/11). */
+  mode?: "grid" | "document";
   error: string | null;
   warnings: string[];
   notes: string[];
@@ -1109,6 +1120,8 @@ export type PriceFile = {
   path: string;
   kind: string;
   fillable: boolean;
+  /** An Excel to fill, or a document whose text Pilao can read (OCR included). */
+  readable?: boolean;
   sheet: PriceSheet | null;
 };
 
@@ -1133,7 +1146,9 @@ export type Inclusion = {
 };
 export type Quote = {
   id: string;
+  /** The company's own number, or Pilao's D-AAAA-NNNN (``proposed_number``). */
   number: string;
+  proposed_number?: string;
   status: "drafting" | "ready" | "error";
   error: string | null;
   inclusions: Inclusion[];
@@ -1153,6 +1168,17 @@ export type QuoteState = {
   quote: Quote | null;
   blocking: string | null;
   cctp: boolean;
+};
+
+/** The reading of a consultation's documents (25/11): its card and its price file. */
+export type ConsultationRead = {
+  status: "none" | "reading" | "ready" | "error" | "waiting_credits";
+  error: string | null;
+  /** The facts read (client_name, site_address…). */
+  found: string[];
+  /** The documents of quantities found. */
+  price_files: { dce_file_id: string; path: string; reason: string }[];
+  updated_at: string | null;
 };
 
 /** « Plateformes des DCE » (admin, 24/11): where the DCE are, and how Pilao gets them. */

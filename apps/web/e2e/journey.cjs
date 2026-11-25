@@ -778,20 +778,44 @@ let current; // the page, for a screenshot when a step fails
   await page.getByLabel("Prix HT de la prestation 1").fill("1,50");
   await page.getByRole("button", { name: "Enregistrer la liste" }).click();
   await page.getByText("Liste enregistrée.").waitFor();
+  // 25/11: the documents first; Pilao fills the card and reads the price file it found
   await page.goto(`${WEB}/dossiers`);
   await page.getByLabel("Consultation d'une entreprise (devis)").check();
-  await page.fill("#bid-title", "Annexe du lycée — nettoyage");
-  await page.fill("#bid-buyer", "Entreprise générale Exemple");
-  await page.fill("#bid-contact", "Mme Exemple");
-  await page.fill("#bid-contact-email", "contact@eg-exemple.fr");
-  await page.fill("#bid-lot", "Lot 16");
-  await page.getByRole("button", { name: "Créer", exact: true }).click();
-  await page.waitForURL(/\/dossiers\/[0-9a-f-]+$/);
-  await page.getByRole("tab", { name: "Devis" }).waitFor(); // the page has loaded
+  if (await page.locator("#bid-title").count())
+    throw new Error(
+      "a consultation still asks for its title before its documents",
+    );
+  await page.setInputFiles("#consultation-upload", `${S}/consultation.zip`);
+  await page
+    .getByRole("button", { name: "Créer et lire les documents" })
+    .click();
+  await page.waitForURL(/\/dossiers\/[0-9a-f-]+\?onglet=dce$/);
   await page.getByRole("heading", { name: "La consultation" }).waitFor();
   await page
-    .getByRole("heading", { name: "Déposer les documents reçus" })
-    .waitFor();
+    .getByRole("cell", { name: "DPGF lot 16.xlsx", exact: true })
+    .waitFor({ timeout: 60000 });
+  await page
+    .getByRole("heading", { name: "Annexe du lycée — nettoyage" })
+    .waitFor({ timeout: 60000 });
+  await page.getByText("Entreprise générale Exemple").first().waitFor();
+  await page.getByText("(lu dans Demande de prix.pdf, p. 1)").first().waitFor();
+  await page.getByText("Lycée du Parc, 1 boulevard Anatole France").waitFor();
+  await page.getByText("EG-26-016").first().waitFor();
+  // the phone number the model gave is not the one written: dropped, to fill by hand
+  if (await page.getByText("04 72 99 99 99").count())
+    throw new Error(
+      "a phone number not written in the documents reached the card",
+    );
+  await page.getByText("À compléter").first().waitFor();
+  await page.screenshot({
+    path: `${S}/consultation-fiche.png`,
+    fullPage: true,
+  });
+  await page.getByRole("button", { name: "Compléter", exact: true }).click();
+  await page.fill("#c-contact_phone", "04 72 00 00 00");
+  await page.fill("#c-lot", "Lot 16");
+  await page.getByRole("button", { name: "Enregistrer", exact: true }).click();
+  await page.getByText("04 72 00 00 00").waitFor();
   const consultTabs = await page.getByRole("tab").allTextContents();
   for (const name of ["Documents reçus", "Prix", "Devis"])
     if (!consultTabs.some((t) => t.includes(name)))
@@ -800,16 +824,9 @@ let current; // the page, for a screenshot when a step fails
       );
   if (consultTabs.some((t) => /Analyse|Mémoire/.test(t)))
     throw new Error("a consultation shows the tender's tabs: " + consultTabs);
-  await page.getByRole("tab", { name: "Documents reçus" }).click();
-  await page.setInputFiles("#dce-upload", `${S}/consultation.zip`);
-  await page
-    .getByRole("button", { name: "Déposer les documents", exact: true })
-    .click();
-  await page
-    .getByRole("cell", { name: "DPGF lot 16.xlsx", exact: true })
-    .waitFor({ timeout: 60000 });
   await page.getByRole("tab", { name: "Prix" }).click();
-  await page.getByRole("button", { name: /^Lire le fichier/ }).click();
+  // the one price file found is read at once, paid by the reading of the documents
+  await page.getByText("Le fichier de prix est un autre document ?").waitFor();
   await page
     .getByText("prix de votre liste : Nettoyage de fin de chantier avant OPR")
     .first()
@@ -870,12 +887,21 @@ let current; // the page, for a screenshot when a step fails
       throw new Error(`the quote lacks « ${expected} »`);
   if (quoteText.includes("Cloisons"))
     throw new Error("a line set aside reached the quote");
+  // the company numbers its quotes in its office software: its own number (25/11)
+  await page.fill("#quote-number", "EG-2026-118");
+  await page
+    .getByRole("button", { name: "Enregistrer et refaire le devis" })
+    .click();
+  await page
+    .getByRole("heading", { name: "Devis n° EG-2026-118" })
+    .waitFor({ timeout: 90000 });
+  await page.getByText(`Numéro de Pilao : D-${year}-0001`).waitFor();
   await page.screenshot({
     path: `${S}/consultation-devis.png`,
     fullPage: true,
   });
   step(
-    "consultation: price list, plasterwork set aside, cleaning prefilled, quote D-…-0001 in PDF and Word",
+    "consultation: created from its documents (card read with its pages, a phone number not written dropped and typed), price file read at once, plasterwork set aside, cleaning prefilled, quote D-…-0001 in PDF and Word, then the company's own number",
   );
 
   // 7. Knowledge base: upload, indexing, search

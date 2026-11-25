@@ -139,6 +139,24 @@ def matches(prompt):
     return {"matches": [{"line": "DPGF!F8", "service": sid}, {"line": "DPGF!F9", "service": sid}]}
 
 
+# 25/11: the consultation's card read in « Demande de prix.pdf »; the phone number given is
+# not the one written there: the server drops it, the field stays to fill
+DEMANDE = {"file": "Demande de prix.pdf", "page": 1}
+CONSULTATION = {
+    "facts": {
+        "title": {"value": "Annexe du lycée — nettoyage", **DEMANDE},
+        "client_name": {"value": "Entreprise générale Exemple", **DEMANDE},
+        "client_address": {"value": "12 rue des Lilas, 69003 Lyon", **DEMANDE},
+        "site_address": {"value": "Lycée du Parc, 1 boulevard Anatole France, 69006 Lyon", **DEMANDE},
+        "contact_name": {"value": "Mme Exemple", **DEMANDE},
+        "contact_email": {"value": "contact@eg-exemple.fr", **DEMANDE},
+        "contact_phone": {"value": "04 72 99 99 99", **DEMANDE},
+        "reference": {"value": "EG-26-016", **DEMANDE},
+    },
+    "price_files": [{"file": "DPGF lot 16.xlsx", "reason": "quantités par rubrique"}],
+}
+
+
 INCLUSIONS = {"inclusions": [
     {"text": "Nettoyage des sols, des menuiseries et des vitrages deux faces avant les OPR.",
      "file": "CCTP lot 16.pdf", "page": 2},
@@ -167,6 +185,7 @@ class H(BaseHTTPRequestHandler):
         prompt = request["messages"][1]["content"] if len(request.get("messages", [])) > 1 else ""
         system = request["messages"][0]["content"] if request.get("messages") else ""
         answer = ({"ok": True} if '{"ok": true}' in system  # lot 5: a model's trial
+                  else CONSULTATION if "<files>" in prompt
                   else profile(prompt) if "<profile_document" in prompt
                   else chapter(prompt) if "Chapitre à rédiger" in prompt
                   else matrix(prompt) if "<memoir>" in prompt

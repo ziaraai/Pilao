@@ -78,8 +78,11 @@ export function DceSection({
   async function onFiles(files: File[]) {
     const form = new FormData();
     files.forEach((f) => form.append("files", f));
-    // a deposit by hand waits for « Lancer l'analyse »: forgotten pieces can be added first
-    const query = adding ? "mode=add" : "mode=new&analyse=false";
+    // a deposit by hand waits for « Lancer l'analyse »: forgotten pieces can be added first;
+    // a consultation's documents are read at once for its card (25/11)
+    const query = adding
+      ? "mode=add"
+      : `mode=new&analyse=${consultation ? "true" : "false"}`;
     if (await deposit.run(() => api(`/bids/${bidId}/dce?${query}`, { form }))) {
       wasBusy.current = true;
       versions.reload();
@@ -118,9 +121,10 @@ export function DceSection({
     >
       {consultation && (
         <p className="mb-3 text-sm text-slate-700">
-          Déposez les pièces reçues par e-mail (CCTP, DPGF, BPU, plans…), une
-          par une ou en ZIP. Pilao lit le fichier de prix dans l&apos;onglet
-          Prix et le CCTP pour votre devis.
+          Déposez les pièces reçues par e-mail (fiche d&apos;intervention, DPGF,
+          BPU, CCTP, plans…), une par une ou en ZIP. Pilao en tire la fiche du
+          client, trouve le fichier de prix et lit le CCTP pour votre devis. Des
+          pièces ajoutées ensuite : « Relire les documents » en haut de la page.
         </p>
       )}
       {source.data && !consultation && (
