@@ -429,7 +429,8 @@ def run_draft_quote(
             stored.append(pdf_record.storage_key)
             entries.append((f"{name}.pdf", pdf))
         filled, filled_name = pricing_svc.filled_file(db, found[0], storage)
-        entries.append((f"{filled_name} - rempli.xlsx", filled))
+        suffix = "" if found[0].mode == "document" else " - rempli"  # a DPGF Pilao wrote
+        entries.append((f"{filled_name}{suffix}.xlsx", filled))
         bundle = store_generated(
             db, org, quote.created_by, _zip(entries), name, ZIP_MIME, "zip", storage
         )

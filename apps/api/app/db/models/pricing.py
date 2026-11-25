@@ -32,6 +32,7 @@ class PriceSheet(IdMixin, TimestampMixin, OrgScoped, Base):
     __table_args__ = (
         UniqueConstraint("dce_file_id", name="uq_price_sheets_dce_file_id"),
         CheckConstraint("status in ('reading','ready','error')", name="status"),
+        CheckConstraint("mode in ('grid','document')", name="mode"),
     )
 
     bid_id: Mapped[uuid.UUID] = mapped_column(
@@ -50,6 +51,9 @@ class PriceSheet(IdMixin, TimestampMixin, OrgScoped, Base):
     )
     status: Mapped[str] = mapped_column(Text, nullable=False, default="reading")
     error: Mapped[str | None] = mapped_column(Text)
+    # grid: an Excel file filled cell by cell; document: a PDF or Word file read page by page,
+    # whose prices go to a DPGF Pilao writes (25/11)
+    mode: Mapped[str] = mapped_column(Text, nullable=False, default="grid", server_default="grid")
     lines: Mapped[list[dict[str, Any]]] = mapped_column(JSONB, nullable=False, default=list)
     mirrors: Mapped[dict[str, list[str]]] = mapped_column(JSONB, nullable=False, default=dict)
     warnings: Mapped[list[str]] = mapped_column(JSONB, nullable=False, default=list)

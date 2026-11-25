@@ -21,6 +21,9 @@ class BidIn(BaseModel):
     lot_label: Text | None = None
     contact_name: Text | None = None
     contact_email: EmailStr | None = None
+    contact_phone: Text | None = None
+    client_address: LongText | None = None
+    site_address: LongText | None = None
 
 
 class BidPatch(BaseModel):
@@ -33,6 +36,9 @@ class BidPatch(BaseModel):
     lot_label: Text | None = None
     contact_name: Text | None = None
     contact_email: EmailStr | None = None
+    contact_phone: Text | None = None
+    client_address: LongText | None = None
+    site_address: LongText | None = None
     status: BidStatus | None = None
     submitted_amount_cents: Annotated[int, Field(ge=0, le=10**13)] | None = None
     result_rank: Annotated[int, Field(ge=1, le=1000)] | None = None
@@ -63,6 +69,10 @@ class BidOut(BaseModel):
     buyer_name: str | None
     contact_name: str | None = None
     contact_email: str | None = None
+    contact_phone: str | None = None
+    client_address: str | None = None
+    site_address: str | None = None
+    facts_sources: dict[str, Any] = Field(default_factory=dict)  # where each fact was read
     reference: str | None
     deadline_at: datetime | None
     status: BidStatus

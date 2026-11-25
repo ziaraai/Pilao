@@ -419,3 +419,46 @@ def test_set_aside_lines_are_neither_priced_nor_counted_nor_written() -> None:
     assert out.missing_count == 2  # F235 and F236 still to price
     writes = fill_writes(lines, out, {})
     assert "F173" not in writes["DPGF"] and writes["DPGF"]["F234"] == 1.7
+
+
+# ---------- a price file that is a document: a PDF, a Word file (25/11) -------------------
+
+MAUDRY_PAGE = """Fiche d'intervention établie depuis le devis n°: DE36532
+Numéro Description Qté Unité Rapport d'intervention
+1 CUISINE 1,00
+1.1 Dégraissage du sol et application d'un 16,56| M2
+imperméabilisant on ne dépose pas la cuisine
+2 WC 1,00
+2.1 Dégraissage du sol et application d'un 1,65| M2
+imperméabilisant on ne dépose pas la cuisine"""
+
+
+def test_document_lines_are_kept_only_where_the_page_says_so() -> None:
+    from app.domain.pricing import DocLineIn, validate_document_lines
+
+    label = "Dégraissage du sol et application d'un imperméabilisant on ne dépose pas la cuisine"
+    proposed = [
+        DocLineIn(section="CUISINE", label=label, unit="M2", quantity="16,56", page=1),
+        DocLineIn(section="WC", label=label, unit="m²", quantity="1,65", page=1),
+        # a quantity the page does not have: kept, without its quantity
+        DocLineIn(section="WC", label="Dégraissage du sol", unit="m²", quantity="99", page=1),
+        # a line that is not on the page, a page not read
+        DocLineIn(section="SALON", label="Cristallisation du marbre", unit="m²", page=1),
+        DocLineIn(section="CUISINE", label=label, unit="m²", quantity="16,56", page=7),
+        DocLineIn(section="OPTION", label="Dégraissage du sol", unit="m²", page=1),
+    ]
+    lines, warnings = validate_document_lines(proposed, {1: MAUDRY_PAGE})
+    assert [(ln.section, ln.quantity, ln.unit) for ln in lines] == [
+        ("CUISINE", Decimal("16.56"), "M2"),
+        ("WC", Decimal("1.65"), "m²"),
+        ("WC", None, "m²"),
+        ("OPTION", None, "m²"),
+    ]
+    assert [ln.id for ln in lines] == ["p1-001", "p1-002", "p1-003", "p1-004"]
+    assert lines[3].option and not lines[0].option
+    assert all(ln.price_cell == "" and ln.sheet == "" for ln in lines)  # nothing to fill in
+    assert any("2 lignes" in w and "pas été retrouvées" in w for w in warnings)
+    assert any("Dégraissage du sol" in w and "quantité" in w for w in warnings)
+    # the same line proposed twice is kept once
+    twice, _ = validate_document_lines([proposed[0], proposed[0]], {1: MAUDRY_PAGE})
+    assert len(twice) == 1

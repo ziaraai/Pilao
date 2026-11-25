@@ -50,6 +50,23 @@ class PriceReadOut(BaseModel):
     notes: list[str] = Field(default_factory=list, max_length=20)
 
 
+class DocLineIn(BaseModel):
+    """One line of a price file that is a document (PDF, Word: a contractor's « fiche
+    d'intervention », 25/11), as the model reads it on a page (``lecture_prix_document``)."""
+
+    section: str = Field(default="", max_length=300)
+    label: str = Field(max_length=500)
+    unit: str = Field(default="", max_length=50)
+    quantity: str | None = Field(default=None, max_length=30)  # as written: « 89,83 »
+    page: int = Field(ge=1, le=10_000)
+    option: bool = False
+
+
+class DocPriceReadOut(BaseModel):
+    lines: list[DocLineIn] = Field(default_factory=list, max_length=MAX_LINES)
+    notes: list[str] = Field(default_factory=list, max_length=20)
+
+
 @dataclass(frozen=True)
 class PriceLine:
     id: str  # « Feuille!B5 »: stable across readings of the same file
@@ -203,6 +220,78 @@ def validate_lines(
             "par la lecture ne correspondai"
             f"{'ent' if dropped > 1 else 't'} à aucune case à remplir : écartée"
             f"{'s' if dropped > 1 else ''}."
+        )
+    return lines, warnings
+
+
+_WORD = re.compile(r"[a-z0-9]{3,}")
+
+
+def _found(label: str, page: str) -> bool:
+    """Most of the label's words are on the page (OCR may misread one of them)."""
+    words = set(_WORD.findall(_fold(label)))
+    if not words:
+        return False
+    on_page = set(_WORD.findall(_fold(page)))
+    return len(words & on_page) >= max(1, round(0.7 * len(words)))
+
+
+def _compact(text: str) -> str:
+    return re.sub(r"[\s\u00a0\u202f]", "", text)
+
+
+def validate_document_lines(
+    proposed: list[DocLineIn], pages: dict[int, str]
+) -> tuple[list[PriceLine], list[str]]:
+    """The lines of a document, kept only where the cited page has them: the label's words,
+    and the quantity as written (else the line stays, its quantity to type). Nothing to
+    fill in the document itself: the company's prices go to a DPGF Pilao writes."""
+    lines: list[PriceLine] = []
+    warnings: list[str] = []
+    seen: set[tuple[str, str, int]] = set()
+    lost = 0
+    for item in proposed:
+        text = pages.get(item.page)
+        label = re.sub(r"\s+", " ", item.label).strip()
+        if text is None or not label or not _found(label, text):
+            lost += 1
+            continue
+        key = (_fold(item.section).strip(), _fold(label), item.page)
+        if key in seen:
+            continue
+        seen.add(key)
+        quantity = _number(item.quantity) if item.quantity else None
+        if quantity is not None and _compact(item.quantity or "") not in _compact(text):
+            warnings.append(
+                f"« {label[:80]} » : la quantité {item.quantity} n'est pas écrite page "
+                f"{item.page}, saisissez-la."
+            )
+            quantity = None
+        section = re.sub(r"\s+", " ", item.section).strip()
+        unit = item.unit.strip()
+        lines.append(
+            PriceLine(
+                id=f"p{item.page}-{len(lines) + 1:03d}",
+                sheet="",
+                section=section,
+                label=label,
+                unit=unit,
+                quantity=quantity,
+                price_cell="",
+                hours_cell=None,
+                rate_cell=None,
+                hourly=normalize_unit(unit) == "heure",
+                surcharge="none",
+                option=item.option or is_option(section, label),
+            )
+        )
+        if len(lines) >= MAX_LINES:
+            break
+    if lost:
+        warnings.append(
+            f"{lost} ligne{'s' if lost > 1 else ''} proposée{'s' if lost > 1 else ''} par "
+            f"la lecture n'{'ont' if lost > 1 else 'a'} pas été retrouvée"
+            f"{'s' if lost > 1 else ''} dans le document : vérifiez qu'aucune ne manque."
         )
     return lines, warnings
 

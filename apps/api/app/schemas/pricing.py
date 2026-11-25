@@ -39,6 +39,7 @@ class PriceLineOut(BaseModel):
 class PriceSheetOut(BaseModel):
     id: uuid.UUID
     status: Literal["reading", "ready", "error"]
+    mode: Literal["grid", "document"] = "grid"  # document: a PDF read, a DPGF to download
     error: str | None
     warnings: list[str]
     notes: list[str]
@@ -55,6 +56,7 @@ class PriceFileOut(BaseModel):
     path: str
     kind: str
     fillable: bool  # an Excel (or .xls / .ods) file; a PDF cannot be filled
+    readable: bool = False  # its lines can be read: an Excel file, or a document with text
     sheet: PriceSheetOut | None
 
 

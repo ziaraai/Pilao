@@ -38,6 +38,14 @@ class Bid(IdMixin, TimestampMixin, OrgScoped, Base):
     )
     contact_name: Mapped[str | None] = mapped_column(Text)
     contact_email: Mapped[str | None] = mapped_column(Text)
+    # a consultation read from its documents (25/11): the client's facts, and where each one
+    # was read ({field: {"file": path, "page": n}}); a field the user typed has no source
+    contact_phone: Mapped[str | None] = mapped_column(Text)
+    client_address: Mapped[str | None] = mapped_column(Text)
+    site_address: Mapped[str | None] = mapped_column(Text)
+    facts_sources: Mapped[dict[str, Any]] = mapped_column(
+        JSONB, nullable=False, default=dict, server_default="{}"
+    )
 
     tender_id: Mapped[uuid.UUID | None] = mapped_column(
         UUID(as_uuid=True), ForeignKey("tenders.id", ondelete="SET NULL")

@@ -24,6 +24,7 @@ from app.db.models import (
     AuditLog,
     Bid,
     DceFile,
+    DcePage,
     DceVersion,
     File,
     Job,
@@ -36,6 +37,7 @@ from app.db.models import (
 from app.documents.convert import ConversionUnavailable, soffice_convert
 from app.domain.price_grid import PriceFileError, grid_text, read_workbook
 from app.domain.pricing import (
+    DocPriceReadOut,
     LineIn,
     MatchOut,
     Priced,
@@ -49,9 +51,11 @@ from app.domain.pricing import (
     fill_writes,
     hours_summary,
     parse_hours,
+    validate_document_lines,
     validate_lines,
     validate_matches,
 )
+from app.exports.dpgf_xlsx import DpgfHeader, build_dpgf
 from app.exports.xlsx_fill import XlsxFillError, fill_xlsx
 from app.schemas.files import DownloadUrlOut
 from app.schemas.pricing import (
@@ -77,6 +81,8 @@ logger = logging.getLogger("pilao.pricing")
 JOB_READ = "read_prices"
 TASK = "price_read"
 PROMPT = "lecture_bordereau_prix"
+DOCUMENT_PROMPT = "lecture_prix_document"  # a PDF or Word price file (25/11)
+MAX_DOCUMENT_CHARS = 60_000
 MATCH_PROMPT = "rapprochement_prestations"  # ADR-052
 MATCH_FAILED = (
     "Le rapprochement avec votre liste de prix n'a pas abouti : saisissez les prix ou relisez "
@@ -94,8 +100,8 @@ FAILED = "La lecture du fichier de prix n'a pas abouti : réessayez."
 INTERRUPTED = "La lecture du fichier de prix a été interrompue : réessayez."
 NO_LINES = "Pilao n'a trouvé aucune ligne à chiffrer dans ce fichier."
 NOT_FILLABLE = (
-    "Pilao ne peut remplir qu'un fichier Excel (.xlsx, .xls) ou Calc (.ods). "
-    "Demandez la version Excel du bordereau à l'acheteur."
+    "Pilao n'a pas pu lire le texte de ce document : déposez la version Excel du bordereau, "
+    "ou une version PDF où le texte se sélectionne."
 )
 NOT_READY = "Lisez d'abord le fichier de prix."
 
@@ -112,6 +118,18 @@ def _stem(path: str) -> str:
 
 def fillable(path: str) -> bool:
     return _ext(path) in FILLABLE + CONVERTIBLE
+
+
+def document_pages(db: Session, dce_file: DceFile) -> dict[int, str]:
+    """The text of a document's pages (OCR included), as the DCE processing kept it."""
+    rows = db.scalars(
+        select(DcePage).where(DcePage.dce_file_id == dce_file.id).order_by(DcePage.page)
+    )
+    return {p.page: p.text for p in rows if p.text and p.text.strip()}
+
+
+def readable(db: Session, dce_file: DceFile) -> bool:
+    return fillable(dce_file.path) or bool(document_pages(db, dce_file))
 
 
 # ---------- the company's rates -------------------------------------------------------------
@@ -200,6 +218,7 @@ def sheet_out(db: Session, sheet: PriceSheet) -> PriceSheetOut:
     return PriceSheetOut(
         id=sheet.id,
         status=sheet.status,
+        mode="document" if sheet.mode == "document" else "grid",
         error=sheet.error,
         warnings=sheet.warnings,
         notes=sheet.notes,
@@ -275,6 +294,7 @@ def prices_for_bid(db: Session, bid: Bid) -> PricesOut:
                 path=f.path,
                 kind=f.detected_kind,
                 fillable=fillable(f.path),
+                readable=readable(db, f),
                 sheet=sheet_out(db, sheet) if sheet is not None else None,
             )
         )
@@ -297,7 +317,8 @@ def start_read(
     dce_file = next((f for f in price_files(db, bid) if f.id == dce_file_id), None)
     if dce_file is None:
         raise ApiError(404, "not_found", "Fichier de prix introuvable.")
-    if not fillable(dce_file.path):
+    mode = "grid" if fillable(dce_file.path) else "document"
+    if mode == "document" and not document_pages(db, dce_file):
         raise ApiError(422, "not_fillable", NOT_FILLABLE)
     sheet = db.scalar(select(PriceSheet).where(PriceSheet.dce_file_id == dce_file.id))
     if sheet is not None and sheet.status == "reading":
@@ -308,6 +329,7 @@ def start_read(
         sheet = PriceSheet(org_id=bid.org_id, bid_id=bid.id, dce_file_id=dce_file.id)
         db.add(sheet)
     sheet.status, sheet.error, sheet.created_by = "reading", None, user.id
+    sheet.mode = mode
     db.flush()
     db.add(Job(kind=JOB_READ, ref_id=sheet.id, org_id=bid.org_id, status="pending"))
     db.add(
@@ -395,6 +417,110 @@ def _plural(n: int, word: str) -> str:
     return f"{n} {word}{'s' if n > 1 else ''}"
 
 
+def _read_grid(
+    db: Session, sheet: PriceSheet, dce_file: DceFile, storage: ObjectStorage
+) -> tuple[list[PriceLine], list[str], list[str], dict[str, list[str]]] | None:
+    """An Excel price file: the cells to fill, checked against the file itself."""
+    data, converted = _source_bytes(db, sheet, dce_file, storage)
+    sheets = read_workbook(data)
+    filled = [s for s in sheets if not s.hidden and s.cells]
+    if not filled:
+        raise PriceFileError("Ce fichier ne contient aucune case remplie.")
+    prompt = load_prompt(PROMPT)
+    proposed: list[LineIn] = []
+    notes: list[str] = []
+    cut = False
+    for part in filled:  # one call per sheet: a DPGF often has one sheet per lot
+        grid, part_cut = grid_text([part])
+        cut = cut or part_cut
+        system, user_msg = prompt.render(
+            file_name=dce_file.path.replace("<", "‹"),
+            grid=grid.replace("</grid", "‹/grid"),
+        )
+        result = llm.complete(
+            db,
+            org_id=sheet.org_id,
+            task=TASK,
+            messages=[
+                {"role": "system", "content": system},
+                {"role": "user", "content": user_msg},
+            ],
+            response_model=PriceReadOut,
+            prompt_version=prompt.version,
+            bid_id=sheet.bid_id,
+            max_tokens=MAX_OUTPUT_TOKENS,
+        )
+        proposed.extend(result.data.lines)
+        notes.extend(n for n in result.data.notes if n not in notes)
+    lines, warnings = validate_lines(proposed, sheets)
+    if not lines:
+        _fail(db, sheet, NO_LINES)
+        return None
+    mirrors = broken_links(lines, sheets)
+    labels = {ln.id: ln for ln in lines}
+    for line_id, cells in mirrors.items():
+        ln = labels[line_id]
+        where = f"{ln.section} · {ln.label}" if ln.section else ln.label
+        warnings.append(
+            f"« {where} » : dans le fichier de l'acheteur, la case {', '.join(cells)} ne "
+            "reprenait pas le prix (valeur fixe). Pilao y écrira aussi le prix."
+        )
+    if cut:
+        warnings.append(
+            "Fichier très grand : seule sa première partie a été lue. Vérifiez qu'aucune "
+            "ligne ne manque."
+        )
+    if converted:
+        warnings.append(
+            "Le fichier de l'acheteur a été converti au format .xlsx : le fichier rempli "
+            "sera un .xlsx. Vérifiez sa mise en page avant de le déposer."
+        )
+    return lines, warnings, notes, mirrors
+
+
+def _read_document(
+    db: Session, sheet: PriceSheet, dce_file: DceFile
+) -> tuple[list[PriceLine], list[str], list[str], dict[str, list[str]]] | None:
+    """A PDF or Word price file (25/11): its lines read on its pages (OCR included), kept only
+    where the page has them; the prices will go to a DPGF Pilao writes."""
+    pages = document_pages(db, dce_file)
+    warnings: list[str] = []
+    text, sent = "", {}
+    for number, page_text in pages.items():
+        block = f"[p.{number}]\n{page_text}\n"
+        if len(text) + len(block) > MAX_DOCUMENT_CHARS:
+            warnings.append(
+                "Document très long : seules ses premières pages ont été lues. Vérifiez "
+                "qu'aucune ligne ne manque."
+            )
+            break
+        text += block
+        sent[number] = page_text
+    if not sent:
+        _fail(db, sheet, NOT_FILLABLE)
+        return None
+    prompt = load_prompt(DOCUMENT_PROMPT)
+    system, user_msg = prompt.render(
+        file_name=dce_file.path.replace("<", "‹"),
+        pages=text.strip().replace("</pages", "‹/pages"),
+    )
+    result = llm.complete(
+        db,
+        org_id=sheet.org_id,
+        task=TASK,
+        messages=[{"role": "system", "content": system}, {"role": "user", "content": user_msg}],
+        response_model=DocPriceReadOut,
+        prompt_version=prompt.version,
+        bid_id=sheet.bid_id,
+        max_tokens=MAX_OUTPUT_TOKENS,
+    )
+    lines, found = validate_document_lines(result.data.lines, sent)
+    if not lines:
+        _fail(db, sheet, NO_LINES)
+        return None
+    return lines, [*found, *warnings], list(result.data.notes), {}
+
+
 def run_read_prices(db: Session, sheet_id: uuid.UUID, storage: ObjectStorage) -> None:
     sheet = db.get(PriceSheet, sheet_id)
     if sheet is None or sheet.status != "reading":
@@ -405,60 +531,14 @@ def run_read_prices(db: Session, sheet_id: uuid.UUID, storage: ObjectStorage) ->
     db.commit()
     dce_file = db.get_one(DceFile, sheet.dce_file_id)
     try:
-        data, converted = _source_bytes(db, sheet, dce_file, storage)
-        sheets = read_workbook(data)
-        filled = [s for s in sheets if not s.hidden and s.cells]
-        if not filled:
-            raise PriceFileError("Ce fichier ne contient aucune case remplie.")
-        prompt = load_prompt(PROMPT)
-        proposed: list[LineIn] = []
-        notes: list[str] = []
-        cut = False
-        for part in filled:  # one call per sheet: a DPGF often has one sheet per lot
-            grid, part_cut = grid_text([part])
-            cut = cut or part_cut
-            system, user_msg = prompt.render(
-                file_name=dce_file.path.replace("<", "‹"),
-                grid=grid.replace("</grid", "‹/grid"),
-            )
-            result = llm.complete(
-                db,
-                org_id=sheet.org_id,
-                task=TASK,
-                messages=[
-                    {"role": "system", "content": system},
-                    {"role": "user", "content": user_msg},
-                ],
-                response_model=PriceReadOut,
-                prompt_version=prompt.version,
-                bid_id=sheet.bid_id,
-                max_tokens=MAX_OUTPUT_TOKENS,
-            )
-            proposed.extend(result.data.lines)
-            notes.extend(n for n in result.data.notes if n not in notes)
-        lines, warnings = validate_lines(proposed, sheets)
-        if not lines:
-            _fail(db, sheet, NO_LINES)
+        if sheet.mode == "document":
+            read = _read_document(db, sheet, dce_file)
+        else:
+            read = _read_grid(db, sheet, dce_file, storage)
+        if read is None:
             return
-        mirrors = broken_links(lines, sheets)
+        lines, warnings, notes, mirrors = read
         labels = {ln.id: ln for ln in lines}
-        for line_id, cells in mirrors.items():
-            ln = labels[line_id]
-            where = f"{ln.section} · {ln.label}" if ln.section else ln.label
-            warnings.append(
-                f"« {where} » : dans le fichier de l'acheteur, la case {', '.join(cells)} ne "
-                "reprenait pas le prix (valeur fixe). Pilao y écrira aussi le prix."
-            )
-        if cut:
-            warnings.append(
-                "Fichier très grand : seule sa première partie a été lue. Vérifiez qu'aucune "
-                "ligne ne manque."
-            )
-        if converted:
-            warnings.append(
-                "Le fichier de l'acheteur a été converti au format .xlsx : le fichier rempli "
-                "sera un .xlsx. Vérifiez sa mise en page avant de le déposer."
-            )
         sheet.lines = [ln.to_dict() for ln in lines]
         sheet.mirrors = mirrors
         sheet.notes = [re.sub(r"\s+", " ", n).strip()[:300] for n in notes[:5]]
@@ -587,11 +667,31 @@ def update_sheet(db: Session, user: User, sheet: PriceSheet, data: SheetUpdateIn
     return sheet_out(db, locked)
 
 
+def _dpgf(db: Session, sheet: PriceSheet, dce_file: DceFile) -> tuple[bytes, str]:
+    """A document's lines and the company's prices in a DPGF Pilao writes (25/11)."""
+    bid = db.get_one(Bid, sheet.bid_id)
+    org = db.get_one(Organization, sheet.org_id)
+    lines, priced = priced_sheet(db, sheet)
+    file_name = dce_file.path.rsplit("/", 1)[-1]
+    header = DpgfHeader(
+        title=bid.title,
+        client=bid.buyer_name,
+        site=bid.site_address,
+        reference=bid.reference,
+        source=file_name,
+        company=org.name,
+    )
+    return build_dpgf(header, lines, priced), f"DPGF - {file_name.rsplit('.', 1)[0]}"
+
+
 def filled_file(db: Session, sheet: PriceSheet, storage: ObjectStorage) -> tuple[bytes, str]:
-    """The buyer's .xlsx with the company's prices, and its name without extension."""
+    """The buyer's .xlsx with the company's prices, and its name without extension; for a
+    document (PDF, Word), the DPGF Pilao writes with them."""
     if sheet.status != "ready":
         raise ApiError(409, "not_ready", NOT_READY)
     dce_file = db.get_one(DceFile, sheet.dce_file_id)
+    if sheet.mode == "document":
+        return _dpgf(db, sheet, dce_file)
     data, _ = _source_bytes(db, sheet, dce_file, storage)
     lines, priced = priced_sheet(db, sheet)
     try:
@@ -606,9 +706,8 @@ def export_filled(
 ) -> DownloadUrlOut:
     """The buyer's file with the company's prices, as a short-lived download link."""
     filled, name = filled_file(db, sheet, storage)
-    record = store_generated(
-        db, org, user.id, filled, f"{name} - rempli", XLSX_MIME, "xlsx", storage
-    )
+    shown = name if sheet.mode == "document" else f"{name} - rempli"
+    record = store_generated(db, org, user.id, filled, shown, XLSX_MIME, "xlsx", storage)
     previous = db.get(File, sheet.filled_file_id) if sheet.filled_file_id else None
     sheet.filled_file_id = record.id
     try:

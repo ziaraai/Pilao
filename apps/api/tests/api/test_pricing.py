@@ -189,15 +189,21 @@ def test_bad_entries_refused(
     assert c.put(url, json={"entries": {"DQE!B5": {"price_cents": -1}}}).status_code == 422
 
 
-def test_pdf_alone_cannot_be_filled(
+def test_a_pdf_without_text_cannot_be_read(
     make_client: Factory, outbox: Outbox, queue: FakeQueue, reader: PriceModel
 ) -> None:
+    """A PDF price file is read from its pages (25/11); one with no text at all (a scan the
+    OCR could not read) is refused, and nothing is charged."""
+    from tests.documents_helpers import make_blank_pdf
+
     c = signed_in_client(make_client, outbox)
     bid = new_bid(c)
-    deposit(c, bid, ("DCE.zip", zipped({"DCE/RC.pdf": RC, "DCE/DPGF.pdf": RC})))
+    deposit(c, bid, ("DCE.zip", zipped({"DCE/RC.pdf": RC, "DCE/DPGF.pdf": make_blank_pdf(1)})))
     queue.drain_dce()
     listed = prices(c, bid)["files"]
-    assert [(f["path"], f["fillable"]) for f in listed] == [("DCE/DPGF.pdf", False)]
+    assert [(f["path"], f["fillable"], f["readable"]) for f in listed] == [
+        ("DCE/DPGF.pdf", False, False)
+    ]
     before = credits_left(c)
     res = c.post(f"/bids/{bid}/prices/{listed[0]['dce_file_id']}/read")
     assert res.status_code == 422 and res.json()["error"]["code"] == "not_fillable"
