@@ -6,7 +6,7 @@ from decimal import Decimal
 
 from openpyxl import load_workbook
 
-from app.domain.pricing import LinePrice, PriceLine, Priced
+from app.domain.pricing import LinePrice, Priced, PriceLine
 from app.exports.dpgf_xlsx import DpgfHeader, build_dpgf
 
 

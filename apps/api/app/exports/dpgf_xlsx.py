@@ -16,7 +16,7 @@ from openpyxl.styles import Alignment, Border, Font, PatternFill, Side
 from openpyxl.worksheet.datavalidation import DataValidation
 from openpyxl.worksheet.worksheet import Worksheet
 
-from app.domain.pricing import LinePrice, PriceLine, Priced
+from app.domain.pricing import LinePrice, Priced, PriceLine
 
 FONT = "Arial"
 NAVY = "0B2A5B"
@@ -197,8 +197,10 @@ def build_dpgf(header: DpgfHeader, lines: list[PriceLine], priced: Priced) -> by
         s.row += 2
 
     notes = (
-        "Cases jaunes : prix à saisir et taux de TVA. Montants, sous-totaux et totaux se "
-        "calculent seuls.",
+        (
+            "Cases jaunes : prix à saisir et taux de TVA. Montants, sous-totaux et totaux se "
+            "calculent seuls."
+        ),
         f"Quantités (en bleu) reprises de « {header.source} ».",
     )
     for note in notes:
