@@ -2,9 +2,9 @@
 
 import uuid
 from datetime import datetime
-from typing import Literal
+from typing import Annotated, Literal
 
-from pydantic import BaseModel, Field, field_validator
+from pydantic import BaseModel, Field, StringConstraints, field_validator
 
 
 class InclusionItem(BaseModel):
@@ -22,19 +22,25 @@ class InclusionItem(BaseModel):
         return value.strip()
 
 
+QuoteNumber = Annotated[str, StringConstraints(strip_whitespace=True, max_length=40)]
+
+
 class QuoteIn(BaseModel):
     summarize: bool = True  # read the CCTP again (paid) — else only rebuild the files (free)
+    number: QuoteNumber | None = None  # the company's own number; empty: Pilao's (25/11)
 
 
 class QuoteSettingsIn(BaseModel):
     validity_days: int | None = Field(default=None, ge=1, le=365)
     vat_bp: int | None = Field(default=None, ge=0, le=10_000)  # 2000 = 20 %
     inclusions: list[InclusionItem] | None = Field(default=None, max_length=20)
+    number: QuoteNumber | None = None  # "" goes back to Pilao's number
 
 
 class QuoteOut(BaseModel):
     id: uuid.UUID
     number: str
+    proposed_number: str  # Pilao's D-AAAA-NNNN, shown when the field is emptied
     status: Literal["drafting", "ready", "error"]
     error: str | None
     inclusions: list[InclusionItem]

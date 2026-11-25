@@ -37,7 +37,8 @@ def data(**changes: object) -> QuoteDocData:
             city="Saint-Étienne",
             phone="04 00 00 00 00",
             email="contact@exemple.fr",
-            signatory="M. Exemple, gérant",
+            signatory_name="M. Exemple",
+            signatory_role="gérant",
         ),
         client="Entreprise générale Exemple",
         contact="Mme Exemple — contact@eg-exemple.fr",
@@ -90,7 +91,8 @@ def test_the_quote_says_who_what_how_much_and_where_it_comes_from() -> None:
 def test_what_is_missing_is_asked_for_never_guessed() -> None:
     company = data().company.__class__(
         name="ENG PRO", legal_form=None, siret="12345678900012", address_line=None,
-        postal_code=None, city=None, phone=None, email=None, signatory=None,
+        postal_code=None, city=None, phone=None, email=None, signatory_name=None,
+        signatory_role=None,
     )  # fmt: skip
     built = build_quote(data(company=company, client=None, inclusions=[]))
     text = text_of(built.to_bytes())

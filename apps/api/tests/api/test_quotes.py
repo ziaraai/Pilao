@@ -375,3 +375,81 @@ def test_the_dashboard_follows_a_consultation(
     c.post(f"/bids/{bid}/quote", json={})
     queue.drain_quotes(converter)
     assert row()["done"] == ["dce", "prices", "quote"]
+
+
+def test_the_company_can_type_its_own_quote_number(
+    make_client: Factory,
+    outbox: Outbox,
+    queue: FakeQueue,
+    storage: MemoryStorage,
+    model: Model,
+    converter: FakeConverter,
+) -> None:
+    """25/11: most companies number their quotes in their office software; Pilao's number is
+    a proposal the company can replace, never a duplicate."""
+    c = signed_in_client(make_client, outbox)
+    c.put("/profile/services", json={"services": SERVICES})
+    bid = consultation(c, queue)
+    read(c, queue, bid)
+    res = c.post(f"/bids/{bid}/quote", json={"number": "  DE-1254 "})
+    assert res.status_code == 202, res.text
+    assert res.json()["number"] == "DE-1254"
+    queue.drain_quotes(converter)
+    assert "Devis n° DE-1254" in docx_text(downloaded(c, storage, bid, "docx"))
+
+    other = consultation(c, queue)
+    read(c, queue, other)
+    taken = c.post(f"/bids/{other}/quote", json={"number": "de-1254"})
+    assert taken.status_code == 409
+    assert taken.json()["error"]["message"] == (
+        "Le numéro DE-1254 est déjà celui du devis « Gymnases — nettoyage »."
+    )
+    res = c.post(f"/bids/{other}/quote", json={})
+    assert res.json()["number"] == f"D-{YEAR}-0002"  # Pilao's own numbers go on
+    queue.drain_quotes(converter)
+    # changed afterwards, and back to Pilao's number with an empty field
+    assert c.put(f"/bids/{other}/quote", json={"number": "DE-1255"}).json()["number"] == "DE-1255"
+    queue.drain_quotes(converter)
+    res = c.put(f"/bids/{other}/quote", json={"number": ""})
+    assert res.json()["number"] == f"D-{YEAR}-0002"
+    queue.drain_quotes(converter)
+    taken = c.put(f"/bids/{other}/quote", json={"number": f"D-{YEAR}-0001"})
+    assert taken.status_code == 409  # Pilao's number of another quote is taken too
+    assert c.put(f"/bids/{other}/quote", json={"number": "x" * 41}).status_code == 422
+
+
+def test_the_signature_line_never_repeats_the_company_name(
+    make_client: Factory,
+    outbox: Outbox,
+    queue: FakeQueue,
+    storage: MemoryStorage,
+    model: Model,
+    converter: FakeConverter,
+) -> None:
+    """25/11: « Pour ENG-PRO (E.P.) : ENG-PRO, ENG-PRO » when the profile's signatory holds the
+    company's name: the line is left to fill in by hand instead."""
+    c = signed_in_client(make_client, outbox)
+    c.put("/profile/services", json={"services": SERVICES})
+    company = c.get("/profile/company").json()
+    name = company["name"]  # « Entreprise 1 »
+
+    def signatory(who: str, role: str) -> None:
+        fields = ("name", "legal_form", "address_line", "postal_code", "city", "phone")
+        body = {k: company.get(k) for k in fields}
+        res = c.put(
+            "/profile/company", json={**body, "signatory_name": who, "signatory_role": role}
+        )
+        assert res.status_code == 200, res.text
+
+    signatory(name.upper(), name)
+    bid = consultation(c, queue)
+    read(c, queue, bid)
+    c.post(f"/bids/{bid}/quote", json={})
+    queue.drain_quotes(converter)
+    text = docx_text(downloaded(c, storage, bid, "docx"))
+    assert f"{name.upper()}, {name}" not in text
+    assert "nom et qualité du signataire :" in text
+    signatory("Abdraouf Exemple", "Gérant")
+    c.put(f"/bids/{bid}/quote", json={"validity_days": 30})
+    queue.drain_quotes(converter)
+    assert ": Abdraouf Exemple, Gérant" in docx_text(downloaded(c, storage, bid, "docx"))

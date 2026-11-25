@@ -153,6 +153,7 @@ def quote_out(db: Session, bid: Bid, quote: Quote) -> QuoteOut:
     return QuoteOut(
         id=quote.id,
         number=quote.number,
+        proposed_number=quote.proposed_number,
         status=quote.status,
         error=quote.error,
         inclusions=[InclusionItem.model_validate(i) for i in quote.inclusions],
@@ -188,12 +189,41 @@ def close_stale(db: Session, quote: Quote) -> None:
     set_job_status(db, JOB_DRAFT, quote.id, "error", INTERRUPTED)
 
 
+def _set_number(db: Session, quote: Quote, number: str | None) -> None:
+    """The company's own number (25/11), never one another quote of the company already has
+    (its own or Pilao's); empty: back to Pilao's D-AAAA-NNNN."""
+    if number is None:
+        return
+    if number == "" or number == quote.proposed_number:
+        quote.custom_number = None
+        return
+    wanted = number.casefold()
+    for other in db.scalars(select(Quote).where(Quote.id != quote.id)):
+        # its Pilao number too: it comes back when the other quote's field is emptied
+        if wanted in (other.number.casefold(), other.proposed_number.casefold()):
+            title = db.get_one(Bid, other.bid_id).title
+            taken = other.number if other.number.casefold() == wanted else other.proposed_number
+            raise ApiError(
+                409,
+                "number_taken",
+                f"Le numéro {taken} est déjà celui du devis « {title} ».",
+            )
+    quote.custom_number = number
+
+
 def _next_seq(db: Session, org_id: uuid.UUID, year: int) -> int:
     top = db.scalar(select(func.max(Quote.seq)).where(Quote.org_id == org_id, Quote.year == year))
     return (top or 0) + 1
 
 
-def start_quote(db: Session, user: User, bid: Bid, summarize: bool, queue: JobQueue) -> QuoteOut:
+def start_quote(
+    db: Session,
+    user: User,
+    bid: Bid,
+    summarize: bool,
+    queue: JobQueue,
+    number: str | None = None,
+) -> QuoteOut:
     credits.lock_org(db, bid.org_id)  # a second click waits here; numbers never collide
     blocked = blocking(db, bid)
     if blocked is not None:
@@ -215,6 +245,7 @@ def start_quote(db: Session, user: User, bid: Bid, summarize: bool, queue: JobQu
             created_by=user.id,
         )
         db.add(quote)
+    _set_number(db, quote, number)
     found = _sheet(db, bid)
     assert found is not None  # not blocked
     paid = summarize and bool(_pages_to_send(db, bid, quote_table(found[1], found[2])))
@@ -258,6 +289,7 @@ def update_quote(
         quote.vat_bp = data.vat_bp
     if data.inclusions is not None:
         quote.inclusions = [i.model_dump() for i in data.inclusions]  # a new list: saved
+    _set_number(db, quote, data.number)
     quote.status, quote.error = "drafting", None
     quote.updated_at = datetime.now(UTC)
     db.add(Job(kind=JOB_DRAFT, ref_id=quote.id, org_id=bid.org_id, status="pending"))
@@ -326,7 +358,6 @@ def _doc_data(
     table: QuoteTable,
     storage: ObjectStorage,
 ) -> QuoteDocData:
-    signatory = ", ".join(x for x in (org.signatory_name, org.signatory_role) if x) or None
     contact = " — ".join(x for x in (bid.contact_name, bid.contact_email) if x) or None
     return QuoteDocData(
         number=quote.number,
@@ -342,7 +373,8 @@ def _doc_data(
             city=org.city,
             phone=org.phone,
             email=org.contact_email,
-            signatory=signatory,
+            signatory_name=org.signatory_name,
+            signatory_role=org.signatory_role,
         ),
         client=bid.buyer_name,
         contact=contact,

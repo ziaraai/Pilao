@@ -10,7 +10,7 @@ from datetime import date, timedelta
 from decimal import Decimal
 from typing import Any
 
-from app.domain.quote import QuoteRow, QuoteTable, vat_of
+from app.domain.quote import QuoteRow, QuoteTable, signature_line, vat_of
 from app.exports.dc_forms import french_date
 from app.exports.docx_builder import DocBuilder, todo
 
@@ -52,7 +52,8 @@ class Company:
     city: str | None
     phone: str | None
     email: str | None
-    signatory: str | None  # « M. Exemple, gérant »
+    signatory_name: str | None  # « M. Exemple »
+    signatory_role: str | None  # « gérant »
 
 
 @dataclass(frozen=True)
@@ -157,7 +158,7 @@ def build_quote(d: QuoteDocData) -> DocBuilder:
     )
 
     b.heading("Bon pour accord", 1)
-    b.paragraph(f"Pour {c.name} : {c.signatory}" if c.signatory else f"Pour {c.name}")
+    b.paragraph(signature_line(c.name, c.signatory_name, c.signatory_role))
     b.paragraph("Pour le client — date, nom et qualité du signataire, signature et cachet :")
     for _ in range(4):
         b.paragraph()

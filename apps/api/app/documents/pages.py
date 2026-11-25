@@ -6,7 +6,7 @@ Every page keeps its number so that each extracted fact can cite "file + page"
 
 import io
 from dataclasses import dataclass, field
-from typing import BinaryIO
+from typing import Any, BinaryIO
 
 import pdfplumber
 from docx import Document
@@ -28,6 +28,8 @@ from app.domain.filetypes import (
 MAX_PAGES = 600
 MAX_OCR_PAGES = 200  # per file: a 300-page DCE is rarely more than a few scanned pieces
 MIN_TEXT_CHARS = 40  # a page with less text is treated as scanned
+STRIP_MAX_HEIGHT = 60.0  # points: a line or two of text drawn as an image
+STRIP_MIN_RATIO = 3.0
 OCR_RESOLUTION = 200
 MAX_SHEET_ROWS = 5000
 MAX_CHARS = 5_000_000
@@ -62,6 +64,31 @@ def _ocr(ocr: OcrEngine | None, image: Image.Image) -> str | None:
         return None
 
 
+def _drawn_text(page: Any) -> bool:
+    """Lines of text drawn as images on a page that has a text layer too: a CCTB « fiche
+    d'intervention » writes each description as a small picture (25/11). Two thin strips at
+    least (much wider than high, a line's height): a logo or a photo is not text."""
+    strips = 0
+    for image in page.images:
+        width = float(image["x1"]) - float(image["x0"])
+        height = float(image["bottom"]) - float(image["top"])
+        if 0 < height <= STRIP_MAX_HEIGHT and width >= STRIP_MIN_RATIO * height:
+            strips += 1
+    return strips >= 2
+
+
+def _missing_lines(text: str, read: str) -> str:
+    """The lines OCR found that the text layer does not have (spacing and case ignored)."""
+
+    def norm(line: str) -> str:
+        return " ".join(line.lower().split())
+
+    known = norm(text)
+    return "\n".join(
+        line.strip() for line in read.splitlines() if norm(line) and norm(line) not in known
+    )
+
+
 def _pdf(fileobj: BinaryIO, ocr: OcrEngine | None) -> Extraction:
     result = Extraction()
     ocr_budget, ocr_missing, total = MAX_OCR_PAGES, False, 0
@@ -72,7 +99,8 @@ def _pdf(fileobj: BinaryIO, ocr: OcrEngine | None) -> Extraction:
             for number, page in enumerate(pdf.pages, start=1):
                 text = (page.extract_text() or "").strip()
                 used = False
-                if len(text) < MIN_TEXT_CHARS:
+                scanned = len(text) < MIN_TEXT_CHARS
+                if scanned or _drawn_text(page):
                     if ocr_budget > 0:
                         ocr_budget -= 1
                         image = page.to_image(resolution=OCR_RESOLUTION).original
@@ -80,7 +108,11 @@ def _pdf(fileobj: BinaryIO, ocr: OcrEngine | None) -> Extraction:
                         if read is None:
                             ocr_missing = True
                         elif len(read) > len(text):
-                            text, used = read, True
+                            text, used = read, True  # the whole page read, in its order
+                        elif not scanned:
+                            extra = _missing_lines(text, read)
+                            if extra:
+                                text, used = f"{text}\n{extra}", True
                     else:
                         ocr_missing = True
                 page.close()  # frees the page's parsed objects: memory stays flat on long PDFs

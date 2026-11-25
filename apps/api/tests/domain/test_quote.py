@@ -141,3 +141,20 @@ def test_the_fingerprint_changes_with_any_price_or_quantity() -> None:
     other = QuoteRow("12 Nettoyages", "Avant OPR", "m²", Decimal(2500), 160, 400_000)
     assert base != fingerprint(QuoteTable([other], [], 400_000, 0))
     assert base != fingerprint(QuoteTable([row], [row], 375_000, 375_000))
+
+
+def test_the_signature_line_names_a_person_or_leaves_a_line_to_fill() -> None:
+    from app.domain.quote import signature_line
+
+    assert signature_line("ENG-PRO (E.P.)", "ENG-PRO", "ENG-PRO") == (
+        "Pour ENG-PRO (E.P.) — nom et qualité du signataire :"
+    )
+    assert signature_line("ENG PRO", "Abdraouf Exemple", "Gérant") == (
+        "Pour ENG PRO : Abdraouf Exemple, Gérant"
+    )
+    assert signature_line("ENG PRO", "Abdraouf Exemple", "eng-pro") == (
+        "Pour ENG PRO : Abdraouf Exemple"
+    )
+    assert signature_line("ENG PRO", None, None) == (
+        "Pour ENG PRO — nom et qualité du signataire :"
+    )

@@ -67,3 +67,29 @@ def make_scanned_pdf(lines: list[str], pages: int = 1) -> bytes:
         pdf.showPage()
     pdf.save()
     return buf.getvalue()
+
+
+def make_mixed_pdf(header: list[str], drawn: list[str]) -> bytes:
+    """A page with a real text layer (the header) and lines of text drawn as small images, one
+    strip per line: the descriptions of a CCTB « fiche d'intervention » (25/11)."""
+    from PIL import Image, ImageDraw, ImageFont
+    from reportlab.lib.utils import ImageReader
+
+    try:
+        font = ImageFont.truetype("DejaVuSans.ttf", 30)
+    except OSError:
+        font = ImageFont.load_default(size=30)
+    buf = io.BytesIO()
+    pdf = canvas.Canvas(buf, pagesize=A4)
+    y = 800
+    for line in header:
+        pdf.drawString(50, y, line)
+        y -= 16
+    for i, line in enumerate(drawn):
+        strip = Image.new("L", (820, 50), 255)
+        ImageDraw.Draw(strip).text((4, 6), line, fill=0, font=font)
+        pdf.drawImage(ImageReader(strip), 160, 560 - i * 24, width=197, height=12)
+        pdf.drawString(470, 562 - i * 24, f"{i + 1},00")
+    pdf.showPage()
+    pdf.save()
+    return buf.getvalue()

@@ -36,7 +36,7 @@ def prepare_quote(
     bid_id: uuid.UUID, data: QuoteIn, ctx: CurrentAuth, db: ScopedDb, queue: Queue
 ) -> QuoteOut:
     """« Préparer le devis »: paid when the CCTP is read, in the background."""
-    return svc.start_quote(db, ctx.user, _bid(db, bid_id), data.summarize, queue)
+    return svc.start_quote(db, ctx.user, _bid(db, bid_id), data.summarize, queue, data.number)
 
 
 @router.put("/bids/{bid_id}/quote")

@@ -10,7 +10,7 @@ from app.documents.ocr import OcrUnavailable, TesseractOcr
 from app.documents.pages import extract_pages
 from app.domain.dce import kind_from_content, kind_from_filename
 from app.domain.filetypes import DOCX, PDF, PNG, XLSX
-from tests.documents_helpers import make_docx, make_pdf, make_scanned_pdf
+from tests.documents_helpers import make_docx, make_mixed_pdf, make_pdf, make_scanned_pdf
 
 needs_tesseract = pytest.mark.skipif(
     shutil.which("tesseract") is None, reason="tesseract not installed"
@@ -53,6 +53,41 @@ def test_scanned_pages_go_through_ocr_only_when_needed() -> None:
     result = extract_pages(io.BytesIO(make_scanned_pdf(["Page scannee"], pages=3)), PDF.mime, ocr)
     assert ocr.calls == 3 and result.ocr_used and result.status == "ready"
     assert all(p.ocr_used and "OCR" in p.text for p in result.pages)
+
+
+def test_text_drawn_as_images_goes_through_ocr_too() -> None:
+    """A CCTB « fiche d'intervention » (25/11): the header is text, but each description is a
+    small image of text. The page has enough text not to look scanned, yet its lines to price
+    are only readable by OCR."""
+    header = [
+        "CCTB - Rue de l'orphelinat - 42100 SAINT ETIENNE",
+        "Fiche d'intervention etablie depuis le devis n DE36594",
+        "Numero Description Qte Unite Rapport d'intervention",
+    ]
+    drawn = ["Nettoyage et cristallisation du sol", "Nettoyage de fin de chantier"]
+    ocr = CountingOcr()
+    result = extract_pages(io.BytesIO(make_mixed_pdf(header, drawn)), PDF.mime, ocr)
+    assert ocr.calls == 1 and result.pages[0].ocr_used
+    # a page with a logo only (one image) keeps its text layer
+    ocr = CountingOcr()
+    logo_only = make_mixed_pdf([*header, "Page sans libelle en image"], ["LOGO"])
+    assert extract_pages(io.BytesIO(logo_only), PDF.mime, ocr).pages[0].ocr_used is False
+    assert ocr.calls == 0
+
+
+@needs_tesseract
+def test_real_tesseract_reads_the_descriptions_drawn_as_images() -> None:
+    header = [
+        "CCTB - Rue de l'orphelinat - 42100 SAINT ETIENNE",
+        "Fiche d'intervention etablie depuis le devis n DE36594",
+        "Numero Description Qte Unite Rapport d'intervention",
+    ]
+    drawn = ["Nettoyage et cristallisation du sol", "Traitement et valorisation des dechets"]
+    page = extract_pages(io.BytesIO(make_mixed_pdf(header, drawn)), PDF.mime, TesseractOcr()).pages[
+        0
+    ]
+    assert "cristallisation" in page.text and "valorisation" in page.text
+    assert "DE36594" in page.text  # the text layer's facts are still there
 
 
 def test_missing_ocr_engine_is_reported_not_fatal() -> None:

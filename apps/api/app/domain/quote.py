@@ -53,6 +53,26 @@ def _fold(text: str) -> str:
     return unicodedata.normalize("NFKD", text).encode("ascii", "ignore").decode().lower()
 
 
+def _words(text: str) -> str:
+    return " ".join(re.findall(r"[a-z0-9]+", _fold(text)))
+
+
+def signature_line(company: str, name: str | None, role: str | None) -> str:
+    """« Pour ENG PRO : M. Exemple, gérant ». A signatory that is only the company's name
+    (« ENG-PRO, ENG-PRO », 25/11) names nobody: the line is left to fill in by hand."""
+    own = _words(company)
+
+    def person(value: str | None) -> str | None:
+        words = _words(value or "")
+        return value.strip() if value and words and words not in own else None
+
+    who = person(name)
+    if who is None:
+        return f"Pour {company} — nom et qualité du signataire :"
+    quality = person(role)
+    return f"Pour {company} : {who}" + (f", {quality}" if quality else "")
+
+
 def _stem(word: str) -> str:
     return word[:-1] if word.endswith("s") and len(word) > 5 else word
 

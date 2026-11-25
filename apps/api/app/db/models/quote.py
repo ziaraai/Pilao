@@ -27,6 +27,8 @@ class Quote(IdMixin, TimestampMixin, OrgScoped, Base):
     )
     year: Mapped[int] = mapped_column(Integer, nullable=False)
     seq: Mapped[int] = mapped_column(Integer, nullable=False)
+    # the company's own number (its office software, 25/11): shown instead of D-AAAA-NNNN
+    custom_number: Mapped[str | None] = mapped_column(Text)
     status: Mapped[str] = mapped_column(Text, nullable=False, default="drafting")
     error: Mapped[str | None] = mapped_column(Text)
     # what the CCTP asks for the rubriques priced, each with its source (file, page)
@@ -50,5 +52,9 @@ class Quote(IdMixin, TimestampMixin, OrgScoped, Base):
     )
 
     @property
-    def number(self) -> str:
+    def proposed_number(self) -> str:
         return f"D-{self.year}-{self.seq:04d}"
+
+    @property
+    def number(self) -> str:
+        return self.custom_number or self.proposed_number
