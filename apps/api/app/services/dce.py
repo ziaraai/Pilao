@@ -539,8 +539,13 @@ def run_process_dce(
 
             notify_update(db, fresh, mailer)
         return
-    if db.get_one(Bid, fresh.bid_id).kind == "consultation":
-        return  # no règlement to read: the documents feed the « Prix » tab (ADR-052)
+    bid = db.get_one(Bid, fresh.bid_id)
+    if bid.kind == "consultation":  # no règlement to analyse (ADR-052)
+        if fresh.auto_analysis and queue is not None:  # its documents read for its card (25/11)
+            from app.services.consultation_read import request_read  # avoid an import cycle
+
+            request_read(db, bid, queue, user_id=fresh.uploaded_by, automatic=True)
+        return
     if not fresh.auto_analysis:
         return  # deposited by hand: the analysis waits for « Lancer l'analyse »
     if queue is not None:

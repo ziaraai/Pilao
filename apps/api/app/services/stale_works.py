@@ -11,7 +11,16 @@ from datetime import UTC, datetime
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
-from app.db.models import DceAnalysis, Job, MarkerFill, MemoirSection, PriceSheet, Quote
+from app.db.models import (
+    ConsultationRead,
+    DceAnalysis,
+    Job,
+    MarkerFill,
+    MemoirSection,
+    PriceSheet,
+    Quote,
+)
+from app.services import consultation_read as consultation_svc
 from app.services import dce_analysis as analysis_svc
 from app.services import dce_retrieval as retrieval
 from app.services import marker_fill as fills_svc
@@ -80,6 +89,14 @@ def sweep_stale_works(db: Session, queue: JobQueue, now: datetime | None = None)
     ).all()
     for quote in quotes:
         quotes_svc.close_stale(db, quote)
+    consultation_reads = db.scalars(  # a consultation's documents left « en lecture » (25/11)
+        select(ConsultationRead).where(
+            ConsultationRead.status == "reading",
+            ConsultationRead.updated_at < now - consultation_svc.STALE_AFTER,
+        )
+    ).all()
+    for read in consultation_reads:
+        consultation_svc.close_stale(db, read)
     db.commit()
     for memoir_id in {s.memoir_id for s in sections}:
         drafting.maybe_finish(db, memoir_id, queue)  # the memoir may have nothing left to draft
@@ -91,4 +108,5 @@ def sweep_stale_works(db: Session, queue: JobQueue, now: datetime | None = None)
         + len(fills)
         + len(price_reads)
         + len(quotes)
+        + len(consultation_reads)
     )

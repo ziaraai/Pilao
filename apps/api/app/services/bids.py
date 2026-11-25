@@ -1,4 +1,5 @@
 import uuid
+from datetime import date
 from typing import Any
 
 from sqlalchemy import literal, select
@@ -16,6 +17,7 @@ from app.db.models import (
     Quote,
     User,
 )
+from app.domain.consultation import placeholder_title
 from app.schemas.bids import BidIn, BidPatch, BidProgressOut
 from app.services import files as files_svc
 from app.services import pricing as pricing_svc
@@ -25,7 +27,12 @@ from app.storage.objects import ObjectStorage
 
 
 def create_bid(db: Session, user: User, data: BidIn) -> Bid:
-    bid = Bid(**data.model_dump(), owner_user_id=user.id, status="to_review")
+    values = data.model_dump()
+    sources: dict[str, Any] = {}
+    if not values["title"]:  # a consultation started from its documents (25/11)
+        values["title"] = placeholder_title(date.today())
+        sources["title"] = {"auto": True}  # replaced by the title read in the documents
+    bid = Bid(**values, facts_sources=sources, owner_user_id=user.id, status="to_review")
     db.add(bid)
     db.flush()
     db.add(AuditLog(user_id=user.id, action="create", entity="bid", entity_id=bid.id))
@@ -35,10 +42,14 @@ def create_bid(db: Session, user: User, data: BidIn) -> Bid:
 
 def update_bid(db: Session, user: User, bid: Bid, data: BidPatch) -> Bid:
     changes: dict[str, Any] = data.model_dump(exclude_unset=True)
+    sources = dict(bid.facts_sources or {})
     for key, value in changes.items():
         if value is None and key in ("title", "status"):
             continue  # mandatory fields cannot be cleared
+        if getattr(bid, key) != value:
+            sources.pop(key, None)  # the user's own words now: a new reading keeps them
         setattr(bid, key, value)
+    bid.facts_sources = sources
     db.add(
         AuditLog(
             user_id=user.id,

@@ -64,3 +64,19 @@ class QuoteStateOut(BaseModel):
 
 class QuoteDownloadIn(BaseModel):
     format: Literal["pdf", "docx", "zip"]
+
+
+class ConsultationPriceFileOut(BaseModel):
+    dce_file_id: uuid.UUID
+    path: str
+    reason: str = ""
+
+
+class ConsultationReadStateOut(BaseModel):
+    """The reading of a consultation's documents (25/11): « none » before the first one."""
+
+    status: Literal["none", "reading", "ready", "error", "waiting_credits"]
+    error: str | None = None
+    found: list[str] = []  # the facts read in the documents (their names)
+    price_files: list[ConsultationPriceFileOut] = []  # the documents of quantities proposed
+    updated_at: datetime | None = None

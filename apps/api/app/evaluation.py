@@ -180,6 +180,9 @@ class InlineQueue:
     def enqueue_read_prices(self, sheet_id: uuid.UUID) -> None:
         pass  # nor price files
 
+    def enqueue_read_consultation(self, read_id: uuid.UUID) -> None:
+        pass  # nor consultations
+
     def enqueue_draft_quote(self, quote_id: uuid.UUID, summarize: bool) -> None:
         pass  # nor quotes
 

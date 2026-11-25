@@ -36,6 +36,7 @@ class JobQueue(Protocol):
     def enqueue_fetch_dce(self, fetch_id: uuid.UUID, delay_seconds: int = 0) -> None: ...
     def enqueue_fill_marker(self, fill_id: uuid.UUID) -> None: ...
     def enqueue_read_prices(self, sheet_id: uuid.UUID) -> None: ...
+    def enqueue_read_consultation(self, read_id: uuid.UUID) -> None: ...
     def enqueue_draft_quote(self, quote_id: uuid.UUID, summarize: bool) -> None: ...
 
 
@@ -170,6 +171,17 @@ class RqJobQueue:
         self._q.enqueue(
             "app.workers.jobs.read_prices_job",
             str(sheet_id),
+            job_timeout=600,
+            result_ttl=3600,
+            failure_ttl=7 * 24 * 3600,
+        )
+
+    def enqueue_read_consultation(self, read_id: uuid.UUID) -> None:
+        # A consultation read from its documents (25/11): one model call, then maybe the
+        # reading of its price file.
+        self._q.enqueue(
+            "app.workers.jobs.read_consultation_job",
+            str(read_id),
             job_timeout=600,
             result_ttl=3600,
             failure_ttl=7 * 24 * 3600,

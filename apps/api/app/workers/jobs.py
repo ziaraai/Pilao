@@ -13,6 +13,7 @@ from app.documents.ocr import get_ocr_engine
 from app.exports.pdf import get_pdf_converter
 from app.integrations.atexo import get_robot
 from app.services.alerts import run_daily
+from app.services.consultation_read import run_read_consultation
 from app.services.dce import run_process_dce
 from app.services.dce_analysis import run_analyze_dce
 from app.services.dce_retrieval import run_fetch, watch_dces
@@ -136,6 +137,11 @@ def org_export_job(request_id: str) -> None:
 def read_prices_job(sheet_id: str) -> None:
     with get_sessionmaker()() as db:
         run_read_prices(db, uuid.UUID(sheet_id), get_storage())
+
+
+def read_consultation_job(read_id: str) -> None:
+    with get_sessionmaker()() as db:
+        run_read_consultation(db, uuid.UUID(read_id), get_job_queue())
 
 
 def draft_quote_job(quote_id: str, summarize: bool) -> None:

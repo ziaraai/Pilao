@@ -311,6 +311,7 @@ REFUNDED_JOBS = {
     "fill_marker": ("marker_fill", "Remboursé : la complétion n'a pas abouti."),
     "read_prices": ("price_read", "Remboursé : la lecture du fichier de prix n'a pas abouti."),
     "draft_quote": ("quote_draft", "Remboursé : le devis n'a pas abouti."),
+    "read_consultation": ("price_read", "Remboursé : la lecture des documents n'a pas abouti."),
 }
 DRAFTING_REFUND = "Remboursé : la rédaction n'a pas abouti."
 

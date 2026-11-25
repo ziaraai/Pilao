@@ -2,7 +2,7 @@ import uuid
 from datetime import datetime
 from typing import Annotated, Any, Literal
 
-from pydantic import BaseModel, ConfigDict, EmailStr, Field, StringConstraints
+from pydantic import BaseModel, ConfigDict, EmailStr, Field, StringConstraints, model_validator
 
 BidStatus = Literal["to_review", "in_progress", "submitted", "won", "lost", "dropped"]
 # a public tender, or a company asking for a quote on part of a lot (ADR-052)
@@ -14,7 +14,8 @@ LongText = Annotated[str, StringConstraints(strip_whitespace=True, max_length=50
 
 class BidIn(BaseModel):
     kind: BidKind = "tender"
-    title: Text
+    # a consultation may start from its documents alone: its title is read in them (25/11)
+    title: Text | None = None
     buyer_name: Text | None = None
     reference: Text | None = None
     deadline_at: datetime | None = None
@@ -24,6 +25,12 @@ class BidIn(BaseModel):
     contact_phone: Text | None = None
     client_address: LongText | None = None
     site_address: LongText | None = None
+
+    @model_validator(mode="after")
+    def _tender_has_title(self) -> "BidIn":
+        if self.kind == "tender" and not self.title:
+            raise ValueError("L'intitulé du marché est obligatoire.")
+        return self
 
 
 class BidPatch(BaseModel):

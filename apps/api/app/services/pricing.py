@@ -23,6 +23,7 @@ from app.core.tenancy import scope_session
 from app.db.models import (
     AuditLog,
     Bid,
+    ConsultationRead,
     DceFile,
     DcePage,
     DceVersion,
@@ -304,6 +305,24 @@ def prices_for_bid(db: Session, bid: Bid) -> PricesOut:
 # ---------- reading (paid, in the background) -----------------------------------------------
 
 
+def _included(db: Session, bid: Bid) -> bool:
+    """The reading of a consultation's documents also pays for one price file (25/11): until
+    a price file read that way is reading or read. One that failed leaves it to the next."""
+    if bid.kind != "consultation":
+        return False
+    read = db.scalar(select(ConsultationRead).where(ConsultationRead.bid_id == bid.id))
+    if read is None or read.status != "ready":
+        return False
+    used = db.scalar(
+        select(PriceSheet.id).where(
+            PriceSheet.bid_id == bid.id,
+            PriceSheet.included.is_(True),
+            PriceSheet.status.in_(("reading", "ready")),
+        )
+    )
+    return used is None
+
+
 def close_stale(db: Session, sheet: PriceSheet) -> None:
     """A reading left for dead: failed, its credit given back (caller commits)."""
     sheet.status, sheet.error = "error", INTERRUPTED
@@ -325,11 +344,12 @@ def start_read(
         if sheet.updated_at >= datetime.now(UTC) - STALE_AFTER:
             return sheet  # already on its way: never charged twice
         close_stale(db, sheet)
+    included = _included(db, bid)
     if sheet is None:
         sheet = PriceSheet(org_id=bid.org_id, bid_id=bid.id, dce_file_id=dce_file.id)
         db.add(sheet)
     sheet.status, sheet.error, sheet.created_by = "reading", None, user.id
-    sheet.mode = mode
+    sheet.mode, sheet.included = mode, included
     db.flush()
     db.add(Job(kind=JOB_READ, ref_id=sheet.id, org_id=bid.org_id, status="pending"))
     db.add(
@@ -341,14 +361,15 @@ def start_read(
             meta={"file": dce_file.path},
         )
     )
-    credits.charge(
-        db,
-        db.get_one(Organization, bid.org_id),
-        "price_read",
-        user_id=user.id,
-        bid_id=bid.id,
-        ref_id=sheet.id,
-    )
+    if not included:
+        credits.charge(
+            db,
+            db.get_one(Organization, bid.org_id),
+            "price_read",
+            user_id=user.id,
+            bid_id=bid.id,
+            ref_id=sheet.id,
+        )
     db.commit()
     try:
         queue.enqueue_read_prices(sheet.id)

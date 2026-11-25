@@ -3,7 +3,7 @@
 import uuid
 from typing import Any
 
-from sqlalchemy import CheckConstraint, ForeignKey, Integer, Text, UniqueConstraint
+from sqlalchemy import Boolean, CheckConstraint, ForeignKey, Integer, Text, UniqueConstraint
 from sqlalchemy.dialects.postgresql import JSONB, UUID
 from sqlalchemy.orm import Mapped, mapped_column
 
@@ -54,6 +54,10 @@ class PriceSheet(IdMixin, TimestampMixin, OrgScoped, Base):
     # grid: an Excel file filled cell by cell; document: a PDF or Word file read page by page,
     # whose prices go to a DPGF Pilao writes (25/11)
     mode: Mapped[str] = mapped_column(Text, nullable=False, default="grid", server_default="grid")
+    # read without its own credit: the consultation's reading paid for it (25/11)
+    included: Mapped[bool] = mapped_column(
+        Boolean, nullable=False, default=False, server_default="false"
+    )
     lines: Mapped[list[dict[str, Any]]] = mapped_column(JSONB, nullable=False, default=list)
     mirrors: Mapped[dict[str, list[str]]] = mapped_column(JSONB, nullable=False, default=dict)
     warnings: Mapped[list[str]] = mapped_column(JSONB, nullable=False, default=list)

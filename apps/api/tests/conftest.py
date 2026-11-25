@@ -214,6 +214,7 @@ class FakeQueue:
         self.pending_prefill: list[uuid.UUID] = []
         self.pending_fills: list[uuid.UUID] = []
         self.pending_price_reads: list[uuid.UUID] = []
+        self.pending_consultation_reads: list[uuid.UUID] = []
         self.pending_quotes: list[tuple[uuid.UUID, bool]] = []
         self.pending_imports: list[str] = []
         self.pending_fetches: list[tuple[uuid.UUID, int]] = []  # (fetch, delay in seconds)
@@ -402,6 +403,19 @@ class FakeQueue:
             quote_id, summarize = self.pending_quotes.pop(0)
             with _new_session(self._conn) as session:
                 run_draft_quote(session, quote_id, self._storage, converter, summarize)
+
+    def enqueue_read_consultation(self, read_id: uuid.UUID) -> None:
+        if self.down:
+            raise ConnectionError("redis down")
+        self.pending_consultation_reads.append(read_id)
+
+    def drain_consultation_reads(self) -> None:
+        from app.services.consultation_read import run_read_consultation
+
+        while self.pending_consultation_reads:
+            read_id = self.pending_consultation_reads.pop(0)
+            with _new_session(self._conn) as session:
+                run_read_consultation(session, read_id, self)
 
     def drain_price_reads(self) -> None:
         from app.services.pricing import run_read_prices

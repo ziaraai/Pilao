@@ -9,7 +9,15 @@ from app.core.deps import CurrentAuth, ScopedDb, require_module
 from app.core.errors import ApiError
 from app.db.models import Bid
 from app.schemas.files import DownloadUrlOut
-from app.schemas.quotes import QuoteDownloadIn, QuoteIn, QuoteOut, QuoteSettingsIn, QuoteStateOut
+from app.schemas.quotes import (
+    ConsultationReadStateOut,
+    QuoteDownloadIn,
+    QuoteIn,
+    QuoteOut,
+    QuoteSettingsIn,
+    QuoteStateOut,
+)
+from app.services import consultation_read
 from app.services import quotes as svc
 from app.storage.objects import ObjectStorage, get_storage
 from app.workers.queue import JobQueue, get_job_queue
@@ -51,3 +59,26 @@ def download_quote(
     bid_id: uuid.UUID, data: QuoteDownloadIn, db: ScopedDb, storage: Storage
 ) -> DownloadUrlOut:
     return svc.download(db, _bid(db, bid_id), data.format, storage)
+
+
+def _read_state(db: ScopedDb, bid: Bid) -> ConsultationReadStateOut:
+    read = consultation_read.get_read(db, bid)
+    if read is None:
+        return ConsultationReadStateOut(status="none")
+    return ConsultationReadStateOut.model_validate(read, from_attributes=True)
+
+
+@router.get("/bids/{bid_id}/consultation-read")
+def get_consultation_read(bid_id: uuid.UUID, db: ScopedDb) -> ConsultationReadStateOut:
+    """Where the reading of the documents stands (25/11)."""
+    return _read_state(db, _bid(db, bid_id))
+
+
+@router.post("/bids/{bid_id}/consultation-read", status_code=202)
+def read_consultation(
+    bid_id: uuid.UUID, ctx: CurrentAuth, db: ScopedDb, queue: Queue
+) -> ConsultationReadStateOut:
+    """« Relire les documents » (1 credit): the client's facts and the price file, again."""
+    bid = _bid(db, bid_id)
+    consultation_read.request_read(db, bid, queue, user_id=ctx.user.id, automatic=False)
+    return _read_state(db, bid)
